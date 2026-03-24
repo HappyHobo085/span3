@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twee Panele Webwerf</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <section class="top-controls" aria-label="Opsies">
+      <label for="data-select">Kies opsie:</label>
+      <select id="data-select" name="data-select">
+        <option value="opsie1">Opsie 1</option>
+        <option value="opsie2">Opsie 2</option>
+        <option value="opsie3">Opsie 3</option>
+      </select>
+    </section>
+
+    <section class="panels">
+      <article class="panel left-panel" aria-label="Mock dashboard">
+        <h2>Dashboard</h2>
+        <div class="dashboard-grid">
+          <div class="card">Totale gebruikers</div>
+          <div class="card">Aktiewe sessies</div>
+          <div class="card mock-circle-card">
+            <div class="mock-circle" aria-label="Mock circle diagram"></div>
+          </div>
+          <div class="card mock-graph-card" aria-label="Mock graph">
+            <div class="mock-graph">
+              <span class="bar bar-1"></span>
+              <span class="bar bar-2"></span>
+              <span class="bar bar-3"></span>
+              <span class="bar bar-4"></span>
+              <span class="bar bar-5"></span>
+            </div>
+          </div>
+          <div class="card wide">Toegang oorsig</div>
+        </div>
+      </article>
+
+      <article class="panel right-panel" aria-label="Leë lys">
+        <h2>Lys</h2>
+        <ul class="empty-list" aria-label="Leë data lys">
+        </ul>
+      </article>
+    </section>
+
+    <button class="action-button back-button" type="button">Terug</button>
+    <button class="action-button generate-button" type="button">Kry/Genereer data</button>
+  </main>
+</body>
+</html>
