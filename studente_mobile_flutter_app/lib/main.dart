@@ -25,8 +25,11 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const loginBrown = Color(0xFF935E28);
+    const loginDarkBlue = Color(0xFF0E1E3B);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: loginDarkBlue,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -36,8 +39,8 @@ class LoginPage extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 420),
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black, width: 1),
+                color: loginBrown,
+                border: Border.all(color: loginBrown, width: 1),
                 borderRadius: BorderRadius.circular(2),
               ),
               child: SizedBox(
@@ -46,30 +49,38 @@ class LoginPage extends StatelessWidget {
                   children: [
                     const Spacer(),
                     TextField(
+                      style: const TextStyle(color: Color(0xFF0E1E3B)),
                       decoration: InputDecoration(
-                        hintText: 'Voer jou e-pos adres in',
+                        hintText: 'Enter your email',
+                        hintStyle: const TextStyle(color: Color(0xFF0E1E3B)),
+                        filled: true,
+                        fillColor: Colors.white,
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(2),
-                          borderSide: const BorderSide(color: Colors.black),
+                          borderSide: const BorderSide(color: loginBrown),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(2),
-                          borderSide: const BorderSide(color: Colors.black),
+                          borderSide: const BorderSide(color: loginBrown),
                         ),
                       ),
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 18),
                     TextField(
+                      style: const TextStyle(color: Color(0xFF0E1E3B)),
                       decoration: InputDecoration(
-                        hintText: 'Voer jou wagwoord in',
+                        hintText: 'Enter your password',
+                        hintStyle: const TextStyle(color: Color(0xFF0E1E3B)),
+                        filled: true,
+                        fillColor: Colors.white,
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(2),
-                          borderSide: const BorderSide(color: Colors.black),
+                          borderSide: const BorderSide(color: loginBrown),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(2),
-                          borderSide: const BorderSide(color: Colors.black),
+                          borderSide: const BorderSide(color: loginBrown),
                         ),
                       ),
                       obscureText: true,
@@ -85,9 +96,9 @@ class LoginPage extends StatelessWidget {
                         );
                       },
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        side: const BorderSide(color: Colors.black),
+                        backgroundColor: loginDarkBlue,
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: loginBrown),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(2),
                         ),
