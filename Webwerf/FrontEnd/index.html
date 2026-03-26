@@ -57,9 +57,9 @@
     <section class="top-controls" aria-label="Opsies">
       <label for="data-select">Kies opsie:</label>
       <select id="data-select" name="data-select">
-        <option value="opsie1">Opsie 1</option>
-        <option value="opsie2">Opsie 2</option>
-        <option value="opsie3">Opsie 3</option>
+        <option value="opsie1">Kampus</option>
+        <option value="opsie2">Koshuis</option>
+        <option value="opsie3">Events</option>
       </select>
     </section>
 
@@ -87,7 +87,15 @@
 
       <article class="panel right-panel" aria-label="Leë lys">
         <h2>Lys</h2>
-        <ul class="empty-list" aria-label="Leë data lys">
+        <div class="list-search">
+          <input
+            type="search"
+            id="list-search"
+            aria-label="Soek in Lys"
+            placeholder="Soek..."
+          >
+        </div>
+        <ul id="data-list" class="empty-list" aria-label="Leë data lys">
         </ul>
       </article>
     </section>
@@ -101,6 +109,8 @@
       const loginPage = document.getElementById('login-page');
       const homePage = document.getElementById('home-page');
       const loginForm = document.getElementById('login-form');
+      const listSearch = document.getElementById('list-search');
+      const dataList = document.getElementById('data-list');
 
       function showPageFromHash() {
         if (window.location.hash === '#home') {
@@ -115,6 +125,22 @@
       loginForm.addEventListener('submit', function () {
         window.location.hash = 'home';
       });
+
+      function applyListFilter() {
+        if (!listSearch || !dataList) return;
+        const query = listSearch.value.trim().toLowerCase();
+        const items = dataList.querySelectorAll('li');
+
+        items.forEach((li) => {
+          const text = (li.textContent || '').trim().toLowerCase();
+          const matches = query === '' || text.includes(query);
+          li.hidden = !matches;
+        });
+      }
+
+      if (listSearch) {
+        listSearch.addEventListener('input', applyListFilter);
+      }
 
       window.addEventListener('hashchange', showPageFromHash);
       showPageFromHash();
