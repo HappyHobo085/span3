@@ -1,51 +1,147 @@
 <!DOCTYPE html>
+<!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
+<!-- Start of the page head (settings and linked files) -->
 <head>
+  <!-- Character set so text displays correctly -->
   <meta charset="UTF-8">
+  <!-- Makes the layout responsive on phones/tablets -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Browser tab title -->
   <title>Twee Panele Webwerf</title>
+  <!-- Main external stylesheet -->
   <link rel="stylesheet" href="styles.css">
+  <!-- Page-specific styles -->
   <style>
+    /* Login page section styling */
     #login-page {
-      background-color: #0E1E3B;
-      color: #935E28;
+      background-color: #0D132C; /* Dark blue background */
+      color: #935E28; /* Default login text color */
+      min-height: 100vh; /* Fill full screen height */
+      width: 100%; /* Fill full screen width */
     }
 
+    /* Home page background styling */
+    #home-page {
+      background-color: #0D132C; /* Same dark blue background */
+    }
+
+    /* Login panel (the box around form controls) */
     #login-page div[aria-label="Login panel"] {
-      background-color: #935E28;
-      color: #0E1E3B;
+      background-color: #0D132C; /* Brown panel color */
+      color: #0E1E3B; /* Dark text color inside panel by default */
+      width: 320px; /* Panel width */
+      padding: 30px; /* Space inside panel */
+      border-radius: 12px;
+      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
     }
 
+    /* Login input fields */
     #login-page input {
-      background-color: #FFFFFF;
-      color: #FFFFFF;
-      border-color: #935E28;
+      background-color: #021c42; /* Dark field background */
+      color: #FFFFFF; /* White typed text */
+      border-color: #935E28; /* Brown border */
     }
 
+    /* Login button neon style */
     #login-page button {
-      background-color: #0E1E3B;
-      color: #FFFFFF;
-      border-color: #935E28;
+      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%); /* Neon gradient */
+      color: #FFFFFF; /* White button text */
+      border: 1px solid #7B61FF; /* Neon border */
+      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66); /* Neon glow */
     }
 
+    /* Home action buttons neon style */
+    #home-page .action-button {
+      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%); /* Neon gradient */
+      color: #FFFFFF; /* White button text */
+      border: 1px solid #7B61FF; /* Neon border */
+      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66); /* Neon glow */
+    }
+
+    /* Main home panels neon outline */
+    #home-page .panel {
+      background-color: #0D132C; /* Match page background */
+      border: 1.5px solid #7B61FF; /* Neon outline */
+      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Neon glow */
+    }
+
+    /* Apply same neon outline/glow to all box-like elements */
+    #login-page div[aria-label="Login panel"],
+    #login-page input,
+    #home-page .top-controls select,
+    #home-page .list-search input,
+    #home-page .panel,
+    #home-page .card,
+    #home-page .empty-list {
+      border: 1.5px solid #7B61FF; /* Neon border */
+      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Neon glow */
+    }
+
+    /* Make text white in dark boxes and related fields */
+    #login-page div[aria-label="Login panel"],
+    #login-page input,
+    #login-page input::placeholder,
+    #home-page .top-controls select,
+    #home-page .top-controls select option,
+    #home-page .list-search input,
+    #home-page .list-search input::placeholder,
+    #home-page .panel,
+    #home-page .panel h2,
+    #home-page .card,
+    #home-page .empty-list,
+    #home-page .empty-list li {
+      color: #FFFFFF; /* White readable text */
+    }
+
+    /* Dashboard inner cards match panel color */
+    #home-page .card {
+      background-color: #0D132C; /* Dark card background */
+      color: #FFFFFF; /* White text on dark background */
+    }
+
+    /* Inner circle color matches panel background */
+    #home-page .mock-circle::after {
+      background-color: #0D132C; /* Dark center */
+    }
+
+    /* Dropdown options are white, so text must be dark */
+    #home-page .top-controls select option {
+      background-color: #FFFFFF; /* Light option background */
+      color: #111111; /* Dark option text */
+    }
+
+    /* Login heading color */
     #login-page h1 {
-      color: #FFFFFF;
+      color: #FFFFFF; /* White heading */
     }
   </style>
 </head>
+<!-- Start of visible page content -->
 <body>
+  <!-- Login page section shown first -->
   <section id="login-page" aria-label="Login page">
+    <!-- Centers login panel horizontally -->
     <center>
+    <!-- Login panel container -->
     <div aria-label="Login panel">
-      <h1>Log in</h1>
+      <!-- Login heading -->
+      <img src="https://cdn.discordapp.com/attachments/1474016815481880700/1486730725779570808/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png?ex=69c69163&is=69c53fe3&hm=1c0736abbd6631bd072516a005e2dd570829acd58d60ea12c9b30898fb7de612&" alt="Login">
+      <!-- Login form -->
       <form id="login-form" action="#home">
+        <!-- Email field wrapper -->
         <div>
+          <!-- Email input field -->
           <input type="email" id="email" name="email" placeholder="Enter your email" required>
         </div>
+        <!-- Password field wrapper -->
         <div>
+          <!-- Password input field -->
           <input type="password" id="password" name="password" placeholder="Enter your password" required>
         </div>
+        <!-- Button wrapper -->
         <div>
+          <!-- Submit login button -->
           <button type="submit">Log in</button>
         </div>
       </form>
@@ -53,41 +149,68 @@
     </center>
   </section>
 
+  <!-- Home page section (hidden until login) -->
   <main class="page" id="home-page" hidden>
+    <!-- Top controls area -->
     <section class="top-controls" aria-label="Opsies">
+      <!-- Dropdown label -->
       <label for="data-select">Kies opsie:</label>
+      <!-- Dropdown selection -->
       <select id="data-select" name="data-select">
+        <!-- Option 1 -->
         <option value="opsie1">Kampus</option>
+        <!-- Option 2 -->
         <option value="opsie2">Koshuis</option>
+        <!-- Option 3 -->
         <option value="opsie3">Events</option>
       </select>
     </section>
 
+    <!-- Two-panel main layout -->
     <section class="panels">
+      <!-- Left dashboard panel -->
       <article class="panel left-panel" aria-label="Mock dashboard">
+        <!-- Dashboard title -->
         <h2>Dashboard</h2>
+        <!-- Grid for dashboard cards -->
         <div class="dashboard-grid">
+          <!-- Card item -->
           <div class="card">Totale gebruikers</div>
+          <!-- Card item -->
           <div class="card">Aktiewe sessies</div>
+          <!-- Card with circle chart -->
           <div class="card mock-circle-card">
+            <!-- Circle chart graphic -->
             <div class="mock-circle" aria-label="Mock circle diagram"></div>
           </div>
+          <!-- Card with graph -->
           <div class="card mock-graph-card" aria-label="Mock graph">
+            <!-- Graph bars wrapper -->
             <div class="mock-graph">
+              <!-- Bar 1 -->
               <span class="bar bar-1"></span>
+              <!-- Bar 2 -->
               <span class="bar bar-2"></span>
+              <!-- Bar 3 -->
               <span class="bar bar-3"></span>
+              <!-- Bar 4 -->
               <span class="bar bar-4"></span>
+              <!-- Bar 5 -->
               <span class="bar bar-5"></span>
             </div>
           </div>
+          <!-- Wide card -->
           <div class="card wide">Toegang oorsig</div>
         </div>
       </article>
 
+      <!-- Right list panel -->
       <article class="panel right-panel" aria-label="Leë lys">
+        <!-- List title -->
         <h2>Lys</h2>
+        <!-- Search area -->
         <div class="list-search">
+          <!-- Search input -->
           <input
             type="search"
             id="list-search"
@@ -95,54 +218,78 @@
             placeholder="Soek..."
           >
         </div>
+        <!-- Data list container -->
         <ul id="data-list" class="empty-list" aria-label="Leë data lys">
         </ul>
       </article>
     </section>
 
+    <!-- Back action button -->
     <button class="action-button back-button" type="button">Terug</button>
+    <!-- Generate data action button -->
     <button class="action-button generate-button" type="button">Kry/Genereer data</button>
   </main>
 
+  <!-- JavaScript logic -->
   <script>
+    // Wrap logic so variables do not leak globally
     (function () {
+      // Get login page element
       const loginPage = document.getElementById('login-page');
+      // Get home page element
       const homePage = document.getElementById('home-page');
+      // Get login form element
       const loginForm = document.getElementById('login-form');
+      // Get search input element
       const listSearch = document.getElementById('list-search');
+      // Get list container element
       const dataList = document.getElementById('data-list');
 
+      // Show login or home page based on URL hash
       function showPageFromHash() {
+        // If hash is #home, show home page
         if (window.location.hash === '#home') {
-          loginPage.hidden = true;
-          homePage.hidden = false;
+          loginPage.hidden = true; // Hide login page
+          homePage.hidden = false; // Show home page
         } else {
-          loginPage.hidden = false;
-          homePage.hidden = true;
+          loginPage.hidden = false; // Show login page
+          homePage.hidden = true; // Hide home page
         }
       }
 
+      // On login submit, navigate to home hash
       loginForm.addEventListener('submit', function () {
         window.location.hash = 'home';
       });
 
+      // Filter list items based on search input
       function applyListFilter() {
+        // Stop if required elements do not exist
         if (!listSearch || !dataList) return;
+        // Normalize query text
         const query = listSearch.value.trim().toLowerCase();
+        // Find all list items
         const items = dataList.querySelectorAll('li');
 
+        // Loop through each list item
         items.forEach((li) => {
+          // Normalize item text
           const text = (li.textContent || '').trim().toLowerCase();
+          // Check if item should be visible
           const matches = query === '' || text.includes(query);
+          // Hide item when it does not match
           li.hidden = !matches;
         });
       }
 
+      // Attach filter logic when search input changes
       if (listSearch) {
         listSearch.addEventListener('input', applyListFilter);
       }
 
+      // Re-run page toggle when URL hash changes
       window.addEventListener('hashchange', showPageFromHash);
+      // Run once on first load
       showPageFromHash();
     })();
   </script>
