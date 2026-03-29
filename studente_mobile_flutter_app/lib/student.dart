@@ -22,7 +22,7 @@ class HomePage extends StatelessWidget {
                   // Panel that opens access scanning page.
                   Expanded(
                     child: _OutlinedPanel(
-                      text: 'Kampus Inskandering',
+                      text: 'Kampus Skandering',
                       onTap: () {
                         Navigator.push(
                           context,
@@ -38,7 +38,7 @@ class HomePage extends StatelessWidget {
                   // Panel that opens class scanning page.
                   Expanded(
                     child: _OutlinedPanel(
-                      text: 'Klas Inskandering',
+                      text: 'Klas Skandering',
                       onTap: () {
                         Navigator.push(
                           context,
