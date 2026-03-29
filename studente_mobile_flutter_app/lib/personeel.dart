@@ -128,6 +128,47 @@ class _BackButton extends StatelessWidget {
 class PersoneelKampusInskanderingPage extends StatelessWidget {
   const PersoneelKampusInskanderingPage({super.key});
 
+  Widget _buildNeonSearchBox() {
+    return Container(
+      width: 160,
+      height: 48,
+      decoration: BoxDecoration(
+        color: loginPageBackground,
+        border: const Border.fromBorderSide(
+          BorderSide(color: Color(0xFF7B61FF), width: 1.5),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 18,
+            spreadRadius: 1,
+            color: Color(0x4D7B61FF),
+            offset: Offset(0, 0),
+          ),
+        ],
+        borderRadius: BorderRadius.circular(2),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: const Row(
+        children: [
+          Icon(Icons.search, color: Colors.white, size: 20),
+          SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              style: TextStyle(color: Colors.white, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: 'Soek...',
+                hintStyle: TextStyle(color: Colors.white54, fontSize: 16),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,29 +208,47 @@ class PersoneelKampusInskanderingPage extends StatelessWidget {
               ),
             ),
           ),
-          // Center content panel
+          // Center content panel and its top controls
           Align(
             alignment: Alignment.center,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                height: 220,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: loginPageBackground,
-                  border: const Border.fromBorderSide(
-                    BorderSide(color: Color(0xFF7B61FF), width: 1.5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GradientActionButton(
+                        label: 'Saam ry',
+                        width: 140,
+                        height: 48,
+                        onTap: () {},
+                      ),
+                      _buildNeonSearchBox(),
+                    ],
                   ),
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 18,
-                      spreadRadius: 1,
-                      color: Color(0x4D7B61FF),
-                      offset: Offset(0, 0),
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 220,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: loginPageBackground,
+                      border: const Border.fromBorderSide(
+                        BorderSide(color: Color(0xFF7B61FF), width: 1.5),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                          color: Color(0x4D7B61FF),
+                          offset: Offset(0, 0),
+                        ),
+                      ],
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                  ],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                  ),
+                ],
               ),
             ),
           ),
