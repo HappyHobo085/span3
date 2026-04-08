@@ -208,14 +208,17 @@ body {
   color: #935E28; /* Default login text color */
   min-height: 100vh; /* Fill full screen height */
   width: 100%; /* Fill full screen width */
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Login panel (the box around form controls) */
 #login-page div[aria-label="Login panel"] {
   background-color: #0D132C; /* Brown panel color */
   color: #0E1E3B; /* Dark text color inside panel by default */
-  width: 320px; /* Panel width */
-  padding: 30px; /* Space inside panel */
+  width: 450px; /* Panel width */
+  padding: 50px; /* Space inside panel */
   border-radius: 12px;
   box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
 }
@@ -225,6 +228,11 @@ body {
   background-color: #021c42; /* Dark field background */
   color: #FFFFFF; /* White typed text */
   border-color: #935E28; /* Brown border */
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  font-size: 16px;
 }
 
 /* Login button neon style */
@@ -233,6 +241,12 @@ body {
   color: #FFFFFF; /* White button text */
   border: 1px solid #7B61FF; /* Neon border */
   box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66); /* Neon glow */
+  width: 100%;
+  padding: 14px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 /* Apply same neon outline/glow to all box-like elements */
