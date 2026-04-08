@@ -144,7 +144,7 @@ class _LoginPageState extends State<LoginPage> {
                           style: const TextStyle(color: Colors.white),
                           decoration: _loginInputDecoration(
                             context,
-                            hintText: 'studentenommer',
+                            hintText: 'gebruikers inligting',
                           ),
                         ),
                       ),

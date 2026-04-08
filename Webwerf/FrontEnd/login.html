@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!-- This tells the browser to use modern HTML5 mode -->
+<html lang="en">
+<!-- Start of the page head (settings and linked files) -->
+<head>
+  <!-- Character set so text displays correctly -->
+  <meta charset="UTF-8">
+  <!-- Makes the layout responsive on phones/tablets -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Browser tab title -->
+  <title>Login - Twee Panele Webwerf</title>
+  <!-- Main external stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+
+</head>
+<!-- Start of visible page content -->
+<body>
+  <!-- Login page section shown first -->
+  <section id="login-page" aria-label="Login page">
+    <!-- Centers login panel horizontally -->
+    <center>
+    <!-- Login panel container -->
+    <div aria-label="Login panel">
+      <!-- Login image -->
+      <img src="../assets/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png" alt="Login" style="width: 150px; height: auto; display: block; margin: 0 auto 20px auto;">
+      <!-- Login form -->
+      <form id="login-form">
+        <!-- Email field wrapper -->
+        <div>
+          <!-- Email input field -->
+          <input type="email" id="email" name="email" placeholder="Enter your email" required>
+        </div>
+        <!-- Password field wrapper -->
+        <div>
+          <!-- Password input field -->
+          <input type="password" id="password" name="password" placeholder="Enter your password" required>
+        </div>
+        <!-- Button wrapper -->
+        <div>
+          <!-- Submit login button -->
+          <button type="submit">Log in</button>
+        </div>
+      </form>
+    </div>
+    </center>
+  </section>
+
+  <!-- JavaScript logic -->
+  <script>
+    // Wrap logic so variables do not leak globally
+    (function () {
+      // Get login form element
+      const loginForm = document.getElementById('login-form');
+
+      // On login submit, navigate to index.html
+      loginForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        window.location.href = 'index.html';
+      });
+    })();
+  </script>
+</body>
+</html>
