@@ -46,7 +46,7 @@ body {
 .panels {
   display: flex;
   gap: var(--panel-gap);
-  min-height: calc(100vh - 2 * var(--page-padding) - var(--button-height) - 2cm - 70px);
+  min-height: calc(100vh - 2 * var(--page-padding) - var(--button-height) - 1cm - 30px);
   padding-bottom: calc(var(--button-height) + 24px);
 }
 
@@ -196,6 +196,20 @@ body {
 
 .generate-button {
   right: var(--page-padding);
+}
+
+.bottom-right-actions {
+  position: absolute;
+  bottom: var(--page-padding);
+  right: var(--page-padding);
+  display: flex;
+  gap: 20px;
+}
+
+.bottom-right-actions .action-button {
+  position: relative; /* overrides absolute from .action-button */
+  bottom: auto;
+  right: auto;
 }
 
 .action-button:hover {

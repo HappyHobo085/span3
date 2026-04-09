@@ -2,6 +2,7 @@
 <!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
 <!-- Start of the page head (settings and linked files) -->
+
 <head>
   <!-- Character set so text displays correctly -->
   <meta charset="UTF-8">
@@ -13,6 +14,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <!-- Start of visible page content -->
+
 <body>
   <!-- Home page section -->
   <main class="page" id="home-page">
@@ -76,23 +78,30 @@
         <!-- Search area -->
         <div class="list-search">
           <!-- Search input -->
-          <input
-            type="search"
-            id="list-search"
-            aria-label="Soek in Lys"
-            placeholder="Soek..."
-          >
+          <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
         </div>
         <!-- Data list container -->
         <ul id="data-list" class="empty-list" aria-label="Leë data lys">
         </ul>
+
+        <!-- Search box just above the bottom panel -->
+        <div class="list-search" style="margin-top: 20px;">
+          <input type="search" id="bottom-search" aria-label="Bottom Soek" placeholder="Soek dosent...">
+        </div>
+
+        <!-- Bottom panel just above the bottom of the right panel -->
+        <div class="panel bottom-inner-panel" style="margin-top: 10px; min-height: 260px;">
+        </div>
       </article>
     </section>
 
     <!-- Back action button -->
     <button class="action-button back-button" type="button" onclick="window.location.href='login.html'">Terug</button>
     <!-- Generate data action button -->
-    <button class="action-button generate-button" type="button">Kry/Genereer data</button>
+    <div class="bottom-right-actions">
+      <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
+      <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
+    </div>
   </main>
 
   <!-- JavaScript logic -->
@@ -131,4 +140,5 @@
     })();
   </script>
 </body>
+
 </html>
