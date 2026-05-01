@@ -1,0 +1,58 @@
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from database import Base
+
+class Rolle(Base):
+    __tablename__ = 'rolle'
+    Rol_ID   = Column(Integer, primary_key=True, index=True)
+    ROL_Naam = Column(String(50), nullable=False, unique=True)
+
+class Gebruikers(Base):
+    __tablename__ = 'gebruikers'
+    Gebruiker_ID     = Column(Integer, primary_key=True, index=True)
+    GEB_Naam         = Column(String(100), nullable=False)
+    GEB_Van          = Column(String(100), nullable=False)
+    GEB_ID_Nommer    = Column(String(13),  nullable=False, unique=True)
+    GEB_Epos         = Column(String(255), nullable=False, unique=True)
+    GEB_Wagwoord     = Column(String(255), nullable=False)
+    GEB_Selfoon_Nr   = Column(String(15))
+    GEB_Profiel_Foto = Column(String(500))
+    Rol_ID           = Column(Integer, ForeignKey('rolle.Rol_ID'), nullable=False)
+    Is_Aktief        = Column(Boolean, nullable=False, default=True)
+    Geskep_Op        = Column(DateTime, default=datetime.utcnow)
+    Gewysig_Op       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    rol = relationship("Rolle")
+
+class NFC_Tags(Base):
+    __tablename__ = 'nfc_tags'
+    NFC_Tags_ID   = Column(Integer, primary_key=True, index=True)
+    NFC_UID       = Column(String(64), nullable=False, unique=True)
+    Gebruiker_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'))
+    NFC_Tipe      = Column(String(32), nullable=False)
+    NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
+    Geskep_Op     = Column(DateTime, default=datetime.utcnow)
+    Gewysig_Op    = Column(DateTime, default=datetime.utcnow)
+
+    gebruiker = relationship("Gebruikers")
+
+class Waarskuwings(Base):
+    __tablename__ = 'waarskuwings'
+    Waarskuwing_ID = Column(Integer, primary_key=True, index=True)
+    Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    WAA_Beskrywing = Column(Text, nullable=False)
+    WAA_Status     = Column(String(32), nullable=False, default='OOP')
+    WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
+
+    gebruiker = relationship("Gebruikers")
+
+class Kampus_Opsigter(Base):
+    __tablename__ = 'kampus_opsigter'
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
+
+class Sekuriteit_Wag(Base):
+    __tablename__ = 'sekuriteit_wag'
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    SEK_Nommer   = Column(String(20), nullable=False, unique=True)
