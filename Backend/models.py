@@ -47,10 +47,19 @@ class Waarskuwings(Base):
 
     gebruiker = relationship("Gebruikers")
 
+class Kampus(Base):
+    __tablename__ = 'kampus'
+    Kampus_ID   = Column(Integer, primary_key=True, index=True)
+    KAM_Naam    = Column(String(100), nullable=False)
+    KAM_Adres   = Column(String(255))
+
 class Kampus_Opsigter(Base):
     __tablename__ = 'kampus_opsigter'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
+    Kampus_ID    = Column(Integer, ForeignKey('kampus.Kampus_ID'))
+
+    kampus = relationship("Kampus")
 
 class Sekuriteit_Wag(Base):
     __tablename__ = 'sekuriteit_wag'

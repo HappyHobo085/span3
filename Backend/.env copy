@@ -1,5 +1,0 @@
-DB_USER=postgres
-DB_PASS=Anakintronic
-DB_HOST=localhost
-DB_NAME=MOON_Test
-SECRET_KEY=da46761b9b1f8d25d176dcf81b54fa42f3d07441f080aa84c3f414a927a8232b

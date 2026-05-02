@@ -1,3 +1,4 @@
+# --- Root / General ---
 # Python
 __pycache__/
 *.py[cod]
@@ -38,3 +39,105 @@ venv.bak/
 # OS
 .DS_Store
 Thumbs.db
+
+# --- Backend ---
+Backend/.env
+Backend/venv/
+Backend/__pycache__/
+Backend/*.pyc
+
+# --- studente_mobile_flutter_app ---
+studente_mobile_flutter_app/*.class
+studente_mobile_flutter_app/*.env
+studente_mobile_flutter_app/*.log
+studente_mobile_flutter_app/*.pyc
+studente_mobile_flutter_app/*.swp
+studente_mobile_flutter_app/.DS_Store
+studente_mobile_flutter_app/.atom/
+studente_mobile_flutter_app/.buildlog/
+studente_mobile_flutter_app/.history
+studente_mobile_flutter_app/.svn/
+studente_mobile_flutter_app/migrate_working_dir/
+studente_mobile_flutter_app/*.iml
+studente_mobile_flutter_app/*.ipr
+studente_mobile_flutter_app/*.iws
+studente_mobile_flutter_app/.idea/
+studente_mobile_flutter_app/**/doc/api/
+studente_mobile_flutter_app/**/ios/Flutter/.last_build_id
+studente_mobile_flutter_app/.dart_tool/
+studente_mobile_flutter_app/.flutter-plugins
+studente_mobile_flutter_app/.flutter-plugins-dependencies
+studente_mobile_flutter_app/.pub-cache/
+studente_mobile_flutter_app/.pub/
+studente_mobile_flutter_app/build/
+studente_mobile_flutter_app/app.*.symbols
+studente_mobile_flutter_app/app.*.map.json
+studente_mobile_flutter_app/android/app/debug
+studente_mobile_flutter_app/android/app/profile
+studente_mobile_flutter_app/android/app/release
+
+# studente_mobile_flutter_app/android
+studente_mobile_flutter_app/android/gradle-wrapper.jar
+studente_mobile_flutter_app/android/.gradle
+studente_mobile_flutter_app/android/captures/
+studente_mobile_flutter_app/android/gradlew
+studente_mobile_flutter_app/android/gradlew.bat
+studente_mobile_flutter_app/android/local.properties
+studente_mobile_flutter_app/android/GeneratedPluginRegistrant.java
+studente_mobile_flutter_app/android/key.properties
+studente_mobile_flutter_app/android/**/*.keystore
+studente_mobile_flutter_app/android/**/*.jks
+
+# studente_mobile_flutter_app/ios
+studente_mobile_flutter_app/ios/**/dgph
+studente_mobile_flutter_app/ios/*.mode1v3
+studente_mobile_flutter_app/ios/*.mode2v3
+studente_mobile_flutter_app/ios/*.moved-aside
+studente_mobile_flutter_app/ios/*.pbxuser
+studente_mobile_flutter_app/ios/*.perspectivev3
+studente_mobile_flutter_app/ios/**/*sync/
+studente_mobile_flutter_app/ios/.sconsign.dblite
+studente_mobile_flutter_app/ios/.tags*
+studente_mobile_flutter_app/ios/**/.vagrant/
+studente_mobile_flutter_app/ios/**/DerivedData/
+studente_mobile_flutter_app/ios/Icon?
+studente_mobile_flutter_app/ios/**/Pods/
+studente_mobile_flutter_app/ios/**/.symlinks/
+studente_mobile_flutter_app/ios/profile
+studente_mobile_flutter_app/ios/xcuserdata
+studente_mobile_flutter_app/ios/**/.generated/
+studente_mobile_flutter_app/ios/Flutter/App.framework
+studente_mobile_flutter_app/ios/Flutter/Flutter.framework
+studente_mobile_flutter_app/ios/Flutter/Flutter.podspec
+studente_mobile_flutter_app/ios/Flutter/Generated.xcconfig
+studente_mobile_flutter_app/ios/Flutter/ephemeral/
+studente_mobile_flutter_app/ios/Flutter/app.flx
+studente_mobile_flutter_app/ios/Flutter/app.zip
+studente_mobile_flutter_app/ios/Flutter/flutter_assets/
+studente_mobile_flutter_app/ios/Flutter/flutter_export_environment.sh
+studente_mobile_flutter_app/ios/ServiceDefinitions.json
+studente_mobile_flutter_app/ios/Runner/GeneratedPluginRegistrant.*
+!studente_mobile_flutter_app/ios/default.mode1v3
+!studente_mobile_flutter_app/ios/default.mode2v3
+!studente_mobile_flutter_app/ios/default.pbxuser
+!studente_mobile_flutter_app/ios/default.perspectivev3
+
+# studente_mobile_flutter_app/linux
+studente_mobile_flutter_app/linux/flutter/ephemeral
+
+# studente_mobile_flutter_app/macos
+studente_mobile_flutter_app/macos/**/Flutter/ephemeral/
+studente_mobile_flutter_app/macos/**/Pods/
+studente_mobile_flutter_app/macos/**/dgph
+studente_mobile_flutter_app/macos/**/xcuserdata/
+
+# studente_mobile_flutter_app/windows
+studente_mobile_flutter_app/windows/flutter/ephemeral/
+studente_mobile_flutter_app/windows/*.suo
+studente_mobile_flutter_app/windows/*.user
+studente_mobile_flutter_app/windows/*.userosscache
+studente_mobile_flutter_app/windows/*.sln.docstates
+studente_mobile_flutter_app/windows/x64/
+studente_mobile_flutter_app/windows/x86/
+studente_mobile_flutter_app/windows/*.[Cc]ache
+!studente_mobile_flutter_app/windows/*.[Cc]ache/
