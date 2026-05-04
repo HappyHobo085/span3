@@ -16,20 +16,28 @@
 <!-- Start of visible page content -->
 
 <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="home.html">Tuis</a>
+        <a href="kampus.html">Kampus</a>
+        <a href="koshuis.html">Koshuis</a>
+        <a href="events.html">Events</a>
+        <a href="sub_stelsel.html">Sub Stelsel</a>
+    </nav>
+
     <!-- Home page section -->
-    <main class="page" id="home-page">
+    <main class="page" id="home-page" style="padding-top: 0;">
         <!-- Top controls area -->
         <section class="top-controls" aria-label="Opsies">
             <!-- Dropdown label -->
-            <label for="data-select">Kies opsie:</label>
+            <label for="data-select">Kies Koshuis:</label>
             <!-- Dropdown selection -->
             <select id="data-select" name="data-select">
-                <!-- Option 1 -->
-                <option value="opsie1">Kampus</option>
-                <!-- Option 2 -->
-                <option value="opsie2">Koshuis</option>
-                <!-- Option 3 -->
-                <option value="opsie3">Events</option>
+                <option value="veritas">Veritas</option>
+                <option value="patria">Patria</option>
+                <option value="heide">Heide</option>
+                <option value="wagnbietjie">Wag-'n-Bietjie</option>
+                <option value="kasteel">Kasteel</option>
             </select>
         </section>
 
@@ -88,7 +96,7 @@
 
         <!-- Back action button -->
         <button class="action-button back-button" type="button"
-            onclick="window.location.href='login.html'">Terug</button>
+            onclick="window.location.href='home.html'">Terug</button>
         <!-- Generate data action button -->
         <div class="bottom-right-actions">
             <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
@@ -131,6 +139,7 @@
             }
         })();
     </script>
+    <script src="main.js"></script>
 </body>
 
 </html>
