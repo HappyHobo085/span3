@@ -1,1 +1,105 @@
-///ededed
+<!DOCTYPE html>
+<!-- This tells the browser to use modern HTML5 mode -->
+<html lang="en">
+<!-- Start of the page head (settings and linked files) -->
+
+<head>
+    <!-- Character set so text displays correctly -->
+    <meta charset="UTF-8">
+    <!-- Makes the layout responsive on phones/tablets -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Browser tab title -->
+    <title>Twee Panele Webwerf</title>
+    <!-- Main external stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<!-- Start of visible page content -->
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="home.html">Tuis</a>
+        <a href="kampus.html">Kampus</a>
+        <a href="koshuis.html">Koshuis</a>
+        <a href="events.html">Events</a>
+        <a href="sub_stelsel.html">Sub Stelsel</a>
+    </nav>
+
+    <!-- Home page section -->
+    <main class="page" id="home-page" style="padding-top: 0;">
+
+        <!-- Two-panel main layout -->
+        <section class="panels">
+            <!-- Left dashboard panel -->
+            <article class="panel left-panel" aria-label="Events Details">
+                <!-- Dashboard title -->
+                <h2>Events Details</h2>
+
+            </article>
+
+            <!-- Right list panel -->
+            <article class="panel right-panel" aria-label="Leë lys">
+                <!-- List title -->
+                <h2>Lys</h2>
+                <!-- Search area -->
+                <div class="list-search">
+                    <!-- Search input -->
+                    <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
+                </div>
+                <!-- Data list container -->
+                <ul id="data-list" class="empty-list" aria-label="Leë data lys">
+                </ul>
+
+
+            </article>
+        </section>
+
+        <!-- Back action button -->
+        <button class="action-button back-button" type="button"
+            onclick="window.location.href='home.html'">Terug</button>
+        <!-- Generate data action button -->
+        <div class="bottom-right-actions">
+            <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
+            <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
+        </div>
+    </main>
+
+    <!-- JavaScript logic -->
+    <script>
+        // Wrap logic so variables do not leak globally
+        (function () {
+            // Get search input element
+            const listSearch = document.getElementById('list-search');
+            // Get list container element
+            const dataList = document.getElementById('data-list');
+
+            // Filter list items based on search input
+            function applyListFilter() {
+                // Stop if required elements do not exist
+                if (!listSearch || !dataList) return;
+                // Normalize query text
+                const query = listSearch.value.trim().toLowerCase();
+                // Find all list items
+                const items = dataList.querySelectorAll('li');
+
+                // Loop through each list item
+                items.forEach((li) => {
+                    // Normalize item text
+                    const text = (li.textContent || '').trim().toLowerCase();
+                    // Check if item should be visible
+                    const matches = query === '' || text.includes(query);
+                    // Hide item when it does not match
+                    li.hidden = !matches;
+                });
+            }
+
+            // Attach filter logic when search input changes
+            if (listSearch) {
+                listSearch.addEventListener('input', applyListFilter);
+            }
+        })();
+    </script>
+    <script src="main.js"></script>
+</body>
+
+</html>
