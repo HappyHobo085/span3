@@ -1,0 +1,87 @@
+from pydantic import BaseModel, EmailStr
+from typing import Optional, Generic, TypeVar, Any
+from datetime import datetime
+
+T = TypeVar("T")
+
+# --- Standaard Response Schema ---
+class APIResponse(BaseModel, Generic[T]):
+    sukses: bool
+    data: Optional[T] = None
+    fout: Optional[str] = None
+
+# --- Rolle Schemas ---
+class RolBase(BaseModel):
+    ROL_Naam: str
+
+class RolCreate(RolBase):
+    pass
+
+class Rol(RolBase):
+    Rol_ID: int
+
+    class Config:
+        from_attributes = True
+
+# --- Gebruikers Schemas ---
+class UserBase(BaseModel):
+    GEB_Naam: str
+    GEB_Van: str
+    GEB_ID_Nommer: str
+    GEB_Epos: EmailStr
+    GEB_Selfoon_Nr: Optional[str] = None
+    GEB_Profiel_Foto: Optional[str] = None
+    Rol_ID: int
+    Is_Aktief: bool = True
+
+class UserCreate(UserBase):
+    GEB_Wagwoord: str
+
+class UserUpdate(BaseModel):
+    GEB_Naam: Optional[str] = None
+    GEB_Van: Optional[str] = None
+    GEB_Selfoon_Nr: Optional[str] = None
+    GEB_Profiel_Foto: Optional[str] = None
+    Is_Aktief: Optional[bool] = None
+
+class User(UserBase):
+    Gebruiker_ID: int
+    Geskep_Op: datetime
+    Gewysig_Op: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- NFC Tags Schemas ---
+class NFCTagBase(BaseModel):
+    NFC_UID: str
+    Gebruiker_ID: Optional[int] = None
+    NFC_Tipe: str
+    NFC_Is_Aktief: bool = True
+
+class NFCTagCreate(NFCTagBase):
+    pass
+
+class NFCTag(NFCTagBase):
+    NFC_Tags_ID: int
+    Geskep_Op: datetime
+    Gewysig_Op: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Waarskuwings Schemas ---
+class WaarskuwingBase(BaseModel):
+    Gebruiker_ID: int
+    WAA_Beskrywing: str
+    WAA_Status: str = "OOP"
+
+class WaarskuwingCreate(WaarskuwingBase):
+    pass
+
+class Waarskuwing(WaarskuwingBase):
+    Waarskuwing_ID: int
+    WAA_Tydstempel: datetime
+
+    class Config:
+        from_attributes = True
