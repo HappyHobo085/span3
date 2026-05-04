@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Twee Panele Webwerf</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="home.html">Tuis</a>
+        <a href="kampus.html">Kampus</a>
+        <a href="koshuis.html">Koshuis</a>
+        <a href="events.html">Events</a>
+        <a href="sub_stelsel.html">Sub Stelsel</a>
+    </nav>
+
+    <main class="page" id="home-page" style="padding-top: 0;">
+        <section class="panels">
+            <article class="panel wide-panel" aria-label="Mini Dashboard">
+                <h2>Mini Dashboard - Updates & Opsomming</h2>
+                <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="card">
+                        <h3>Kampusse</h3>
+                        <p>3 Aktief</p>
+                    </div>
+                    <div class="card">
+                        <h3>Koshuise</h3>
+                        <p>12 Geregistreer</p>
+                    </div>
+                    <div class="card">
+                        <h3>Gebeure (Events)</h3>
+                        <p>5 Komende</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <h3>Stelsel Opdaterings</h3>
+                    <ul class="empty-list" style="padding: 20px; min-height: auto;">
+                        <li>- Toegangsbestuur module is aanlyn.</li>
+                        <li>- Koshuis data is suksesvol gelaai vir 2026.</li>
+                        <li>- Nuwe studente kaarte is gedruk vir eerstejaars.</li>
+                    </ul>
+                </div>
+            </article>
+        </section>
+        
+        <button class="action-button back-button" type="button" onclick="logOut()">Teken uit</button>
+    </main>
+
+    <script src="main.js"></script>
+    <script>
+        function logOut() {
+            localStorage.removeItem('isLoggedIn');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>

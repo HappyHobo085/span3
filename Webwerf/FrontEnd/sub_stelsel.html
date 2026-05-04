@@ -16,8 +16,17 @@
 <!-- Start of visible page content -->
 
 <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="home.html">Tuis</a>
+        <a href="kampus.html">Kampus</a>
+        <a href="koshuis.html">Koshuis</a>
+        <a href="events.html">Events</a>
+        <a href="sub_stelsel.html">Sub Stelsel</a>
+    </nav>
+
     <!-- Home page section -->
-    <main class="page" id="home-page">
+    <main class="page" id="home-page" style="padding-top: 0;">
         <!-- Top controls area -->
         <section class="top-controls" aria-label="Opsies">
             <!-- Dropdown label -->
@@ -143,8 +152,7 @@
         </section>
 
         <!-- Back action button -->
-        <button class="action-button back-button" type="button" onclick="window.location.href='login.html'">Teken
-            uit</button>
+        <button class="action-button back-button" type="button" onclick="window.location.href='home.html'">Terug</button>
     </main>
 
     <!-- JavaScript logic -->
@@ -180,8 +188,22 @@
             if (listSearch) {
                 listSearch.addEventListener('input', applyListFilter);
             }
+
+            // Load test Sub Details from localStorage
+            const storedSub = localStorage.getItem('testSubDetails');
+            if (storedSub) {
+                const subDetails = JSON.parse(storedSub);
+                const selectEl = document.getElementById('data-select');
+                if (selectEl) {
+                    const opt = document.createElement('option');
+                    opt.value = subDetails.module;
+                    opt.textContent = subDetails.module + " (" + subDetails.status + ")";
+                    selectEl.appendChild(opt);
+                }
+            }
         })();
     </script>
+    <script src="main.js"></script>
 </body>
 
 </html>

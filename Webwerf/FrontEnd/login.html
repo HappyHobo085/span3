@@ -46,19 +46,7 @@
   </section>
 
   <!-- JavaScript logic -->
-  <script>
-    // Wrap logic so variables do not leak globally
-    (function () {
-      // Get login form element
-      const loginForm = document.getElementById('login-form');
-
-      // On login submit, navigate to index.html
-      loginForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        window.location.href = 'index.html';
-      });
-    })();
-  </script>
+  <script src="login.js"></script>
 </body>
 
 </html>
