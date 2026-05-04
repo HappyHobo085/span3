@@ -257,3 +257,129 @@ def opdateer_gebruiker_status(
         # Rol terug as enige stap misluk
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Fout tydens transaksie: {str(e)}")
+
+
+@app.post("/nfc/register", response_model=schemas.APIResponse[schemas.NFCTag])
+def registreer_nfc_tag(
+    tag_in: schemas.NFCTagCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    # Check of tag reeds bestaan
+    if db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_UID == tag_in.NFC_UID).first():
+        raise HTTPException(status_code=400, detail="Tag reeds geregistreer")
+
+    # Check of user reeds 'n aktiewe tag het
+    existing = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == tag_in.Gebruiker_ID,
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Gebruiker het reeds 'n aktiewe tag")
+
+    new_tag = models.NFC_Tags(**tag_in.dict())
+    db.add(new_tag)
+    db.commit()
+    db.refresh(new_tag)
+
+    return schemas.APIResponse(sukses=True, data=new_tag)
+
+
+@app.put("/nfc/deactivate/{tag_id}", response_model=schemas.APIResponse[dict])
+def deactivate_nfc(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    tag = db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_Tags_ID == tag_id).first()
+
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag nie gevind nie")
+
+    tag.NFC_Is_Aktief = False
+    db.commit()
+
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Tag gedeaktiveer"})
+
+
+@app.get("/sekuriteit/toegang")
+def sekuriteit_toegang(
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_sekuriteit: bool = Depends(auth.check_sekuriteit)
+):
+    return schemas.APIResponse(
+        sukses=True,
+        data={"boodskap": "Sekuriteit toegang bevestig"}
+    )
+    
+    
+
+@app.post("/nfc-tags/registreer", response_model=schemas.APIResponse[schemas.NFCTag])
+def registreer_nfc_tag(
+    tag_in: schemas.NFCTagCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    # 1. Check of NFC_UID reeds bestaan
+    bestaande_tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.NFC_UID == tag_in.NFC_UID
+    ).first()
+
+    if bestaande_tag:
+        raise HTTPException(status_code=400, detail="NFC tag reeds geregistreer")
+
+    # 2. Check of gebruiker bestaan
+    gebruiker = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == tag_in.Gebruiker_ID
+    ).first()
+
+    if not gebruiker:
+        raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
+
+    # 3. Maak ou aktiewe tag onaktief
+    db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == tag_in.Gebruiker_ID,
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).update({"NFC_Is_Aktief": False})
+
+    # 4. Skep nuwe aktiewe tag
+    nuwe_tag = models.NFC_Tags(
+        NFC_UID=tag_in.NFC_UID,
+        Gebruiker_ID=tag_in.Gebruiker_ID,
+        NFC_Tipe=tag_in.NFC_Tipe,
+        NFC_Is_Aktief=True
+    )
+
+    db.add(nuwe_tag)
+    db.commit()
+    db.refresh(nuwe_tag)
+
+    return schemas.APIResponse(sukses=True, data=nuwe_tag)
+
+
+@app.patch("/nfc-tags/{gebruiker_id}/deaktiveer", response_model=schemas.APIResponse[dict])
+def deaktiveer_gebruiker_nfc_tag(
+    gebruiker_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    aktiewe_tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == gebruiker_id,
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).first()
+
+    if not aktiewe_tag:
+        raise HTTPException(status_code=404, detail="Geen aktiewe NFC tag vir hierdie gebruiker gevind nie")
+
+    aktiewe_tag.NFC_Is_Aktief = False
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={"boodskap": "Aktiewe NFC tag suksesvol gedeaktiveer"}
+    )

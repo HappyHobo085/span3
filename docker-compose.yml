@@ -27,5 +27,15 @@ services:
       db:
         condition: service_healthy
 
+  webwerf-frontend:
+    image: nginx:alpine
+    container_name: webwerf_frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Webwerf/FrontEnd:/usr/share/nginx/html:ro
+      - ./Webwerf/assets:/usr/share/nginx/assets:ro
+    restart: unless-stopped
+
 volumes:
   postgres_data:
