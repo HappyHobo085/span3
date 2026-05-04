@@ -61,27 +61,35 @@ class RoleChecker:
     def __init__(self, allowed_roles: list):
         self.allowed_roles = allowed_roles
 
-    def __call__(self, current_user: models.Gebruikers = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    def __call__(self, 
+        current_user: models.Gebruikers = Depends(get_current_user), 
+        db: Session = Depends(database.get_db)
+    ):
         rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
         if not rol:
             raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
 
+        # Admins het universele toegang
         if rol.ROL_Naam == "Administrateur":
             return True
 
+        # Check of die rol in die toegelate lys is
         if rol.ROL_Naam not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Jy het nie toestemming vir hierdie aksie nie. Benodig: {self.allowed_roles}"
+                detail=f"Toegang geweier. Benodig een van: {self.allowed_roles}"
             )
 
         return True
 
-def verifieer_kampus_toegang(kampus_id: int, current_user: models.Gebruikers, db: Session):
+async def verifieer_kampus_toegang(
+    kampus_id: int, 
+    current_user: models.Gebruikers = Depends(get_current_user), 
+    db: Session = Depends(database.get_db)
+):
     """
-    Kritieke sekuriteits-check vir F20:
-    Verifieer of 'n Kampus_Opsigter toegang het tot 'n spesifieke kampus.
-    Admins het altyd toegang.
+    Check of 'n gebruiker toegang het tot 'n spesifieke kampus.
+    Word gebruik as 'n addisionele check vir Kampus_Opsigters.
     """
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
     
@@ -99,9 +107,10 @@ def verifieer_kampus_toegang(kampus_id: int, current_user: models.Gebruikers, db
             
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Jy het nie toestemming om data vir hierdie kampus te sien nie."
+        detail="Jy het nie toestemming om data vir hierdie kampus te sien of te verander nie."
     )
 
-# Spesifieke Rol Dependencies
+# Voorafgedefinieerde dependencies vir maklike gebruik in routes
 check_admin = RoleChecker(["Administrateur"])
 check_opsigter = RoleChecker(["Administrateur", "Kampus_Opsigter"])
+check_sekuriteit = RoleChecker(["Administrateur", "Kampus_Opsigter", "Sekuriteit_Wag"])

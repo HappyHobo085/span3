@@ -77,6 +77,76 @@ def login_vir_toegang_token(form_data: OAuth2PasswordRequestForm = Depends(), db
 
 # --- GEBRUIKER ROETES ---
 
+@app.post("/gebruikers", response_model=schemas.APIResponse[schemas.User], status_code=status.HTTP_201_CREATED)
+def skep_gebruiker(
+    user_in: schemas.UserCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    """
+    F2: Skep 'n nuwe gebruiker. Slegs vir Admin.
+    """
+    # Check vir bestaande e-pos
+    if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == user_in.GEB_Epos).first():
+        raise HTTPException(status_code=400, detail="E-pos reeds geregistreer")
+    
+    # Check vir bestaande ID nommer
+    if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_ID_Nommer == user_in.GEB_ID_Nommer).first():
+        raise HTTPException(status_code=400, detail="ID Nommer reeds in gebruik")
+
+    db_user = models.Gebruikers(
+        GEB_Naam=user_in.GEB_Naam,
+        GEB_Van=user_in.GEB_Van,
+        GEB_ID_Nommer=user_in.GEB_ID_Nommer,
+        GEB_Epos=user_in.GEB_Epos,
+        GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord), # Hash wagwoord (F2)
+        GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
+        GEB_Profiel_Foto=user_in.GEB_Profiel_Foto,
+        Rol_ID=user_in.Rol_ID,
+        Is_Aktief=user_in.Is_Aktief
+    )
+    
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return schemas.APIResponse(sukses=True, data=db_user)
+
+@app.put("/gebruikers/{user_id}", response_model=schemas.APIResponse[schemas.User])
+def opdateer_gebruiker(
+    user_id: int, 
+    user_in: schemas.UserUpdate, 
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    """
+    F2: Dateer 'n gebruiker op. Slegs vir Admin.
+    """
+    db_user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
+
+    update_data = user_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    db.commit()
+    db.refresh(db_user)
+    return schemas.APIResponse(sukses=True, data=db_user)
+
+@app.delete("/gebruikers/{user_id}", response_model=schemas.APIResponse[dict])
+def verwyder_gebruiker(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    """
+    F2: Sagte verwydering van 'n gebruiker (deaktiveer).
+    """
+    return opdateer_gebruiker_status(user_id=user_id, is_aktief=False, db=db, current_user=current_user, is_admin=is_admin)
+
 @app.get("/gebruikers", response_model=schemas.APIResponse[List[schemas.User]])
 def lees_gebruikers(
     skip: int = 0, 
@@ -147,23 +217,26 @@ def opdateer_gebruiker_status(
     is_admin: bool = Depends(auth.check_admin)
 ):
     """
-    Deaktiveer 'n gebruiker en hul NFC-tags. Slegs vir Admin.
+    F1: Deaktiveer 'n gebruiker en hul NFC-tags in een transaksie. 
+    Slegs vir Admin.
     """
     gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == user_id).first()
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
     try:
+        # Stap 1: Merk Gebruikers rekord
         gebruiker.Is_Aktief = is_aktief
         
         if not is_aktief:
-            # Deaktiveer NFC tags
+            # Stap 2 & 3: Soek en deaktiveer NFC tags (F1/F13 Integrasie)
+            # Nota: In 'n produksie-omgewing met microservices sou hierdie 'n API-oproep na Steven se diens wees.
             db.query(models.NFC_Tags).filter(
                 models.NFC_Tags.Gebruiker_ID == user_id, 
                 models.NFC_Tags.NFC_Is_Aktief == True
             ).update({"NFC_Is_Aktief": False})
 
-            # Skep waarskuwing
+            # Stap 4: Skep waarskuwing rekord met spesifieke beskrywing
             nuwe_waarskuwing = models.Waarskuwings(
                 Gebruiker_ID=user_id,
                 WAA_Beskrywing=f"Gebruiker handmatig deur Admin ({current_user.GEB_Naam}) onaktief gemerk",
@@ -171,13 +244,16 @@ def opdateer_gebruiker_status(
             )
             db.add(nuwe_waarskuwing)
 
+        # Stap 5: Bevestig transaksie
         db.commit()
         db.refresh(gebruiker)
+        
         return schemas.APIResponse(
             sukses=True, 
             data={"boodskap": "Status suksesvol opgedateer", "is_aktief": gebruiker.Is_Aktief}
         )
     
     except Exception as e:
+        # Rol terug as enige stap misluk
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Fout tydens opdatering: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fout tydens transaksie: {str(e)}")
