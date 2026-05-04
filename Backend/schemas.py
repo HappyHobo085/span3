@@ -52,6 +52,20 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+class UserSecurityRead(BaseModel):
+    """
+    F21: Beperkte data vir Sekuriteitswagte.
+    """
+    Gebruiker_ID: int
+    GEB_Naam: str
+    GEB_Van: str
+    GEB_ID_Nommer: str
+    GEB_Profiel_Foto: Optional[str] = None
+    Is_Aktief: bool
+    
+    class Config:
+        from_attributes = True
+
 # --- NFC Tags Schemas ---
 class NFCTagBase(BaseModel):
     NFC_UID: str

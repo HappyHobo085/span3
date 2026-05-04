@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from database import engine, get_db
 import models, schemas, auth
@@ -147,66 +147,100 @@ def verwyder_gebruiker(
     """
     return opdateer_gebruiker_status(user_id=user_id, is_aktief=False, db=db, current_user=current_user, is_admin=is_admin)
 
-@app.get("/gebruikers", response_model=schemas.APIResponse[List[schemas.User]])
+@app.get("/gebruikers", response_model=schemas.APIResponse[List[Any]])
 def lees_gebruikers(
     skip: int = 0, 
     limit: int = 100, 
     kampus_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_authorized: bool = Depends(auth.check_opsigter)
+    is_authorized: bool = Depends(auth.check_sekuriteit) # Wagte mag nou ook lys sien
 ):
     """
     Stuur 'n lys van gebruikers terug. 
-    As 'n kampus_id verskaf word, word toegang eers verifieer (F20).
+    F20: Kampus Opsigters word beperk tot hul eie kampus.
+    F21: Sekuriteitswagte sien beperkte data.
     """
     query = db.query(models.Gebruikers)
-
-    # As dit 'n opsigter is, MOET ons filter op hul kampus as hulle nie 'n spesifieke een vra nie,
-    # of verifieer dat hulle toegang het tot die een wat hulle vra.
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
     
+    # F20: Kampus Opsigter Filtering
     if rol.ROL_Naam == "Kampus_Opsigter":
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         if not opsigter_info:
             raise HTTPException(status_code=403, detail="Opsigter is nie aan 'n kampus gekoppel nie.")
         
-        # Filter altyd op die opsigter se eie kampus
         query = query.join(models.Kampus_Opsigter, models.Gebruikers.Gebruiker_ID == models.Kampus_Opsigter.Gebruiker_ID)\
                      .filter(models.Kampus_Opsigter.Kampus_ID == opsigter_info.Kampus_ID)
     elif kampus_id:
-        # Admins kan filter op enige kampus
+        # Admins kan op enige kampus filter
         query = query.join(models.Kampus_Opsigter, models.Gebruikers.Gebruiker_ID == models.Kampus_Opsigter.Gebruiker_ID)\
                      .filter(models.Kampus_Opsigter.Kampus_ID == kampus_id)
 
     gebruikers = query.offset(skip).limit(limit).all()
+
+    # F21: Data Filtering vir Sekuriteitswagte
+    if rol.ROL_Naam == "Sekuriteit_Wag":
+        return schemas.APIResponse(
+            sukses=True, 
+            data=[schemas.UserSecurityRead.from_orm(g) for g in gebruikers]
+        )
+
     return schemas.APIResponse(sukses=True, data=gebruikers)
 
-@app.get("/gebruikers/{user_id}", response_model=schemas.APIResponse[schemas.User])
+@app.get("/gebruikers/{user_id}", response_model=schemas.APIResponse[Any])
 def lees_gebruiker(
     user_id: int, 
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_authorized: bool = Depends(auth.check_opsigter)
+    is_authorized: bool = Depends(auth.check_sekuriteit)
 ):
+    """
+    Kry 'n spesifieke gebruiker.
+    F20: Check kampus skoop.
+    F21: Filter velde vir Sekuriteitswagte.
+    """
     gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == user_id).first()
     if gebruiker is None:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
     
-    # F20: Check of die opsigter toegang het tot hierdie spesifieke gebruiker se kampus
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+
+    # F20: Kampus Skoop Check
     if rol.ROL_Naam == "Kampus_Opsigter":
-        # Check of die gebruiker aan dieselfde kampus as die opsigter behoort
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
-        gebruiker_opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == user_id).first()
+        # Check of die teiken gebruiker in dieselfde kampus is
+        teiken_opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == user_id).first()
         
-        # Hierdie is 'n vereenvoudigde check - in 'n regte stelsel sal studente ook aan kampusse gekoppel wees.
-        # Vir nou check ons of die gebruiker wat opgevra word, in die opsigter se kampus is (as hulle ook 'n opsigter is)
-        # OF ons gooi 'n fout as die opsigter probeer om buite hul skoop te kyk.
-        if gebruiker_opsigter_info and gebruiker_opsigter_info.Kampus_ID != opsigter_info.Kampus_ID:
+        if teiken_opsigter_info and teiken_opsigter_info.Kampus_ID != opsigter_info.Kampus_ID:
             raise HTTPException(status_code=403, detail="Jy het nie toegang tot hierdie gebruiker nie.")
 
+    # F21: Data Filtering vir Sekuriteitswagte
+    if rol.ROL_Naam == "Sekuriteit_Wag":
+        return schemas.APIResponse(sukses=True, data=schemas.UserSecurityRead.from_orm(gebruiker))
+
     return schemas.APIResponse(sukses=True, data=gebruiker)
+
+# --- NFC ROETES (Steven se verantwoordelikheid, maar Louis integreer hiermee) ---
+
+@app.patch("/nfc-tags/{user_id}/deaktiveer", response_model=schemas.APIResponse[dict])
+def deaktiveer_nfc_tags(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user)
+):
+    """
+    F13: Steven se eindpunt om NFC tags te deaktiveer.
+    Word deur Louis se F1 logika aangeroep.
+    """
+    db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == user_id, 
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).update({"NFC_Is_Aktief": False})
+    
+    # Steven skep NIE die waarskuwing nie - dit is Louis se werk.
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "NFC tags gedeaktiveer"})
 
 @app.patch("/gebruikers/{user_id}/status", response_model=schemas.APIResponse[dict])
 def opdateer_gebruiker_status(
@@ -229,14 +263,12 @@ def opdateer_gebruiker_status(
         gebruiker.Is_Aktief = is_aktief
         
         if not is_aktief:
-            # Stap 2 & 3: Soek en deaktiveer NFC tags (F1/F13 Integrasie)
-            # Nota: In 'n produksie-omgewing met microservices sou hierdie 'n API-oproep na Steven se diens wees.
-            db.query(models.NFC_Tags).filter(
-                models.NFC_Tags.Gebruiker_ID == user_id, 
-                models.NFC_Tags.NFC_Is_Aktief == True
-            ).update({"NFC_Is_Aktief": False})
+            # Stap 2 & 3: Roep Steven se F13 eindpunt aan (F1/F13 Integrasie)
+            # In 'n microservice argitektuur sou dit 'n HTTP PATCH wees.
+            # Hier simuleer ons dit deur die funksie direk te roep.
+            deaktiveer_nfc_tags(user_id=user_id, db=db, current_user=current_user)
 
-            # Stap 4: Skep waarskuwing rekord met spesifieke beskrywing
+            # Stap 4: Skep waarskuwing rekord met spesifieke beskrywing (Louis se verantwoordelikheid)
             nuwe_waarskuwing = models.Waarskuwings(
                 Gebruiker_ID=user_id,
                 WAA_Beskrywing=f"Gebruiker handmatig deur Admin ({current_user.GEB_Naam}) onaktief gemerk",
