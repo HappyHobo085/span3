@@ -84,6 +84,20 @@ class NFCTag(NFCTagBase):
     class Config:
         from_attributes = True
 
+# --- Kampus Schemas ---
+class KampusBase(BaseModel):
+    KAM_Naam: str
+    KAM_Adres: Optional[str] = None
+
+class KampusCreate(KampusBase):
+    pass
+
+class Kampus(KampusBase):
+    Kampus_ID: int
+
+    class Config:
+        from_attributes = True
+
 # --- Waarskuwings Schemas ---
 class WaarskuwingBase(BaseModel):
     Gebruiker_ID: int

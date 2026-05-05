@@ -221,27 +221,6 @@ def lees_gebruiker(
 
     return schemas.APIResponse(sukses=True, data=gebruiker)
 
-# --- NFC ROETES (Steven se verantwoordelikheid, maar Louis integreer hiermee) ---
-
-@app.patch("/nfc-tags/{user_id}/deaktiveer", response_model=schemas.APIResponse[dict])
-def deaktiveer_nfc_tags(
-    user_id: int, 
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user)
-):
-    """
-    F13: Steven se eindpunt om NFC tags te deaktiveer.
-    Word deur Louis se F1 logika aangeroep.
-    """
-    db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.Gebruiker_ID == user_id, 
-        models.NFC_Tags.NFC_Is_Aktief == True
-    ).update({"NFC_Is_Aktief": False})
-    
-    # Steven skep NIE die waarskuwing nie - dit is Louis se werk.
-    db.commit()
-    return schemas.APIResponse(sukses=True, data={"boodskap": "NFC tags gedeaktiveer"})
-
 @app.patch("/gebruikers/{user_id}/status", response_model=schemas.APIResponse[dict])
 def opdateer_gebruiker_status(
     user_id: int, 
@@ -263,12 +242,13 @@ def opdateer_gebruiker_status(
         gebruiker.Is_Aktief = is_aktief
         
         if not is_aktief:
-            # Stap 2 & 3: Roep Steven se F13 eindpunt aan (F1/F13 Integrasie)
-            # In 'n microservice argitektuur sou dit 'n HTTP PATCH wees.
-            # Hier simuleer ons dit deur die funksie direk te roep.
-            deaktiveer_nfc_tags(user_id=user_id, db=db, current_user=current_user)
+            # Stap 2 & 3: Deaktiveer NFC tags (F1/F13 Integrasie)
+            db.query(models.NFC_Tags).filter(
+                models.NFC_Tags.Gebruiker_ID == user_id, 
+                models.NFC_Tags.NFC_Is_Aktief == True
+            ).update({"NFC_Is_Aktief": False})
 
-            # Stap 4: Skep waarskuwing rekord met spesifieke beskrywing (Louis se verantwoordelikheid)
+            # Stap 4: Skep waarskuwing rekord (Louis se verantwoordelikheid)
             nuwe_waarskuwing = models.Waarskuwings(
                 Gebruiker_ID=user_id,
                 WAA_Beskrywing=f"Gebruiker handmatig deur Admin ({current_user.GEB_Naam}) onaktief gemerk",
@@ -286,68 +266,28 @@ def opdateer_gebruiker_status(
         )
     
     except Exception as e:
-        # Rol terug as enige stap misluk
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Fout tydens transaksie: {str(e)}")
 
+# --- KAMPUS & ROL ROETES ---
 
-@app.post("/nfc/register", response_model=schemas.APIResponse[schemas.NFCTag])
-def registreer_nfc_tag(
-    tag_in: schemas.NFCTagCreate,
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_admin: bool = Depends(auth.check_admin)
-):
-    # Check of tag reeds bestaan
-    if db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_UID == tag_in.NFC_UID).first():
-        raise HTTPException(status_code=400, detail="Tag reeds geregistreer")
+@app.get("/kampusse", response_model=schemas.APIResponse[List[schemas.Kampus]])
+def lees_kampusse(db: Session = Depends(get_db)):
+    """
+    Stuur 'n lys van alle kampusse terug.
+    """
+    kampusse = db.query(models.Kampus).all()
+    return schemas.APIResponse(sukses=True, data=kampusse)
 
-    # Check of user reeds 'n aktiewe tag het
-    existing = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.Gebruiker_ID == tag_in.Gebruiker_ID,
-        models.NFC_Tags.NFC_Is_Aktief == True
-    ).first()
+@app.get("/rolle", response_model=schemas.APIResponse[List[schemas.Rol]])
+def lees_rolle(db: Session = Depends(get_db)):
+    """
+    Stuur 'n lys van alle rolle terug.
+    """
+    rolle = db.query(models.Rolle).all()
+    return schemas.APIResponse(sukses=True, data=rolle)
 
-    if existing:
-        raise HTTPException(status_code=400, detail="Gebruiker het reeds 'n aktiewe tag")
-
-    new_tag = models.NFC_Tags(**tag_in.dict())
-    db.add(new_tag)
-    db.commit()
-    db.refresh(new_tag)
-
-    return schemas.APIResponse(sukses=True, data=new_tag)
-
-
-@app.put("/nfc/deactivate/{tag_id}", response_model=schemas.APIResponse[dict])
-def deactivate_nfc(
-    tag_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_admin: bool = Depends(auth.check_admin)
-):
-    tag = db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_Tags_ID == tag_id).first()
-
-    if not tag:
-        raise HTTPException(status_code=404, detail="Tag nie gevind nie")
-
-    tag.NFC_Is_Aktief = False
-    db.commit()
-
-    return schemas.APIResponse(sukses=True, data={"boodskap": "Tag gedeaktiveer"})
-
-
-@app.get("/sekuriteit/toegang")
-def sekuriteit_toegang(
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_sekuriteit: bool = Depends(auth.check_sekuriteit)
-):
-    return schemas.APIResponse(
-        sukses=True,
-        data={"boodskap": "Sekuriteit toegang bevestig"}
-    )
-    
-    
+# --- NFC ROETES (F13 & F1 Integrasie) ---
 
 @app.post("/nfc-tags/registreer", response_model=schemas.APIResponse[schemas.NFCTag])
 def registreer_nfc_tag(
@@ -356,62 +296,61 @@ def registreer_nfc_tag(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
+    """
+    F13: Registreer 'n nuwe NFC tag vir 'n gebruiker.
+    Deaktiveer outomaties enige bestaande aktiewe tags vir daardie gebruiker.
+    """
     # 1. Check of NFC_UID reeds bestaan
-    bestaande_tag = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.NFC_UID == tag_in.NFC_UID
-    ).first()
-
+    bestaande_tag = db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_UID == tag_in.NFC_UID).first()
     if bestaande_tag:
         raise HTTPException(status_code=400, detail="NFC tag reeds geregistreer")
 
     # 2. Check of gebruiker bestaan
-    gebruiker = db.query(models.Gebruikers).filter(
-        models.Gebruikers.Gebruiker_ID == tag_in.Gebruiker_ID
-    ).first()
-
+    gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == tag_in.Gebruiker_ID).first()
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
-    # 3. Maak ou aktiewe tag onaktief
+    # 3. Maak ou aktiewe tag onaktief (Besigheidsreël: slegs een aktiewe tag per gebruiker)
     db.query(models.NFC_Tags).filter(
         models.NFC_Tags.Gebruiker_ID == tag_in.Gebruiker_ID,
         models.NFC_Tags.NFC_Is_Aktief == True
     ).update({"NFC_Is_Aktief": False})
 
     # 4. Skep nuwe aktiewe tag
-    nuwe_tag = models.NFC_Tags(
-        NFC_UID=tag_in.NFC_UID,
-        Gebruiker_ID=tag_in.Gebruiker_ID,
-        NFC_Tipe=tag_in.NFC_Tipe,
-        NFC_Is_Aktief=True
-    )
-
+    nuwe_tag = models.NFC_Tags(**tag_in.dict())
     db.add(nuwe_tag)
     db.commit()
     db.refresh(nuwe_tag)
 
     return schemas.APIResponse(sukses=True, data=nuwe_tag)
 
-
-@app.patch("/nfc-tags/{gebruiker_id}/deaktiveer", response_model=schemas.APIResponse[dict])
-def deaktiveer_gebruiker_nfc_tag(
-    gebruiker_id: int,
+@app.patch("/nfc-tags/{user_id}/deaktiveer", response_model=schemas.APIResponse[dict])
+def deaktiveer_gebruiker_nfc_tags(
+    user_id: int, 
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
-    aktiewe_tag = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.Gebruiker_ID == gebruiker_id,
+    """
+    F13: Deaktiveer alle aktiewe NFC tags vir 'n spesifieke gebruiker.
+    """
+    updated_count = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == user_id, 
         models.NFC_Tags.NFC_Is_Aktief == True
-    ).first()
+    ).update({"NFC_Is_Aktief": False})
+    
+    if updated_count == 0:
+        raise HTTPException(status_code=404, detail="Geen aktiewe NFC tags vir hierdie gebruiker gevind nie")
 
-    if not aktiewe_tag:
-        raise HTTPException(status_code=404, detail="Geen aktiewe NFC tag vir hierdie gebruiker gevind nie")
-
-    aktiewe_tag.NFC_Is_Aktief = False
     db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "NFC tags suksesvol gedeaktiveer"})
 
-    return schemas.APIResponse(
-        sukses=True,
-        data={"boodskap": "Aktiewe NFC tag suksesvol gedeaktiveer"}
-    )
+@app.get("/sekuriteit/toegang")
+def sekuriteit_toegang_toets(
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit)
+):
+    """
+    Eenvoudige toets-eindpunt vir Sekuriteitswag toegang.
+    """
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Toegang bevestig vir Sekuriteit"})
