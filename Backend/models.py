@@ -41,6 +41,7 @@ class Waarskuwings(Base):
     __tablename__ = 'waarskuwings'
     Waarskuwing_ID = Column(Integer, primary_key=True, index=True)
     Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Lokasie_ID     = Column(Integer) # REFERENCES Lokasies(Lokasie_ID)
     WAA_Beskrywing = Column(Text, nullable=False)
     WAA_Status     = Column(String(32), nullable=False, default='OOP')
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)

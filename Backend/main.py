@@ -50,6 +50,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- HULPFUNKSIES (Interne Kontrakte) ---
+
+def _deaktiveer_nfc_tags_logika(db: Session, user_id: int):
+    """
+    Interne hulpfunksie vir deaktivering van NFC tags.
+    Word gedeel tussen Louis en Steven se roetes (F1 & F13).
+    """
+    return db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == user_id, 
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).update({"NFC_Is_Aktief": False})
+
 @app.get("/", response_model=schemas.APIResponse[dict])
 def read_root():
     return schemas.APIResponse(sukses=True, data={"message": "Backend is working"})
@@ -65,9 +77,12 @@ def login_vir_toegang_token(form_data: OAuth2PasswordRequestForm = Depends(), db
             detail="Verkeerde e-pos of wagwoord"
         )
     
+    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
+    rol_naam = rol.ROL_Naam if rol else "Onbekend"
+
     access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
-        data={"sub": str(user.Gebruiker_ID), "rol": user.Rol_ID}, 
+        data={"sub": str(user.Gebruiker_ID), "rol": user.Rol_ID, "rol_naam": rol_naam}, 
         expires_delta=access_token_expires
     )
     return schemas.APIResponse(
@@ -242,11 +257,8 @@ def opdateer_gebruiker_status(
         gebruiker.Is_Aktief = is_aktief
         
         if not is_aktief:
-            # Stap 2 & 3: Deaktiveer NFC tags (F1/F13 Integrasie)
-            db.query(models.NFC_Tags).filter(
-                models.NFC_Tags.Gebruiker_ID == user_id, 
-                models.NFC_Tags.NFC_Is_Aktief == True
-            ).update({"NFC_Is_Aktief": False})
+            # Stap 2 & 3: Deaktiveer NFC tags via gedeelde logika (F1/F13 Integrasie)
+            _deaktiveer_nfc_tags_logika(db, user_id)
 
             # Stap 4: Skep waarskuwing rekord (Louis se verantwoordelikheid)
             nuwe_waarskuwing = models.Waarskuwings(
@@ -311,10 +323,7 @@ def registreer_nfc_tag(
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
     # 3. Maak ou aktiewe tag onaktief (Besigheidsreël: slegs een aktiewe tag per gebruiker)
-    db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.Gebruiker_ID == tag_in.Gebruiker_ID,
-        models.NFC_Tags.NFC_Is_Aktief == True
-    ).update({"NFC_Is_Aktief": False})
+    _deaktiveer_nfc_tags_logika(db, tag_in.Gebruiker_ID)
 
     # 4. Skep nuwe aktiewe tag
     nuwe_tag = models.NFC_Tags(**tag_in.dict())
@@ -334,10 +343,7 @@ def deaktiveer_gebruiker_nfc_tags(
     """
     F13: Deaktiveer alle aktiewe NFC tags vir 'n spesifieke gebruiker.
     """
-    updated_count = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.Gebruiker_ID == user_id, 
-        models.NFC_Tags.NFC_Is_Aktief == True
-    ).update({"NFC_Is_Aktief": False})
+    updated_count = _deaktiveer_nfc_tags_logika(db, user_id)
     
     if updated_count == 0:
         raise HTTPException(status_code=404, detail="Geen aktiewe NFC tags vir hierdie gebruiker gevind nie")
