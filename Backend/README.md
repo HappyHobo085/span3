@@ -16,26 +16,31 @@ Alle antwoorde volg hierdie standaard struktuur:
 }
 ```
 
+## Toegangsbeheer en Rolle
+Die API implementeer streng rol-gebaseerde toegang (RBAC):
+*   **Administrateur**: Volle toegang tot alle CRUD operasies en data.
+*   **Kampus_Opsigter**: Kan slegs gebruikers en data binne hul toegewese kampusse sien (F20).
+*   **Sekuriteit_Wag**: Mag gebruikers skandeer en lys, maar sien slegs 'n beperkte profiel (geen e-pos of sensitiewe data) (F21).
+
 ## Roetes
 
 ### 1. Gebruikerbestuur (F2)
-*   **GET /gebruikers**: Lys alle gebruikers. 
-    *   *Admins* sien almal. 
-    *   *Kampus Opsigters* sien slegs gebruikers in hul kampus skoop.
-*   **GET /gebruikers/{id}**: Kry volledige profiel van 'n spesifieke gebruiker.
+*   **GET /gebruikers**: Lys gebruikers. Data word gefilter gebaseer op die versoeker se rol.
+*   **GET /gebruikers/{id}**: Kry profiel. Sekuriteitswagte sien slegs `UserSecurityRead` velde.
 *   **POST /gebruikers**: Skep 'n nuwe gebruiker (Slegs Admin).
-    *   Verpligte velde: `GEB_Naam`, `GEB_Van`, `GEB_ID_Nommer`, `GEB_Epos`, `GEB_Wagwoord`, `Rol_ID`.
 *   **PUT /gebruikers/{id}**: Dateer gebruiker inligting op (Slegs Admin).
-*   **DELETE /gebruikers/{id}**: Deaktiveer 'n gebruiker (Sagte verwydering).
+*   **DELETE /gebruikers/{id}**: Sagte verwydering (deaktiveer).
 
-### 2. Status en NFC (F1)
+### 2. Status en NFC (F1 & F13)
 *   **PATCH /gebruikers/{id}/status?is_aktief=false**: 
     *   Merk gebruiker as onaktief.
-    *   Deaktiveer outomaties alle gekoppelde NFC tags.
-    *   Skep 'n `Waarskuwing` rekord vir die ouditspoor.
+    *   Roep outomaties Steven se NFC deaktivering eindpunt aan.
+    *   Skep 'n `Waarskuwing` rekord.
+*   **PATCH /nfc-tags/{user_id}/deaktiveer**: 
+    *   Steven se eindpunt (F13) om alle aktiewe tags vir 'n gebruiker te deaktiveer.
 
-### 3. Kampus Skoop (F20)
-*   Middleware verifieer outomaties dat `Kampus_Opsigters` slegs toegang het tot data binne hul toegewese kampusse.
+## Databasis Migrasies
+Sien die `Backend/migrations/` gids vir die amptelike SQL skema-lêers. Nuwe veranderinge moet as genommerde SQL lêers bygevoeg word.
 
 ---
 *Geskep deur Louis (Admin API Ontwikkelaar)*
