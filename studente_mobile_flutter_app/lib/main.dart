@@ -101,103 +101,104 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     // Basic page structure.
     return Scaffold(
-      // Screen background color.
-      backgroundColor: loginPageBackground,
-      body: SafeArea(
-        child: Center(
-          // Vertical layout for image, fields and button.
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              // Top image container.
-              Container(
-                width: 395.1,
-                height: 285.38,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0A0F1F),
-                ),
-                child: ClipRRect(
-                  // Rounded image corners.
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    // Login page image.
-                    'assets/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png',
-                    width: 200,
-                    height: 60.43,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(0, 50, 0, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Align(
-                      alignment: const AlignmentDirectional(0, 0),
-                      child: _LoginFieldContainer(
-                        // Email text field.
-                        child: TextField(
-                          controller: _usernameController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _loginInputDecoration(
-                            context,
-                            hintText: 'gebruikers inligting',
-                          ),
-                        ),
+        // Screen background color.
+        backgroundColor: loginPageBackground,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Center(
+              // Vertical layout for image, fields and button.
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  // Top image container.
+                  Container(
+                    width: 395.1,
+                    height: 285.38,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF0A0F1F),
+                    ),
+                    child: ClipRRect(
+                      // Rounded image corners.
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        // Login page image.
+                        'assets/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png',
+                        width: 200,
+                        height: 60.43,
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(0, 10, 0, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Align(
-                      alignment: const AlignmentDirectional(0, 0),
-                      child: _LoginFieldContainer(
-                        // Password text field.
-                        child: TextField(
-                          // Hide password characters.
-                          obscureText: true,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _loginInputDecoration(
-                            context,
-                            hintText: 'wagwoord',
-                            // Lock icon inside field.
-                            prefixIcon:
-                                const Icon(Icons.lock, color: Colors.white),
+                  ),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(0, 50, 0, 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Align(
+                          alignment: const AlignmentDirectional(0, 0),
+                          child: _LoginFieldContainer(
+                            // Email text field.
+                            child: TextField(
+                              controller: _usernameController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _loginInputDecoration(
+                                context,
+                                hintText: 'gebruikers inligting',
+                              ),
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(0, 10, 0, 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Align(
+                          alignment: const AlignmentDirectional(0, 0),
+                          child: _LoginFieldContainer(
+                            // Password text field.
+                            child: TextField(
+                              // Hide password characters.
+                              obscureText: true,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _loginInputDecoration(
+                                context,
+                                hintText: 'wagwoord',
+                                // Lock icon inside field.
+                                prefixIcon:
+                                    const Icon(Icons.lock, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(0, 80, 0, 0),
+                    child: SingleChildScrollView(
+                      // Keep layout safe on small widths.
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          // Login action button.
+                          _LoginGradientButton(onLogin: _handleLogin),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(0, 80, 0, 0),
-                child: SingleChildScrollView(
-                  // Keep layout safe on small widths.
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      // Login action button.
-                      _LoginGradientButton(onLogin: _handleLogin),
-                    ],
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
 
