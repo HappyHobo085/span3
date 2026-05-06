@@ -101,6 +101,7 @@ class Kampus(KampusBase):
 # --- Waarskuwings Schemas ---
 class WaarskuwingBase(BaseModel):
     Gebruiker_ID: int
+    Lokasie_ID: Optional[int] = None
     WAA_Beskrywing: str
     WAA_Status: str = "OOP"
 
