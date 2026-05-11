@@ -30,23 +30,33 @@ class NFC_Tags(Base):
     NFC_Tags_ID   = Column(Integer, primary_key=True, index=True)
     NFC_UID       = Column(String(64), nullable=False, unique=True)
     Gebruiker_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'))
+    Lokasie_ID    = Column(Integer, ForeignKey('lokasies.id'))
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
     Geskep_Op     = Column(DateTime, default=datetime.utcnow)
     Gewysig_Op    = Column(DateTime, default=datetime.utcnow)
 
     gebruiker = relationship("Gebruikers")
+    lokasie   = relationship("Lokasie")
+
+class Lokasie(Base):
+    __tablename__ = 'lokasies'
+    id          = Column(Integer, primary_key=True, index=True)
+    naam        = Column(String(100), nullable=False)
+    beskrywing  = Column(Text)
+    kampus_id   = Column(Integer) # vir later, kan NULL wees vir nou
 
 class Waarskuwings(Base):
     __tablename__ = 'waarskuwings'
     Waarskuwing_ID = Column(Integer, primary_key=True, index=True)
     Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
-    Lokasie_ID     = Column(Integer) # REFERENCES Lokasies(Lokasie_ID)
+    Lokasie_ID     = Column(Integer, ForeignKey('lokasies.id')) 
     WAA_Beskrywing = Column(Text, nullable=False)
     WAA_Status     = Column(String(32), nullable=False, default='OOP')
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
 
     gebruiker = relationship("Gebruikers")
+    lokasie   = relationship("Lokasie")
 
 class Kampus(Base):
     __tablename__ = 'kampus'

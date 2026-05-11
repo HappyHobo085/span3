@@ -70,6 +70,7 @@ class UserSecurityRead(BaseModel):
 class NFCTagBase(BaseModel):
     NFC_UID: str
     Gebruiker_ID: Optional[int] = None
+    Lokasie_ID: Optional[int] = None
     NFC_Tipe: str
     NFC_Is_Aktief: bool = True
 
@@ -80,6 +81,21 @@ class NFCTag(NFCTagBase):
     NFC_Tags_ID: int
     Geskep_Op: datetime
     Gewysig_Op: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Lokasies Schemas ---
+class LokasieBase(BaseModel):
+    naam: str
+    beskrywing: Optional[str] = None
+    kampus_id: Optional[int] = None
+
+class LokasieCreate(LokasieBase):
+    pass
+
+class Lokasie(LokasieBase):
+    id: int
 
     class Config:
         from_attributes = True

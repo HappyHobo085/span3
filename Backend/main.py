@@ -299,6 +299,61 @@ def lees_rolle(db: Session = Depends(get_db)):
     rolle = db.query(models.Rolle).all()
     return schemas.APIResponse(sukses=True, data=rolle)
 
+# --- LOKASIE ROETES (Louis) ---
+
+@app.post("/lokasies", response_model=schemas.APIResponse[schemas.Lokasie], status_code=status.HTTP_201_CREATED)
+def skep_lokasie(
+    lokasie_in: schemas.LokasieCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    """
+    Stap 2: Skep 'n nuwe klaskamer/lokasie.
+    """
+    db_lokasie = models.Lokasie(**lokasie_in.dict())
+    db.add(db_lokasie)
+    db.commit()
+    db.refresh(db_lokasie)
+    return schemas.APIResponse(sukses=True, data=db_lokasie)
+
+@app.get("/lokasies", response_model=schemas.APIResponse[List[schemas.Lokasie]])
+def lys_lokasies(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user)
+):
+    """
+    Stap 2: Lys alle klaskamers.
+    """
+    lokasies = db.query(models.Lokasie).all()
+    return schemas.APIResponse(sukses=True, data=lokasies)
+
+@app.post("/nfc-tags", response_model=schemas.APIResponse[schemas.NFCTag])
+def koppel_nfc_tag_aan_lokasie(
+    tag_in: schemas.NFCTagCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
+    """
+    Stap 2: Koppel 'n NFC-tag aan 'n klaskamer.
+    """
+    # Check of NFC_UID reeds bestaan
+    db_tag = db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_UID == tag_in.NFC_UID).first()
+    
+    if db_tag:
+        # Update bestaande tag
+        for key, value in tag_in.dict(exclude_unset=True).items():
+            setattr(db_tag, key, value)
+    else:
+        # Skep nuwe tag
+        db_tag = models.NFC_Tags(**tag_in.dict())
+        db.add(db_tag)
+    
+    db.commit()
+    db.refresh(db_tag)
+    return schemas.APIResponse(sukses=True, data=db_tag)
+
 # --- NFC ROETES (F13 & F1 Integrasie) ---
 
 @app.post("/nfc-tags/registreer", response_model=schemas.APIResponse[schemas.NFCTag])
