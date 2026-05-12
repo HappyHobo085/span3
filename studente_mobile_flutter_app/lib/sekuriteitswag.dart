@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'app_shared.dart';
 
 class SekuriteitswagHomePage extends StatelessWidget {
   const SekuriteitswagHomePage({super.key});

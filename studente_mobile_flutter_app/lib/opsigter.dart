@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'app_shared.dart';
 
 class OpsigterHomePage extends StatelessWidget {
   const OpsigterHomePage({super.key});

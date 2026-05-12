@@ -1,20 +1,19 @@
 // Flutter material widgets package.
 import 'package:flutter/material.dart';
+import 'app_shared.dart';
 import 'student.dart';
 import 'personeel.dart';
 import 'opsigter.dart';
 import 'sekuriteitswag.dart';
 
-// Main brown color used in the app theme.
-const Color loginBrown = Color(0xFF935E28);
-// Dark blue helper color used in the app theme.
-const Color loginDarkBlue = Color(0xFF0E1E3B);
-// Main page background color used on all screens.
-const Color loginPageBackground = Color(0xFF0D132C);
+/// Backend API (FastAPI `main.py`) — sien [moon_api.dart].
+export 'moon_api.dart';
 
 // App entry point.
 void main() {
-  // Start the Flutter app.
+  // Backend: stel URL vir jou omgewing (Android-emulator: 10.0.2.2; iOS-simulator/Desktop: 127.0.0.1).
+  // MoonApi.baseUrl = 'http://127.0.0.1:8000';
+  // Na werklike login teen POST /token: MoonApi.bearerToken = access_token;
   runApp(const MyApp());
 }
 
@@ -296,68 +295,3 @@ class _LoginGradientButton extends StatelessWidget {
   }
 }
 
-// Reusable neon gradient action button.
-class GradientActionButton extends StatelessWidget {
-  // Button text.
-  final String label;
-  // Action when button is tapped.
-  final VoidCallback onTap;
-  // Button width.
-  final double width;
-  // Button height.
-  final double height;
-
-  // Constructor with optional size values.
-  const GradientActionButton({
-    super.key,
-    required this.label,
-    required this.onTap,
-    this.width = 324.65,
-    this.height = 45,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Tap area with custom visual style.
-    return InkWell(
-      splashColor: Colors.transparent,
-      focusColor: Colors.transparent,
-      hoverColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      onTap: onTap,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          // Glow effect around button.
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 25,
-              color: Color(0xA87B61FF),
-              offset: Offset(0, 2),
-              spreadRadius: 2,
-            ),
-          ],
-          // Vertical neon gradient fill.
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7B61FF), Color(0xFF00C2FF)],
-            stops: [0, 1],
-            begin: AlignmentDirectional(0, -1),
-            end: AlignmentDirectional(0, 1),
-          ),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: const Color(0xFF7B61FF)),
-        ),
-        alignment: const AlignmentDirectional(0, 0),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-}

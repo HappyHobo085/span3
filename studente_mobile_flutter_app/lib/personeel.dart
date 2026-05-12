@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'app_shared.dart';
 
 class PersoneelHomePage extends StatelessWidget {
   const PersoneelHomePage({super.key});
