@@ -12,6 +12,111 @@
   <title>Twee Panele Webwerf</title>
   <!-- Main external stylesheet -->
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Keep controls in one row: dropdown left, create button right */
+    .top-controls.kampus-controls {
+      width: 100%;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: row;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .kampus-controls .left-control {
+      width: calc((100% - var(--panel-gap)) / 2);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .create-class-button {
+      height: 44px;
+      min-width: 170px;
+      padding: 0 14px;
+      border: 1px solid #7B61FF;
+      color: #FFFFFF;
+      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%);
+      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
+      cursor: pointer;
+    }
+
+    /* Popup overlay */
+    .class-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .class-modal-overlay.open {
+      display: flex;
+    }
+
+    /* Popup panel */
+    .class-modal {
+      width: 100%;
+      max-width: 520px;
+      background: #0D132C;
+      border: 1.5px solid #7B61FF;
+      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
+      padding: 20px;
+      color: #FFFFFF;
+    }
+
+    .class-modal h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+    }
+
+    .class-modal .field {
+      margin-bottom: 12px;
+    }
+
+    .class-modal label {
+      display: block;
+      margin-bottom: 6px;
+      color: #FFFFFF;
+    }
+
+    .class-modal input,
+    .class-modal textarea {
+      width: 100%;
+      border: 1.5px solid #7B61FF;
+      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.2);
+      background: #0D132C;
+      color: #FFFFFF;
+      padding: 10px;
+      font: inherit;
+    }
+
+    .class-modal textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .class-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .class-modal-actions button {
+      min-width: 110px;
+      height: 40px;
+      border: 1px solid #7B61FF;
+      color: #FFFFFF;
+      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%);
+      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
+      cursor: pointer;
+    }
+  </style>
 </head>
 <!-- Start of visible page content -->
 
@@ -28,15 +133,18 @@
     <!-- Home page section -->
     <main class="page" id="home-page" style="padding-top: 0;">
         <!-- Top controls area -->
-        <section class="top-controls" aria-label="Opsies">
-            <!-- Dropdown label -->
-            <label for="data-select">Kies Kampus:</label>
-            <!-- Dropdown selection -->
-            <select id="data-select" name="data-select">
-                <option value="potchefstroom">Potchefstroom</option>
-                <option value="vanderbijlpark">Vanderbijlpark</option>
-                <option value="mahikeng">Mahikeng</option>
-            </select>
+        <section class="top-controls kampus-controls" aria-label="Opsies">
+            <div class="left-control">
+              <!-- Dropdown label -->
+              <label for="data-select">Kies Kampus:</label>
+              <!-- Dropdown selection -->
+              <select id="data-select" name="data-select">
+                  <option value="potchefstroom">Potchefstroom</option>
+                  <option value="vanderbijlpark">Vanderbijlpark</option>
+                  <option value="mahikeng">Mahikeng</option>
+              </select>
+            </div>
+            <button id="open-class-modal" class="create-class-button" type="button">Skep nuwe klas</button>
         </section>
 
     <!-- Two-panel main layout -->
@@ -110,42 +218,36 @@
     </div>
   </main>
 
-  <!-- JavaScript logic -->
-  <script>
-    // Wrap logic so variables do not leak globally
-    (function () {
-      // Get search input element
-      const listSearch = document.getElementById('list-search');
-      // Get list container element
-      const dataList = document.getElementById('data-list');
+  <!-- Popup for creating a new class -->
+  <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+      <h3 id="class-modal-title">Skep nuwe klas</h3>
 
-      // Filter list items based on search input
-      function applyListFilter() {
-        // Stop if required elements do not exist
-        if (!listSearch || !dataList) return;
-        // Normalize query text
-        const query = listSearch.value.trim().toLowerCase();
-        // Find all list items
-        const items = dataList.querySelectorAll('li');
+      <div class="field">
+        <label for="class-room-name">Naam van die saal</label>
+        <input id="class-room-name" type="text" placeholder="Tik die saal naam">
+      </div>
 
-        // Loop through each list item
-        items.forEach((li) => {
-          // Normalize item text
-          const text = (li.textContent || '').trim().toLowerCase();
-          // Check if item should be visible
-          const matches = query === '' || text.includes(query);
-          // Hide item when it does not match
-          li.hidden = !matches;
-        });
-      }
+      <div class="field">
+        <label for="class-description">Beskrywing</label>
+        <textarea id="class-description" placeholder="Tik beskrywing"></textarea>
+      </div>
 
-      // Attach filter logic when search input changes
-      if (listSearch) {
-        listSearch.addEventListener('input', applyListFilter);
-      }
-    })();
-  </script>
+      <div class="field">
+        <label for="class-nfc-tag">Tik die NFC tag manually</label>
+        <input id="class-nfc-tag" type="text" placeholder="NFC tag kode">
+      </div>
+
+      <div class="class-modal-actions">
+        <button id="close-class-modal" type="button">Kanselleer</button>
+        <button id="create-class-button" type="button">Skep</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- main.js definieer MoonApi (API-roetes); kampus.js gebruik dit vir nuwe klas -->
   <script src="main.js"></script>
+  <script src="kampus.js"></script>
 </body>
 
 </html>

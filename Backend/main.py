@@ -328,6 +328,62 @@ def lys_lokasies(
     lokasies = db.query(models.Lokasie).all()
     return schemas.APIResponse(sukses=True, data=lokasies)
 
+@app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)
+def skep_klas_met_nfc(
+    klas_in: schemas.KlasSkep,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Skep 'n nuwe klas (lokasie/saal) en koppel die NFC-tag daaraan in een databasis-transaksie.
+    """
+    bestaande_nfc = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.NFC_UID == klas_in.nfc_uid.strip()
+    ).first()
+    if bestaande_nfc:
+        raise HTTPException(status_code=400, detail="Hierdie NFC UID is reeds geregistreer")
+
+    if klas_in.kampus_id is not None:
+        kampus_bestaan = db.query(models.Kampus).filter(
+            models.Kampus.Kampus_ID == klas_in.kampus_id
+        ).first()
+        if not kampus_bestaan:
+            raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+
+    try:
+        db_lokasie = models.Lokasie(
+            naam=klas_in.naam.strip(),
+            beskrywing=(klas_in.beskrywing or "").strip() or None,
+            kampus_id=klas_in.kampus_id,
+        )
+        db.add(db_lokasie)
+        db.flush()
+
+        db_tag = models.NFC_Tags(
+            NFC_UID=klas_in.nfc_uid.strip(),
+            Gebruiker_ID=None,
+            Lokasie_ID=db_lokasie.id,
+            NFC_Tipe="Lokasie",
+            NFC_Is_Aktief=True,
+        )
+        db.add(db_tag)
+        db.commit()
+        db.refresh(db_lokasie)
+        db.refresh(db_tag)
+
+        result = schemas.KlasSkepResult(
+            lokasie=schemas.Lokasie.from_orm(db_lokasie),
+            nfc_tag=schemas.NFCTag.from_orm(db_tag),
+        )
+        return schemas.APIResponse(sukses=True, data=result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Kon nie klas skep nie: {str(e)}")
+
+
 @app.post("/nfc-tags", response_model=schemas.APIResponse[schemas.NFCTag])
 def koppel_nfc_tag_aan_lokasie(
     tag_in: schemas.NFCTagCreate,

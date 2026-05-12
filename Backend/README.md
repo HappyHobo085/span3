@@ -24,6 +24,12 @@ Die API implementeer streng rol-gebaseerde toegang (RBAC):
 
 ## Roetes
 
+### Kampus & klas (web / MOON)
+
+* **GET /kampusse**: Lys alle kampusse (openbaar in `main.py` vir dropdowns).
+* **POST /klasse**: Skep ’n nuwe **klas/lokasie** (`lokasies` tabel) en koppel die **NFC-tag** aan daardie lokasie (`nfc_tags` met `NFC_Tipe="Lokasie"`). Vereis **Administrator** JWT (dieselfde as `POST /lokasies`).
+  - JSON-body: `naam`, `beskrywing` (opsioneel), `nfc_uid`, `kampus_id` (opsioneel; moet bestaan in `kampus`).
+
 ### 1. Gebruikerbestuur (F2)
 *   **GET /gebruikers**: Lys gebruikers. Data word gefilter gebaseer op die versoeker se rol.
 *   **GET /gebruikers/{id}**: Kry profiel. Sekuriteitswagte sien slegs `UserSecurityRead` velde.

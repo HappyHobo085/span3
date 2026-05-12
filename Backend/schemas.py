@@ -100,6 +100,23 @@ class Lokasie(LokasieBase):
     class Config:
         from_attributes = True
 
+
+class KlasSkep(BaseModel):
+    """Data om 'n nuwe klas (lokasie + NFC vir die saal) in een stap te skep."""
+    naam: str
+    beskrywing: Optional[str] = None
+    nfc_uid: str
+    kampus_id: Optional[int] = None
+
+
+class KlasSkepResult(BaseModel):
+    lokasie: Lokasie
+    nfc_tag: NFCTag
+
+    class Config:
+        from_attributes = True
+
+
 # --- Kampus Schemas ---
 class KampusBase(BaseModel):
     KAM_Naam: str
