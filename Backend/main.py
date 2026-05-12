@@ -471,3 +471,37 @@ def sekuriteit_toegang_toets(
     Eenvoudige toets-eindpunt vir Sekuriteitswag toegang.
     """
     return schemas.APIResponse(sukses=True, data={"boodskap": "Toegang bevestig vir Sekuriteit"})
+
+
+
+@app.get("/nfc-tags/{uid}", response_model=schemas.APIResponse[dict])
+def kry_lokasie_deur_nfc_uid(
+    uid: str,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user)
+):
+    tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.NFC_UID == uid,
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).first()
+
+    if not tag:
+        raise HTTPException(status_code=404, detail="NFC tag nie gevind of nie aktief nie")
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == tag.Lokasie_ID
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Geen klaskamer aan hierdie tag gekoppel nie")
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "uid": tag.NFC_UID,
+            "lokasie": {
+                "id": lokasie.Lokasie_ID,
+                "naam": lokasie.LOK_Naam
+            }
+        }
+    )
