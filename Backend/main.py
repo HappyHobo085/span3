@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+import uuid
 from typing import List, Optional, Any
 
 from database import engine, get_db
@@ -338,11 +339,6 @@ def skep_klas_met_nfc(
     """
     Skep 'n nuwe klas (lokasie/saal) en koppel die NFC-tag daaraan in een databasis-transaksie.
     """
-    bestaande_nfc = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.NFC_UID == klas_in.nfc_uid.strip()
-    ).first()
-    if bestaande_nfc:
-        raise HTTPException(status_code=400, detail="Hierdie NFC UID is reeds geregistreer")
 
     if klas_in.kampus_id is not None:
         kampus_bestaan = db.query(models.Kampus).filter(
@@ -359,9 +355,11 @@ def skep_klas_met_nfc(
         )
         db.add(db_lokasie)
         db.flush()
-
+        
+        generated_uid = uuid.uuid4().hex[:6].upper()
+        
         db_tag = models.NFC_Tags(
-            NFC_UID=klas_in.nfc_uid.strip(),
+            NFC_UID=generated_uid,
             Gebruiker_ID=None,
             Lokasie_ID=db_lokasie.id,
             NFC_Tipe="Lokasie",
