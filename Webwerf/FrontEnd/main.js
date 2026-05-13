@@ -21,10 +21,11 @@
 })();
 
 (function () {
-  const isLoggedIn = localStorage.getItem('isLoggedIn');
-  const currentPage = window.location.pathname.split('/').pop();
-
-  if (!isLoggedIn && currentPage !== 'login.html') {
-    window.location.href = 'login.html';
-  }
+  // --- SPAN-TOETSING: webwerf-sessie / redirect na login AF (aktiveer weer vir produksie) ---
+  localStorage.setItem('isLoggedIn', 'true');
+  // const isLoggedIn = localStorage.getItem('isLoggedIn');
+  // const currentPage = window.location.pathname.split('/').pop();
+  // if (!isLoggedIn && currentPage !== 'login.html') {
+  //   window.location.href = 'login.html';
+  // }
 })();
