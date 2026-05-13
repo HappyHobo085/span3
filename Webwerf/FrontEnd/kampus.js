@@ -1,4 +1,4 @@
-// Kampus-bladsy: soekfilter, modal, en stuur nuwe klas-data na main.js (MoonApi) -> backend.
+// Kampus-bladsy: soekfilter, modal, en stuur nuwe klas-data via MoonApi (website_api_calls.js, gelaai deur main.js).
 
 (function () {
   const listSearch = document.getElementById('list-search');
@@ -58,7 +58,7 @@
   }
 
   /**
-   * Neem vormdata en roep MoonApi.createKlas (main.js) aan wat na main.py POST /klasse gaan.
+   * Neem vormdata en roep MoonApi.createKlas aan (POST /klasse via website_api_calls.js).
    */
   async function submitNewClass() {
     const roomName = classRoomName ? classRoomName.value.trim() : '';
@@ -71,7 +71,7 @@
     }
 
     if (!window.MoonApi || typeof window.MoonApi.createKlas !== 'function') {
-      alert('API is nie beskikbaar nie. Laai main.js voor kampus.js.');
+      alert('API is nie beskikbaar nie. Laai main.js (laai website_api_calls.js outomaties).');
       return;
     }
 

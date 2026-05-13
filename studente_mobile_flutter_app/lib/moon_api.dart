@@ -2,6 +2,21 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+/// Een kampus soos FastAPI `/kampusse` dit terugstuur (onder `data`).
+class KampusDto {
+  final int kampusId;
+  final String naam;
+
+  KampusDto({required this.kampusId, required this.naam});
+
+  factory KampusDto.fromJson(Map<String, dynamic> json) {
+    return KampusDto(
+      kampusId: json['Kampus_ID'] as int,
+      naam: json['KAM_Naam'] as String,
+    );
+  }
+}
+
 /// Een rekord soos FastAPI `/lokasies` dit terugstuur (onder `data`).
 class LokasieDto {
   final int id;
@@ -38,6 +53,45 @@ class MoonApi {
 
   /// JWT van `POST /token` (veld `access_token` binne `data`).
   static String? bearerToken;
+
+  /// Haal alle kampusse (`GET /kampusse` — gewoonlik sonder JWT).
+  static Future<List<KampusDto>> fetchKampusse() async {
+    final uri = Uri.parse('$baseUrl/kampusse');
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    };
+
+    final response = await http.get(uri, headers: headers);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Ongeldige JSON-antwoord');
+    }
+
+    if (decoded['sukses'] != true) {
+      final fout = decoded['fout']?.toString() ?? 'Onbekende fout';
+      throw Exception(fout);
+    }
+
+    final raw = decoded['data'];
+    if (raw == null) return [];
+
+    if (raw is! List) {
+      throw Exception('Verwag \'data\' as lys');
+    }
+
+    return raw
+        .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
 
   /// Haal alle klasse/lokasies uit die databasis (`GET /lokasies`).
   static Future<List<LokasieDto>> fetchLokasies() async {

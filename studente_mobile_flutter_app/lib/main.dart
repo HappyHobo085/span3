@@ -5,6 +5,7 @@ import 'student.dart';
 import 'personeel.dart';
 import 'opsigter.dart';
 import 'sekuriteitswag.dart';
+import 'admin.dart';
 
 /// Backend API (FastAPI `main.py`) — sien [moon_api.dart].
 export 'moon_api.dart';
@@ -61,6 +62,7 @@ class _LoginPageState extends State<LoginPage> {
   // Handle the logic when user presses the login button.
   void _handleLogin() {
     String input = _usernameController.text.trim();
+    final lower = input.toLowerCase();
     Widget nextPage;
 
     switch (input) {
@@ -81,11 +83,15 @@ class _LoginPageState extends State<LoginPage> {
         nextPage = const SekuriteitswagHomePage();
         break;
       default:
+        if (lower == 'admin') {
+          nextPage = const AdminHomePage();
+          break;
+        }
         // Show an error if they enter anything else.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('Ongeldige opsie. Voer asseblief 0, 1, 2, of 3 in.')),
+              content: Text(
+                  'Ongeldige opsie. Voer 0, 1, 2, 3 in, of admin vir die admin-bladsy.')),
         );
         return;
     }
@@ -140,7 +146,7 @@ class _LoginPageState extends State<LoginPage> {
                             // Email text field.
                             child: TextField(
                               controller: _usernameController,
-                              keyboardType: TextInputType.number,
+                              keyboardType: TextInputType.text,
                               style: const TextStyle(color: Colors.white),
                               decoration: _loginInputDecoration(
                                 context,
