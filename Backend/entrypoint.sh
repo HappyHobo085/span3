@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-echo "⏳ Voer migrасies uit..."
-alembic upgrade head
+echo "⏳ Skep of werk databasis-tabelle by..."
+python -c "from main import models; from database import engine; models.Base.metadata.create_all(bind=engine)"
 
 echo "🌱 Saai databasis..."
 python seed.py
