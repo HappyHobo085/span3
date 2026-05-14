@@ -4,8 +4,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 import os
+from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 import database, models
@@ -17,8 +17,31 @@ SECRET_KEY = os.getenv("SECRET_KEY", "jou-geheime-sleutel-vir-toetsing")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dag
 
+# Span-toetsing / Docker: stel DISABLE_AUTH=1 om JWT- en roltoetsing te omseil (moet AF wees in produksie).
+DISABLE_AUTH = os.getenv("DISABLE_AUTH", "").strip().lower() in ("1", "true", "yes", "on")
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)
+
+
+def _dev_fallback_user(db: Session) -> models.Gebruikers:
+    """Eerste Administrateur in DB, anders enige gebruiker — slegs vir DISABLE_AUTH."""
+    admin_rol = db.query(models.Rolle).filter(models.Rolle.ROL_Naam == "Administrateur").first()
+    if admin_rol:
+        user = (
+            db.query(models.Gebruikers)
+            .filter(models.Gebruikers.Rol_ID == admin_rol.Rol_ID)
+            .first()
+        )
+        if user:
+            return user
+    user = db.query(models.Gebruikers).first()
+    if user:
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="DISABLE_AUTH is aan maar die databasis het geen gebruikers nie.",
+    )
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -36,12 +59,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+async def get_current_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(database.get_db),
+):
+    if DISABLE_AUTH:
+        return _dev_fallback_user(db)
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Kon nie geloofsbriewe verifieer nie",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -49,7 +80,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
+
     user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
     if user is None:
         raise credentials_exception
@@ -65,6 +96,9 @@ class RoleChecker:
         current_user: models.Gebruikers = Depends(get_current_user), 
         db: Session = Depends(database.get_db)
     ):
+        if DISABLE_AUTH:
+            return True
+
         rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
         if not rol:
             raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
@@ -91,6 +125,9 @@ async def verifieer_kampus_toegang(
     Check of 'n gebruiker toegang het tot 'n spesifieke kampus.
     Word gebruik as 'n addisionele check vir Kampus_Opsigters.
     """
+    if DISABLE_AUTH:
+        return True
+
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
     
     if rol.ROL_Naam == "Administrateur":

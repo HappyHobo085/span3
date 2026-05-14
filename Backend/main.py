@@ -349,9 +349,9 @@ def skep_klas_met_nfc(
 
     try:
         db_lokasie = models.Lokasie(
-            naam=klas_in.naam.strip(),
-            beskrywing=(klas_in.beskrywing or "").strip() or None,
-            kampus_id=klas_in.kampus_id,
+            LOK_Naam=klas_in.naam.strip(),
+            LOK_Tipe="Klaskamer",
+            Kampus_ID=klas_in.kampus_id,
         )
         db.add(db_lokasie)
         db.flush()
@@ -361,7 +361,7 @@ def skep_klas_met_nfc(
         db_tag = models.NFC_Tags(
             NFC_UID=generated_uid,
             Gebruiker_ID=None,
-            Lokasie_ID=db_lokasie.id,
+            Lokasie_ID=db_lokasie.Lokasie_ID,
             NFC_Tipe="Lokasie",
             NFC_Is_Aktief=True,
         )
@@ -487,7 +487,7 @@ def kry_lokasie_deur_nfc_uid(
         raise HTTPException(status_code=404, detail="NFC tag nie gevind of nie aktief nie")
 
     lokasie = db.query(models.Lokasie).filter(
-        models.Lokasie.Lokasie_ID == tag.Lokasie_ID
+    models.Lokasie.Lokasie_ID == tag.Lokasie_ID
     ).first()
 
     if not lokasie:

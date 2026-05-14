@@ -38,12 +38,11 @@
 // Login gate: reads flag set by login.js on successful demo login
 // -----------------------------------------------------------------------------
 (function () {
-  const isLoggedIn = localStorage.getItem('isLoggedIn');
-  // Last path segment: "kampus.html", "login.html", etc.
-  const currentPage = window.location.pathname.split('/').pop();
-
-  // Not logged in and not on the login screen → send to login
-  if (!isLoggedIn && currentPage !== 'login.html') {
-    window.location.href = 'login.html';
-  }
+  // --- SPAN-TOETSING: webwerf-sessie / redirect na login AF (aktiveer weer vir produksie) ---
+  localStorage.setItem('isLoggedIn', 'true');
+  // const isLoggedIn = localStorage.getItem('isLoggedIn');
+  // const currentPage = window.location.pathname.split('/').pop();
+  // if (!isLoggedIn && currentPage !== 'login.html') {
+  //   window.location.href = 'login.html';
+  // }
 })();

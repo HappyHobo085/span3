@@ -29,48 +29,44 @@ class NFC_Tags(Base):
     __tablename__ = 'nfc_tags'
     NFC_Tags_ID   = Column(Integer, primary_key=True, index=True)
     NFC_UID       = Column(String(64), nullable=False, unique=True)
-    Gebruiker_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'))
-    Lokasie_ID    = Column(Integer, ForeignKey('lokasies.id'))
+    Lokasie_ID    = Column(Integer, ForeignKey('lokasie.Lokasie_ID'))
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
-    Geskep_Op     = Column(DateTime, default=datetime.utcnow)
-    Gewysig_Op    = Column(DateTime, default=datetime.utcnow)
+                           
+    lokasie   = relationship("Lokasie", back_populates="nfc_tags")
+class Kampus(Base):
+    __tablename__ = 'kampus'
+    Kampus_ID  = Column(Integer, primary_key=True, index=True)
+    KAM_Naam   = Column(String(100), nullable=False)
+    KAM_Adres  = Column(String(255))
 
-    gebruiker = relationship("Gebruikers")
-    lokasie   = relationship("Lokasie")
+    lokasies = relationship("Lokasie", back_populates="kampus")
+
 
 class Lokasie(Base):
-    __tablename__ = 'lokasies'
-    id          = Column(Integer, primary_key=True, index=True)
-    naam        = Column(String(100), nullable=False)
-    beskrywing  = Column(Text)
-    kampus_id   = Column(Integer) # vir later, kan NULL wees vir nou
+    __tablename__ = 'lokasie'
+    Lokasie_ID = Column(Integer, primary_key=True, index=True)
+    LOK_Naam   = Column(String(100), nullable=False)
+    LOK_Tipe   = Column(String(50),  nullable=False)
+    Kampus_ID  = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+
+    kampus    = relationship("Kampus", back_populates="lokasies")
+    nfc_tags  = relationship("NFC_Tags", back_populates="lokasie")
 
 class Waarskuwings(Base):
     __tablename__ = 'waarskuwings'
     Waarskuwing_ID = Column(Integer, primary_key=True, index=True)
     Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
-    Lokasie_ID     = Column(Integer, ForeignKey('lokasies.id')) 
     WAA_Beskrywing = Column(Text, nullable=False)
     WAA_Status     = Column(String(32), nullable=False, default='OOP')
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
 
     gebruiker = relationship("Gebruikers")
-    lokasie   = relationship("Lokasie")
-
-class Kampus(Base):
-    __tablename__ = 'kampus'
-    Kampus_ID   = Column(Integer, primary_key=True, index=True)
-    KAM_Naam    = Column(String(100), nullable=False)
-    KAM_Adres   = Column(String(255))
 
 class Kampus_Opsigter(Base):
     __tablename__ = 'kampus_opsigter'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
-    Kampus_ID    = Column(Integer, ForeignKey('kampus.Kampus_ID'))
-
-    kampus = relationship("Kampus")
 
 class Sekuriteit_Wag(Base):
     __tablename__ = 'sekuriteit_wag'

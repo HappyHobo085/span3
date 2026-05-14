@@ -35,18 +35,19 @@
 
   if (loginForm) {
     loginForm.addEventListener('submit', function (e) {
-      e.preventDefault(); // We handle navigation ourselves
+      e.preventDefault();
 
-      const email = emailInput.value;
-      const password = passwordInput.value;
-
-      if (email === testUser.email && password === testUser.password) {
-        // main.js checks this string on all other pages
-        localStorage.setItem('isLoggedIn', 'true');
-        window.location.href = 'home.html';
-      } else {
-        alert("Invalid credentials. Please use test@demo.com / password123");
-      }
+      // --- SPAN-TOETSING: vaste demo-inlog AF — enige stuur stuur deur (aktiveer weer vir produksie) ---
+      localStorage.setItem('isLoggedIn', 'true');
+      window.location.href = 'home.html';
+      // const email = emailInput.value;
+      // const password = passwordInput.value;
+      // if (email === testUser.email && password === testUser.password) {
+      //   localStorage.setItem('isLoggedIn', 'true');
+      //   window.location.href = 'home.html';
+      // } else {
+      //   alert("Invalid credentials. Please use test@demo.com / password123");
+      // }
     });
   }
 })();
