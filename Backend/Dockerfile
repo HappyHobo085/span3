@@ -19,8 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Kopieer die res van die kode
 COPY . .
 
-# Stel die poort waarop FastAPI sal loop
+# Kopieer entrypoint
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
 EXPOSE 8000
 
-# Begin die toepassing met uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["./entrypoint.sh"]
