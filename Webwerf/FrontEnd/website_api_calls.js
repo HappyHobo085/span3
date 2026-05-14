@@ -54,17 +54,13 @@
 
     /**
      * Skep nuwe klas via POST /klasse.
-     * @param {{ naam: string, beskrywing?: string|null, nfc_uid: string, kampus_id?: string|number|null }} payload
+     * @param {{ kampus_naam: string, klas_naam: string, beskrywing?: string|null}} payload
      */
     createKlas: async function (payload) {
       const body = {
-        naam: payload.naam,
+        kampus_naam: payload.kampus_naam,
+        klas_naam: payload.klas_naam,
         beskrywing: payload.beskrywing || null,
-        nfc_uid: String(payload.nfc_uid).trim(),
-        kampus_id:
-          payload.kampus_id === '' || payload.kampus_id === undefined
-            ? null
-            : Number(payload.kampus_id),
       };
       const r = await apiRequest('/klasse', {
         method: 'POST',
