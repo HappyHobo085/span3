@@ -37,7 +37,7 @@ class LokasieDto {
     return LokasieDto(
       id: json['Lokasie_ID'] as int?,
       naam: json['LOK_Naam'] as String,
-      beskrywing: null,
+      beskrywing: json['LOK_Tipe'] as String?,
       kampusId: json['Kampus_ID'] as int?,
       nfcUid: json['NFC_UID'] as String?,
     );
@@ -52,7 +52,7 @@ class LokasieDto {
 class MoonApi {
   MoonApi._();
 
-  static String baseUrl = "http://192.168.100.177:8000";
+  static String baseUrl = "http://100.103.103.103:8000";
 
   /// JWT van `POST /token` (veld `access_token` binne `data`).
   static String? bearerToken;
