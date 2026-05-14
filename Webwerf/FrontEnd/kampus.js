@@ -1,6 +1,19 @@
-// Kampus-bladsy: soekfilter, modal, en stuur nuwe klas-data via MoonApi (website_api_calls.js, gelaai deur main.js).
+/**
+ * kampus.js — logic for kampus.html only.
+ *
+ * Depends on:
+ *   - main.js (must run first: loads website_api_calls.js → window.MoonApi)
+ *   - HTML ids: list-search, data-list, modal fields, overlay, buttons.
+ *
+ * Features:
+ *   - Filter student list as you type.
+ *   - Open/close “new class” modal (including click on backdrop).
+ *   - Load campuses into dropdown from GET /kampusse.
+ *   - POST new class via MoonApi.createKlas.
+ */
 
 (function () {
+  // ----- Cached DOM nodes (null-safe checks before use) -----
   const listSearch = document.getElementById('list-search');
   const dataList = document.getElementById('data-list');
   const openClassModalButton = document.getElementById('open-class-modal');
@@ -12,6 +25,7 @@
   const classNfcTag = document.getElementById('class-nfc-tag');
   const dataSelect = document.getElementById('data-select');
 
+  /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
     const query = listSearch.value.trim().toLowerCase();
@@ -24,12 +38,14 @@
     });
   }
 
+  /** Show modal: CSS class .open + accessibility flag. */
   function openClassModal() {
     if (!classModalOverlay) return;
     classModalOverlay.classList.add('open');
     classModalOverlay.setAttribute('aria-hidden', 'false');
   }
 
+  /** Hide modal and mark hidden for screen readers. */
   function closeClassModal() {
     if (!classModalOverlay) return;
     classModalOverlay.classList.remove('open');
@@ -38,6 +54,7 @@
 
   /**
    * Laai kampusse vanaf API en vul die dropdown (IDs uit databasis).
+   * Fetches campuses from the API and fills the dropdown (database IDs).
    */
   async function loadKampusDropdown() {
     if (!dataSelect || !window.MoonApi) return;
@@ -59,6 +76,7 @@
 
   /**
    * Neem vormdata en roep MoonApi.createKlas aan (POST /klasse via website_api_calls.js).
+   * Reads modal fields, validates, POSTs new class, shows alerts for success/errors.
    */
   async function submitNewClass() {
     const roomName = classRoomName ? classRoomName.value.trim() : '';
@@ -108,10 +126,12 @@
     }
   }
 
+  // ----- Wire list filter -----
   if (listSearch) {
     listSearch.addEventListener('input', applyListFilter);
   }
 
+  // ----- Modal open / close -----
   if (openClassModalButton) {
     openClassModalButton.addEventListener('click', openClassModal);
   }
@@ -120,6 +140,7 @@
     closeClassModalButton.addEventListener('click', closeClassModal);
   }
 
+  // Click dark area outside the white dialog → close
   if (classModalOverlay) {
     classModalOverlay.addEventListener('click', function (event) {
       if (event.target === classModalOverlay) {
@@ -128,12 +149,14 @@
     });
   }
 
+  // ----- Submit new class from modal -----
   if (createClassButton) {
     createClassButton.addEventListener('click', function () {
       submitNewClass();
     });
   }
 
+  // After full DOM (and MoonApi script) are ready, refresh campus dropdown
   document.addEventListener('DOMContentLoaded', function () {
     loadKampusDropdown();
   });

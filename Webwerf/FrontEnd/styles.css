@@ -1,13 +1,27 @@
+/*
+ * styles.css — look and layout for the Webwerf website (login, home, kampus, etc.).
+ * Colors use a dark blue theme with purple/cyan “neon” accents on logged-in pages.
+ *
+ * How to read this file: each big block comment marks a section (navbar, panels, login, …).
+ * Rules inside a section share one job (e.g. “style the top bar” or “style the login form”).
+ * HTML structure and behaviour are explained in the matching *.html and *.js files beside this one.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Shared numbers: padding, gaps, and button height used in many rules       */
+/* -------------------------------------------------------------------------- */
 :root {
-  --page-padding: 32px;
-  --panel-gap: 24px;
-  --button-height: 52px;
+  --page-padding: 32px; /* Space from screen edges to main content */
+  --panel-gap: 24px; /* Space between the two side-by-side panels */
+  --button-height: 52px; /* Height of main action buttons at the bottom */
 }
 
+/* Padding and border count toward width/height so widths don’t overflow by surprise */
 * {
   box-sizing: border-box;
 }
 
+/* Whole site: default font, white page background, dark text (overridden on themed pages) */
 body {
   margin: 0;
   font-family: Arial, sans-serif;
@@ -15,38 +29,46 @@ body {
   color: #111111;
 }
 
+/* Wraps the main content: at least full screen tall, padded in from the edges */
 .page {
   min-height: 100vh;
   padding: var(--page-padding);
-  position: relative;
+  position: relative; /* Lets bottom buttons position against this area */
 }
 
-/* Navbar styling */
+/* -------------------------------------------------------------------------- */
+/* Top navigation bar (links: Tuis, Kampus, …)                                */
+/* -------------------------------------------------------------------------- */
 .navbar {
-  display: flex;
+  display: flex; /* Links sit in a row */
   gap: 20px;
   background-color: #021c42;
   padding: 15px 32px;
-  border-bottom: 1.5px solid #7B61FF;
-  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
+  border-bottom: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Soft purple glow under the bar */
   margin-bottom: 0;
 }
 
 .navbar a {
-  color: #FFFFFF;
-  text-decoration: none;
+  color: #ffffff;
+  text-decoration: none; /* No underline on links */
   font-weight: bold;
   font-size: 1.1rem;
 }
 
-.navbar a:hover, .navbar a.active {
-  color: #00C2FF;
+/* Hover (and current page): cyan text with a light glow */
+.navbar a:hover,
+.navbar a.active {
+  color: #00c2ff;
   text-shadow: 0 0 8px rgba(0, 194, 255, 0.6);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Dropdown area above panels (e.g. “Kies Koshuis”) — stacked label + select */
+/* -------------------------------------------------------------------------- */
 .top-controls {
-  width: calc((100% - var(--panel-gap)) / 2);
-  margin-bottom: 2cm;
+  width: calc((100% - var(--panel-gap)) / 2); /* About half width so it lines up with one panel */
+  margin-bottom: 2cm; /* Air below before the panels */
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -66,13 +88,18 @@ body {
   color: #111111;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Two-column layout: left and right panels side by side                      */
+/* -------------------------------------------------------------------------- */
 .panels {
   display: flex;
   gap: var(--panel-gap);
+  /* Leave vertical room so content doesn’t hide under the fixed bottom buttons */
   min-height: calc(100vh - 2 * var(--page-padding) - var(--button-height) - 1cm - 30px);
   padding-bottom: calc(var(--button-height) + 24px);
 }
 
+/* One box in the two-panel row: grows equally, simple border */
 .panel {
   flex: 1;
   background: transparent;
@@ -87,6 +114,9 @@ body {
   font-size: 1.4rem;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Search field above a list                                                    */
+/* -------------------------------------------------------------------------- */
 .list-search {
   margin-bottom: 12px;
 }
@@ -103,15 +133,19 @@ body {
 }
 
 .list-search input::placeholder {
-  color: #6b7280;
+  color: #6b7280; /* Gray hint text */
 }
 
+/* -------------------------------------------------------------------------- */
+/* Dashboard: grid of summary cards                                           */
+/* -------------------------------------------------------------------------- */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* Two equal columns */
   gap: 14px;
 }
 
+/* One stat or summary tile */
 .card {
   min-height: 90px;
   border: 1px solid #d1d5db;
@@ -123,6 +157,7 @@ body {
   font-weight: 600;
 }
 
+/* Card that spans the full row of the grid */
 .card.wide {
   grid-column: 1 / -1;
 }
@@ -132,6 +167,7 @@ body {
   padding: 14px;
 }
 
+/* Fake donut chart: colored ring */
 .mock-circle {
   width: 130px;
   height: 130px;
@@ -144,6 +180,7 @@ body {
   position: relative;
 }
 
+/* Hole in the middle of the donut so it looks like a ring */
 .mock-circle::after {
   content: "";
   position: absolute;
@@ -152,6 +189,7 @@ body {
   background: #f9fafb;
 }
 
+/* Fake bar chart: L-shaped axes and bars along the bottom */
 .mock-graph {
   width: 100%;
   height: 130px;
@@ -170,6 +208,7 @@ body {
   background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
 }
 
+/* Each bar’s height (percent of the chart area) */
 .mock-graph .bar-1 {
   height: 35%;
 }
@@ -190,8 +229,11 @@ body {
   height: 58%;
 }
 
+/* -------------------------------------------------------------------------- */
+/* List area when empty or used as a container: dashed border, minimum height   */
+/* -------------------------------------------------------------------------- */
 .empty-list {
-  list-style: none;
+  list-style: none; /* No bullets */
   margin: 0;
   padding: 0;
   min-height: 260px;
@@ -199,6 +241,9 @@ body {
   border-radius: 10px;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Bottom buttons: “Terug”, “Teken uit”, etc. — pinned to bottom of .page      */
+/* -------------------------------------------------------------------------- */
 .action-button {
   position: absolute;
   bottom: var(--page-padding);
@@ -214,13 +259,14 @@ body {
 }
 
 .back-button {
-  left: var(--page-padding);
+  left: var(--page-padding); /* Bottom-left */
 }
 
 .generate-button {
-  right: var(--page-padding);
+  right: var(--page-padding); /* Bottom-right when alone */
 }
 
+/* Group of buttons on the right; keeps them in a row */
 .bottom-right-actions {
   position: absolute;
   bottom: var(--page-padding);
@@ -229,42 +275,44 @@ body {
   gap: 20px;
 }
 
+/* Inside the group, buttons flow normally instead of stacking on the same corner */
 .bottom-right-actions .action-button {
-  position: relative; /* overrides absolute from .action-button */
+  position: relative;
   bottom: auto;
   right: auto;
 }
 
 .action-button:hover {
-  filter: none;
+  filter: none; /* No extra dimming on hover for these buttons */
 }
 
-/* Login page section styling */
+/* -------------------------------------------------------------------------- */
+/* Login page (#login-page) — full-screen centered form                         */
+/* -------------------------------------------------------------------------- */
 #login-page {
-  background-color: #0D132C; /* Dark blue background */
-  color: #935E28; /* Default login text color */
-  min-height: 100vh; /* Fill full screen height */
-  width: 100%; /* Fill full screen width */
+  background-color: #0d132c;
+  color: #935e28; /* Fallback; overridden below for readable white text */
+  min-height: 100vh;
+  width: 100%;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: center; /* Horizontal center */
+  align-items: center; /* Vertical center */
 }
 
-/* Login panel (the box around form controls) */
+/* Box around the logo + email + password + button */
 #login-page div[aria-label="Login panel"] {
-  background-color: #0D132C; /* Brown panel color */
-  color: #0E1E3B; /* Dark text color inside panel by default */
-  width: 450px; /* Panel width */
-  padding: 50px; /* Space inside panel */
+  background-color: #0d132c;
+  color: #0e1e3b;
+  width: 450px;
+  padding: 50px;
   border-radius: 12px;
   box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
 }
 
-/* Login input fields */
 #login-page input {
-  background-color: #021c42; /* Dark field background */
-  color: #FFFFFF; /* White typed text */
-  border-color: #935E28; /* Brown border */
+  background-color: #021c42;
+  color: #ffffff;
+  border-color: #935e28;
   width: 100%;
   padding: 12px;
   margin-bottom: 20px;
@@ -272,12 +320,11 @@ body {
   font-size: 16px;
 }
 
-/* Login button neon style */
 #login-page button {
-  background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%); /* Neon gradient */
-  color: #FFFFFF; /* White button text */
-  border: 1px solid #7B61FF; /* Neon border */
-  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66); /* Neon glow */
+  background: linear-gradient(to bottom, #7b61ff 0%, #00c2ff 100%);
+  color: #ffffff;
+  border: 1px solid #7b61ff;
+  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
   width: 100%;
   padding: 14px;
   border-radius: 6px;
@@ -286,57 +333,54 @@ body {
   cursor: pointer;
 }
 
-/* Apply same neon outline/glow to all box-like elements */
+/* Panel and inputs share the same purple outline and glow */
 #login-page div[aria-label="Login panel"],
 #login-page input {
-  border: 1.5px solid #7B61FF; /* Neon border */
-  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Neon glow */
+  border: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
 }
 
-/* Make text white in dark boxes and related fields */
 #login-page div[aria-label="Login panel"],
 #login-page input,
 #login-page input::placeholder {
-  color: #FFFFFF; /* White readable text */
+  color: #ffffff;
 }
 
-/* Login heading color */
 #login-page h1 {
-  color: #FFFFFF; /* White heading */
+  color: #ffffff;
 }
 
-/* Home page background styling */
+/* -------------------------------------------------------------------------- */
+/* Logged-in pages (#home-page) — dark background, neon borders, white text   */
+/* -------------------------------------------------------------------------- */
 #home-page {
-  background-color: #0D132C; /* Same dark blue background */
-  min-height: 100vh; /* Better layout consistency */
+  background-color: #0d132c;
+  min-height: 100vh;
+  padding-top: 0; /* Navbar sits flush; side padding still comes from .page */
 }
 
-/* Home action buttons neon style */
 #home-page .action-button {
-  background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%); /* Neon gradient */
-  color: #FFFFFF; /* White button text */
-  border: 1px solid #7B61FF; /* Neon border */
-  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66); /* Neon glow */
+  background: linear-gradient(to bottom, #7b61ff 0%, #00c2ff 100%);
+  color: #ffffff;
+  border: 1px solid #7b61ff;
+  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
 }
 
-/* Main home panels neon outline */
 #home-page .panel {
-  background-color: #0D132C; /* Match page background */
-  border: 1.5px solid #7B61FF; /* Neon outline */
-  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Neon glow */
+  background-color: #0d132c;
+  border: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
 }
 
-/* Apply same neon outline/glow to all box-like elements */
 #home-page .top-controls select,
 #home-page .list-search input,
 #home-page .panel,
 #home-page .card,
 #home-page .empty-list {
-  border: 1.5px solid #7B61FF; /* Neon border */
-  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3); /* Neon glow */
+  border: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
 }
 
-/* Make text white in dark boxes and related fields */
 #home-page .top-controls select,
 #home-page .top-controls select option,
 #home-page .list-search input,
@@ -346,22 +390,207 @@ body {
 #home-page .card,
 #home-page .empty-list,
 #home-page .empty-list li {
-  color: #FFFFFF; /* White readable text */
+  color: #ffffff;
 }
 
-/* Dashboard inner cards match panel color */
 #home-page .card {
-  background-color: #0D132C; /* Dark card background */
-  color: #FFFFFF; /* White text on dark background */
+  background-color: #0d132c;
+  color: #ffffff;
 }
 
-/* Inner circle color matches panel background */
 #home-page .mock-circle::after {
-  background-color: #0D132C; /* Dark center */
+  background-color: #0d132c; /* Center of donut matches page so it blends in */
 }
 
-/* Dropdown options are white, so text must be dark */
+/* Open dropdown list: options need dark text on white rows (browser default menu) */
 #home-page .top-controls select option {
-  background-color: #FFFFFF; /* Light option background */
-  color: #111111; /* Dark option text */
+  background-color: #ffffff;
+  color: #111111;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Small helpers (used on specific HTML blocks instead of inline styles)      */
+/* -------------------------------------------------------------------------- */
+
+/* Login logo image: fixed width, centered, space below before the form */
+.login-brand-image {
+  width: 340px;
+  height: auto;
+  display: block;
+  margin: 0 auto 110px auto;
+}
+
+/* Home dashboard: three equal columns instead of the default two */
+.dashboard-grid--cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Block below the dashboard cards on the home “updates” section */
+.home-updates-block {
+  margin-top: 30px;
+}
+
+/* Shorter list box with inner padding (system updates list on home) */
+.empty-list--compact {
+  padding: 20px;
+  min-height: auto;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Kampus page — top row: campus dropdown + “new class” button                */
+/* -------------------------------------------------------------------------- */
+.top-controls.kampus-controls {
+  width: 100%;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: row;
+  align-items: end;
+  justify-content: space-between; /* Dropdown left, button right */
+  gap: 16px;
+}
+
+.kampus-controls .left-control {
+  width: calc((100% - var(--panel-gap)) / 2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.create-class-button {
+  height: 44px;
+  min-width: 170px;
+  padding: 0 14px;
+  border: 1px solid #7b61ff;
+  color: #ffffff;
+  background: linear-gradient(to bottom, #7b61ff 0%, #00c2ff 100%);
+  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Kampus “new class” popup — darkens the page behind a dialog box            */
+/* -------------------------------------------------------------------------- */
+.class-modal-overlay {
+  position: fixed; /* Covers the whole viewport */
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6); /* Semi-transparent black */
+  display: none; /* Hidden until opened with .open */
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000; /* Draw above normal page content */
+}
+
+.class-modal-overlay.open {
+  display: flex; /* Shows the overlay and centers the dialog */
+}
+
+.class-modal {
+  width: 100%;
+  max-width: 520px;
+  background: #0d132c;
+  border: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
+  padding: 20px;
+  color: #ffffff;
+}
+
+.class-modal h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.class-modal .field {
+  margin-bottom: 12px;
+}
+
+.class-modal label {
+  display: block;
+  margin-bottom: 6px;
+  color: #ffffff;
+}
+
+.class-modal input,
+.class-modal textarea {
+  width: 100%;
+  border: 1.5px solid #7b61ff;
+  box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.2);
+  background: #0d132c;
+  color: #ffffff;
+  padding: 10px;
+  font: inherit; /* Same font as the rest of the page */
+}
+
+.class-modal textarea {
+  min-height: 90px;
+  resize: vertical; /* User can drag to make it taller */
+}
+
+.class-modal-actions {
+  display: flex;
+  justify-content: flex-end; /* Buttons to the right */
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.class-modal-actions button {
+  min-width: 110px;
+  height: 40px;
+  border: 1px solid #7b61ff;
+  color: #ffffff;
+  background: linear-gradient(to bottom, #7b61ff 0%, #00c2ff 100%);
+  box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
+  cursor: pointer;
+}
+
+/* Extra search row on kampus: pushed down a bit from the list above */
+.list-search--spaced {
+  margin-top: 20px;
+}
+
+/* Inner panel at bottom of kampus right column: spacing and minimum height */
+.bottom-inner-panel--kampus {
+  margin-top: 10px;
+  min-height: 260px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sub-stelsel calendar — month grid in the right panel                       */
+/* -------------------------------------------------------------------------- */
+.calendar-panel {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+}
+
+.calendar-title {
+  margin: 0 0 15px 0;
+  text-align: center;
+}
+
+/* 7 columns for Sunday–Saturday */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  text-align: center;
+  flex: 1;
+  align-items: center;
+}
+
+.calendar-weekday {
+  font-weight: bold;
+  color: #7b61ff;
+}
+
+.calendar-muted {
+  color: #6b7280; /* Days from other months look dimmer */
+}
+
+.calendar-day-selected {
+  background-color: #7b61ff;
+  color: white;
+  border-radius: 5px;
+  font-weight: bold;
 }

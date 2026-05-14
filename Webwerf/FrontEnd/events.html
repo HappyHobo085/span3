@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!--
+  Webwerf — Events page shell.
+  Left panel reserved for event details; right panel is the same list + search pattern as Koshuis.
+  List filtering script is identical in behaviour to koshuis.html (self-contained copy).
+-->
 <!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
 <!-- Start of the page head (settings and linked files) -->
@@ -25,28 +30,22 @@
         <a href="sub_stelsel.html">Sub Stelsel</a>
     </nav>
 
-    <!-- Home page section -->
-    <main class="page" id="home-page" style="padding-top: 0;">
+    <main class="page" id="home-page">
 
         <!-- Two-panel main layout -->
         <section class="panels">
-            <!-- Left dashboard panel -->
+            <!-- Placeholder for future events UI -->
             <article class="panel left-panel" aria-label="Events Details">
-                <!-- Dashboard title -->
                 <h2>Events Details</h2>
 
             </article>
 
-            <!-- Right list panel -->
+            <!-- Searchable list (same ids as other pages; only one page loads at a time) -->
             <article class="panel right-panel" aria-label="Leë lys">
-                <!-- List title -->
                 <h2>Lys</h2>
-                <!-- Search area -->
                 <div class="list-search">
-                    <!-- Search input -->
                     <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
                 </div>
-                <!-- Data list container -->
                 <ul id="data-list" class="empty-list" aria-label="Leë data lys">
                 </ul>
 
@@ -54,46 +53,35 @@
             </article>
         </section>
 
-        <!-- Back action button -->
         <button class="action-button back-button" type="button"
             onclick="window.location.href='home.html'">Terug</button>
-        <!-- Generate data action button -->
         <div class="bottom-right-actions">
             <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
             <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
         </div>
     </main>
 
-    <!-- JavaScript logic -->
+    <!-- Inline list filter (same logic as koshuis.html) -->
     <script>
-        // Wrap logic so variables do not leak globally
+        /**
+         * Live filter for #data-list: typing in #list-search hides non-matching <li> rows.
+         */
         (function () {
-            // Get search input element
             const listSearch = document.getElementById('list-search');
-            // Get list container element
             const dataList = document.getElementById('data-list');
 
-            // Filter list items based on search input
             function applyListFilter() {
-                // Stop if required elements do not exist
                 if (!listSearch || !dataList) return;
-                // Normalize query text
                 const query = listSearch.value.trim().toLowerCase();
-                // Find all list items
                 const items = dataList.querySelectorAll('li');
 
-                // Loop through each list item
                 items.forEach((li) => {
-                    // Normalize item text
                     const text = (li.textContent || '').trim().toLowerCase();
-                    // Check if item should be visible
                     const matches = query === '' || text.includes(query);
-                    // Hide item when it does not match
                     li.hidden = !matches;
                 });
             }
 
-            // Attach filter logic when search input changes
             if (listSearch) {
                 listSearch.addEventListener('input', applyListFilter);
             }

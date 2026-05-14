@@ -1,13 +1,21 @@
 <!DOCTYPE html>
+<!--
+  Webwerf — Home (Tuis) after login.
+  Shows a small dashboard with sample stats and system updates, plus “Teken uit”.
+  main.js enforces login; styles.css controls layout and dark theme.
+-->
 <html lang="en">
 <head>
+    <!-- UTF-8 so all characters display correctly -->
     <meta charset="UTF-8">
+    <!-- Mobile-friendly scaling -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home - Twee Panele Webwerf</title>
+    <!-- All colours, spacing, and components live in this one file -->
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navbar -->
+    <!-- Site-wide links; same bar on every inner page -->
     <nav class="navbar">
         <a href="home.html">Tuis</a>
         <a href="kampus.html">Kampus</a>
@@ -16,11 +24,14 @@
         <a href="sub_stelsel.html">Sub Stelsel</a>
     </nav>
 
-    <main class="page" id="home-page" style="padding-top: 0;">
+    <!-- id="home-page" triggers the dark “logged in” theme in styles.css -->
+    <main class="page" id="home-page">
+        <!-- Single wide column of content -->
         <section class="panels">
             <article class="panel wide-panel" aria-label="Mini Dashboard">
                 <h2>Mini Dashboard - Updates & Opsomming</h2>
-                <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <!-- Three summary tiles (uses modifier class for 3 columns) -->
+                <div class="dashboard-grid dashboard-grid--cols-3">
                     <div class="card">
                         <h3>Kampusse</h3>
                         <p>3 Aktief</p>
@@ -34,10 +45,11 @@
                         <p>5 Komende</p>
                     </div>
                 </div>
-                
-                <div style="margin-top: 30px;">
+
+                <!-- Bulleted-style updates in a dashed box -->
+                <div class="home-updates-block">
                     <h3>Stelsel Opdaterings</h3>
-                    <ul class="empty-list" style="padding: 20px; min-height: auto;">
+                    <ul class="empty-list empty-list--compact">
                         <li>- Toegangsbestuur module is aanlyn.</li>
                         <li>- Koshuis data is suksesvol gelaai vir 2026.</li>
                         <li>- Nuwe studente kaarte is gedruk vir eerstejaars.</li>
@@ -45,12 +57,18 @@
                 </div>
             </article>
         </section>
-        
+
+        <!-- Clears login flag and returns to login page (see small script below) -->
         <button class="action-button back-button" type="button" onclick="logOut()">Teken uit</button>
     </main>
 
+    <!-- Session guard: redirects to login if not authenticated -->
     <script src="main.js"></script>
     <script>
+        /**
+         * Signs the user out of the demo (browser-only “session”).
+         * Clears the flag main.js checks, then opens the login screen.
+         */
         function logOut() {
             localStorage.removeItem('isLoggedIn');
             window.location.href = 'login.html';
