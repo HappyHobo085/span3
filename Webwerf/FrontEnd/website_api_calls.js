@@ -1,13 +1,22 @@
-// Alle HTTP-roetes na die FastAPI-backend (main.py).
-// Stel window.MoonApi vir bladsye soos kampus.js.
-// Word gewoonlik deur main.js ingevoeg (insertBefore net na die main.js-tag);
-// jy kan dit ook vóór main.js in HTML skakel as jy verkies.
+/**
+ * website_api_calls.js — thin HTTP client for the FastAPI backend (main.py).
+ *
+ * Exposes window.MoonApi with:
+ *   - baseUrl (from localStorage 'apiBaseUrl' or default localhost:8000)
+ *   - fetchKampusse()  → GET /kampusse
+ *   - createKlas(...) → POST /klasse
+ *
+ * Usually injected automatically by main.js right after the main.js script tag.
+ * You may also include this file explicitly in HTML before main.js if you prefer.
+ */
 (function () {
+  // Backend root; change in DevTools: localStorage.setItem('apiBaseUrl', 'http://...')
   const API_BASE_URL =
     localStorage.getItem('apiBaseUrl') || 'http://127.0.0.1:8000';
 
   /**
    * Maak 'n fetch na die backend en parse JSON (APIResponse-formaat).
+   * Performs one HTTP request, attaches JSON + Bearer token when present, returns parsed body.
    * @param {string} path bv. '/kampusse'
    * @param {RequestInit} options fetch-opsies (method, body, ens.)
    * @returns {Promise<{ ok: boolean, status: number, body: object }>}
@@ -26,16 +35,18 @@
       API_BASE_URL + path,
       Object.assign({}, options, { headers })
     );
+    // Non-JSON responses become {} so callers can still read .fout etc.
     const body = await res.json().catch(function () {
       return {};
     });
     return { ok: res.ok, status: res.status, body: body };
   }
 
+  /** Public API attached to window for other scripts */
   window.MoonApi = {
     baseUrl: API_BASE_URL,
 
-    /** Kry lys kampusse. */
+    /** Kry lys kampusse. — GET /kampusse, returns API JSON body */
     fetchKampusse: async function () {
       const r = await apiRequest('/kampusse', { method: 'GET' });
       return r.body;
@@ -43,17 +54,13 @@
 
     /**
      * Skep nuwe klas via POST /klasse.
-     * @param {{ naam: string, beskrywing?: string|null, nfc_uid: string, kampus_id?: string|number|null }} payload
+     * @param {{ kampus_naam: string, klas_naam: string, beskrywing?: string|null}} payload
      */
     createKlas: async function (payload) {
       const body = {
-        naam: payload.naam,
+        kampus_naam: payload.kampus_naam,
+        klas_naam: payload.klas_naam,
         beskrywing: payload.beskrywing || null,
-        nfc_uid: String(payload.nfc_uid).trim(),
-        kampus_id:
-          payload.kampus_id === '' || payload.kampus_id === undefined
-            ? null
-            : Number(payload.kampus_id),
       };
       const r = await apiRequest('/klasse', {
         method: 'POST',

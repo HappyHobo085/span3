@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!--
+  Webwerf — Koshuis (residence) view.
+  Mock dashboard on the left, searchable student list on the right (list starts empty).
+  Bottom buttons are placeholders; “Terug” returns to home.
+-->
 <!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
 <!-- Start of the page head (settings and linked files) -->
@@ -25,13 +30,11 @@
         <a href="sub_stelsel.html">Sub Stelsel</a>
     </nav>
 
-    <!-- Home page section -->
-    <main class="page" id="home-page" style="padding-top: 0;">
-        <!-- Top controls area -->
+    <!-- Main content uses #home-page for the same dark theme as other app pages -->
+    <main class="page" id="home-page">
+        <!-- Dropdown: which residence is selected (static options for now) -->
         <section class="top-controls" aria-label="Opsies">
-            <!-- Dropdown label -->
             <label for="data-select">Kies Koshuis:</label>
-            <!-- Dropdown selection -->
             <select id="data-select" name="data-select">
                 <option value="veritas">Veritas</option>
                 <option value="patria">Patria</option>
@@ -43,102 +46,77 @@
 
         <!-- Two-panel main layout -->
         <section class="panels">
-            <!-- Left dashboard panel -->
+            <!-- Left: fake charts / stats -->
             <article class="panel left-panel" aria-label="Mock dashboard">
-                <!-- Dashboard title -->
                 <h2>Dashboard</h2>
-                <!-- Grid for dashboard cards -->
                 <div class="dashboard-grid">
-                    <!-- Card item -->
                     <div class="card">Totale gebruikers</div>
-                    <!-- Card item -->
                     <div class="card">Aktiewe sessies</div>
-                    <!-- Card with circle chart -->
                     <div class="card mock-circle-card">
-                        <!-- Circle chart graphic -->
                         <div class="mock-circle" aria-label="Mock circle diagram"></div>
                     </div>
-                    <!-- Card with graph -->
                     <div class="card mock-graph-card" aria-label="Mock graph">
-                        <!-- Graph bars wrapper -->
                         <div class="mock-graph">
-                            <!-- Bar 1 -->
                             <span class="bar bar-1"></span>
-                            <!-- Bar 2 -->
                             <span class="bar bar-2"></span>
-                            <!-- Bar 3 -->
                             <span class="bar bar-3"></span>
-                            <!-- Bar 4 -->
                             <span class="bar bar-4"></span>
-                            <!-- Bar 5 -->
                             <span class="bar bar-5"></span>
                         </div>
                     </div>
-                    <!-- Wide card -->
                     <div class="card wide">Toegang oorsig</div>
                 </div>
             </article>
 
-            <!-- Right list panel -->
+            <!-- Right: search + list (items would be injected by a future API) -->
             <article class="panel right-panel" aria-label="Leë lys">
-                <!-- List title -->
                 <h2>Lys</h2>
-                <!-- Search area -->
                 <div class="list-search">
-                    <!-- Search input -->
                     <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
                 </div>
-                <!-- Data list container -->
                 <ul id="data-list" class="empty-list" aria-label="Leë data lys">
                 </ul>
             </article>
         </section>
 
-        <!-- Back action button -->
+        <!-- Single back button (fixed position in CSS) -->
         <button class="action-button back-button" type="button"
             onclick="window.location.href='home.html'">Terug</button>
-        <!-- Generate data action button -->
+        <!-- Pair of actions on the bottom-right -->
         <div class="bottom-right-actions">
             <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
             <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
         </div>
     </main>
 
-    <!-- JavaScript logic -->
+    <!-- Page-only script: filters #data-list rows as the user types -->
     <script>
-        // Wrap logic so variables do not leak globally
+        /**
+         * List search: show only <li> elements whose text includes the search string.
+         * Wrapped in an IIFE so temp variables are not global.
+         */
         (function () {
-            // Get search input element
             const listSearch = document.getElementById('list-search');
-            // Get list container element
             const dataList = document.getElementById('data-list');
 
-            // Filter list items based on search input
             function applyListFilter() {
-                // Stop if required elements do not exist
                 if (!listSearch || !dataList) return;
-                // Normalize query text
                 const query = listSearch.value.trim().toLowerCase();
-                // Find all list items
                 const items = dataList.querySelectorAll('li');
 
-                // Loop through each list item
                 items.forEach((li) => {
-                    // Normalize item text
                     const text = (li.textContent || '').trim().toLowerCase();
-                    // Check if item should be visible
                     const matches = query === '' || text.includes(query);
-                    // Hide item when it does not match
                     li.hidden = !matches;
                 });
             }
 
-            // Attach filter logic when search input changes
             if (listSearch) {
                 listSearch.addEventListener('input', applyListFilter);
             }
         })();
     </script>
+    <!-- Redirects to login if session flag missing -->
     <script src="main.js"></script>
 </body>
 

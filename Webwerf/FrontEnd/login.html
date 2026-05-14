@@ -1,7 +1,12 @@
 <!DOCTYPE html>
-<!-- This tells the browser to use modern HTML5 mode -->
+<!--
+  Webwerf — Login page.
+  Demo login only: credentials are checked in login.js against a fixed test user.
+  Successful login sets localStorage so main.js allows other pages.
+-->
+<!-- HTML5 document mode -->
 <html lang="en">
-<!-- Start of the page head (settings and linked files) -->
+<!-- Document metadata and linked assets -->
 
 <head>
   <!-- Character set so text displays correctly -->
@@ -10,42 +15,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Browser tab title -->
   <title>Login - Twee Panele Webwerf</title>
-  <!-- Main external stylesheet -->
+  <!-- Shared layout and colours for the whole site -->
   <link rel="stylesheet" href="styles.css">
 
 </head>
-<!-- Start of visible page content -->
+<!-- Visible page content starts here -->
 
 <body>
-  <!-- Login page section shown first -->
+  <!-- Full-screen dark section styled in CSS via #login-page -->
   <section id="login-page" aria-label="Login page">
-    <!-- Login panel container -->
+    <!-- Centered card: logo + form -->
     <div aria-label="Login panel">
+      <!-- Brand image path is relative to this HTML file (served under nginx) -->
+      <img class="login-brand-image" src="../assets/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png" alt="Login">
+      <!-- Submitted by login.js (prevent default, then validate) -->
       <!-- Login image -->
       <img src="../assets/MOON.png" alt="Login"
         style="width: 340px; height: auto; display: block; margin: 0 auto 110px auto;">
       <!-- Login form -->
       <form id="login-form">
-        <!-- Email field wrapper -->
+        <!-- Email row -->
         <div>
-          <!-- Email input field -->
           <input type="email" id="email" name="email" placeholder="Enter your email" required>
         </div>
-        <!-- Password field wrapper -->
+        <!-- Password row -->
         <div>
-          <!-- Password input field -->
           <input type="password" id="password" name="password" placeholder="Enter your password" required>
         </div>
-        <!-- Button wrapper -->
+        <!-- Primary action -->
         <div>
-          <!-- Submit login button -->
           <button type="submit">Log in</button>
         </div>
       </form>
     </div>
   </section>
 
-  <!-- JavaScript logic -->
+  <!-- Fills demo credentials, handles submit, sets isLoggedIn -->
   <script src="login.js"></script>
 </body>
 

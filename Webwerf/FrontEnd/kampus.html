@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!--
+  Webwerf — Kampus (campus) admin view.
+  Loads campus list from the API into the dropdown (see kampus.js + website_api_calls.js).
+  “Skep nuwe klas” opens a modal; submitting posts a new class to the backend.
+-->
 <!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
 <!-- Start of the page head (settings and linked files) -->
@@ -10,113 +15,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Browser tab title -->
   <title>Twee Panele Webwerf</title>
-  <!-- Main external stylesheet -->
+  <!-- Kampus-specific layout (modal, top row) lives in styles.css -->
   <link rel="stylesheet" href="styles.css">
-  <style>
-    /* Keep controls in one row: dropdown left, create button right */
-    .top-controls.kampus-controls {
-      width: 100%;
-      margin-bottom: 24px;
-      display: flex;
-      flex-direction: row;
-      align-items: end;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .kampus-controls .left-control {
-      width: calc((100% - var(--panel-gap)) / 2);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .create-class-button {
-      height: 44px;
-      min-width: 170px;
-      padding: 0 14px;
-      border: 1px solid #7B61FF;
-      color: #FFFFFF;
-      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%);
-      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
-      cursor: pointer;
-    }
-
-    /* Popup overlay */
-    .class-modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      z-index: 1000;
-    }
-
-    .class-modal-overlay.open {
-      display: flex;
-    }
-
-    /* Popup panel */
-    .class-modal {
-      width: 100%;
-      max-width: 520px;
-      background: #0D132C;
-      border: 1.5px solid #7B61FF;
-      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.3);
-      padding: 20px;
-      color: #FFFFFF;
-    }
-
-    .class-modal h3 {
-      margin-top: 0;
-      margin-bottom: 16px;
-    }
-
-    .class-modal .field {
-      margin-bottom: 12px;
-    }
-
-    .class-modal label {
-      display: block;
-      margin-bottom: 6px;
-      color: #FFFFFF;
-    }
-
-    .class-modal input,
-    .class-modal textarea {
-      width: 100%;
-      border: 1.5px solid #7B61FF;
-      box-shadow: 0 0 18px 1px rgba(123, 97, 255, 0.2);
-      background: #0D132C;
-      color: #FFFFFF;
-      padding: 10px;
-      font: inherit;
-    }
-
-    .class-modal textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .class-modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .class-modal-actions button {
-      min-width: 110px;
-      height: 40px;
-      border: 1px solid #7B61FF;
-      color: #FFFFFF;
-      background: linear-gradient(to bottom, #7B61FF 0%, #00C2FF 100%);
-      box-shadow: 0 2px 25px 2px rgba(123, 97, 255, 0.66);
-      cursor: pointer;
-    }
-  </style>
 </head>
 <!-- Start of visible page content -->
 
@@ -130,14 +30,12 @@
         <a href="sub_stelsel.html">Sub Stelsel</a>
     </nav>
 
-    <!-- Home page section -->
-    <main class="page" id="home-page" style="padding-top: 0;">
-        <!-- Top controls area -->
+    <main class="page" id="home-page">
+        <!-- Top row: campus select (left) + open modal button (right) -->
         <section class="top-controls kampus-controls" aria-label="Opsies">
             <div class="left-control">
-              <!-- Dropdown label -->
               <label for="data-select">Kies Kampus:</label>
-              <!-- Dropdown selection -->
+              <!-- Options replaced by API when available; these are fallbacks -->
               <select id="data-select" name="data-select">
                   <option value="potchefstroom">Potchefstroom</option>
                   <option value="vanderbijlpark">Vanderbijlpark</option>
@@ -149,76 +47,57 @@
 
     <!-- Two-panel main layout -->
     <section class="panels">
-      <!-- Left dashboard panel -->
       <article class="panel left-panel" aria-label="Mock dashboard">
-        <!-- Dashboard title -->
         <h2>Dashboard</h2>
-        <!-- Grid for dashboard cards -->
         <div class="dashboard-grid">
-          <!-- Card item -->
           <div class="card">Totale gebruikers</div>
-          <!-- Card item -->
           <div class="card">Aktiewe sessies</div>
-          <!-- Card with circle chart -->
           <div class="card mock-circle-card">
-            <!-- Circle chart graphic -->
             <div class="mock-circle" aria-label="Mock circle diagram"></div>
           </div>
-          <!-- Card with graph -->
           <div class="card mock-graph-card" aria-label="Mock graph">
-            <!-- Graph bars wrapper -->
             <div class="mock-graph">
-              <!-- Bar 1 -->
               <span class="bar bar-1"></span>
-              <!-- Bar 2 -->
               <span class="bar bar-2"></span>
-              <!-- Bar 3 -->
               <span class="bar bar-3"></span>
-              <!-- Bar 4 -->
               <span class="bar bar-4"></span>
-              <!-- Bar 5 -->
               <span class="bar bar-5"></span>
             </div>
           </div>
-          <!-- Wide card -->
           <div class="card wide">Toegang oorsig</div>
         </div>
       </article>
 
-      <!-- Right list panel -->
       <article class="panel right-panel" aria-label="Leë lys">
-        <!-- List title -->
         <h2>Lys</h2>
-        <!-- Search area -->
         <div class="list-search">
-          <!-- Search input -->
           <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
         </div>
-        <!-- Data list container -->
         <ul id="data-list" class="empty-list" aria-label="Leë data lys">
         </ul>
 
-        <!-- Search box just above the bottom panel -->
-        <div class="list-search" style="margin-top: 20px;">
+        <!-- Second search row (styling: list-search--spaced in CSS) -->
+        <div class="list-search list-search--spaced">
           <input type="search" id="bottom-search" aria-label="Bottom Soek" placeholder="Soek dosent...">
         </div>
 
-        <!-- Bottom panel just above the bottom of the right panel -->
-        <div class="panel bottom-inner-panel" style="margin-top: 10px; min-height: 260px;">
+        <!-- Empty inner panel reserved for future content -->
+        <div class="panel bottom-inner-panel bottom-inner-panel--kampus">
         </div>
       </article>
     </section>
 
-    <!-- Back action button -->
     <button class="action-button back-button" type="button" onclick="window.location.href='home.html'">Terug</button>
-    <!-- Generate data action button -->
     <div class="bottom-right-actions">
       <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
       <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
     </div>
   </main>
 
-  <!-- Popup for creating a new class -->
+  <!--
+    Modal dialog (hidden until .open is toggled on the overlay).
+    Field labels in the UI are Afrikaans; IDs are used by kampus.js.
+  -->
   <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
       <h3 id="class-modal-title">Skep nuwe klas</h3>
@@ -245,7 +124,7 @@
     </div>
   </div>
 
-  <!-- main.js laai website_api_calls.js (MoonApi); daarna kampus.js -->
+  <!-- main.js injects website_api_calls.js (MoonApi), then kampus.js runs page logic -->
   <script src="main.js"></script>
   <script src="kampus.js"></script>
 </body>
