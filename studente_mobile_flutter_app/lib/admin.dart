@@ -12,12 +12,14 @@ class _AdminKlasRy {
   final String kampusNaam;
   final String klasNaam;
   final String beskrywing;
+  final String? nfcUid;
 
   _AdminKlasRy({
     required this.lokasieId,
     required this.kampusNaam,
     required this.klasNaam,
     required this.beskrywing,
+    required this.nfcUid,
   });
 }
 
@@ -59,7 +61,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ..addAll(
             lokasies.map(
               (l) => _AdminKlasRy(
-                lokasieId: l.id,
+                lokasieId: l.id ?? 0,
+                nfcUid: l.nfcUid,
                 kampusNaam: l.kampusId != null
                     ? (idNaKampus[l.kampusId!] ?? 'Kampus #${l.kampusId}')
                     : '—',
@@ -82,68 +85,27 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
-  Future<void> _skryfUid() async {
+Future<void> _skryfUid() async {
   final id = _gekoseLokasieId;
 
   if (id == null) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Kies eers \'n klas in die lys.')),
     );
     return;
   }
 
-  final uidController = TextEditingController();
-
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) {
-      return AlertDialog(
-        backgroundColor: loginPageBackground,
-        title: const Text(
-          'Skryf UID na NFC tag',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: TextField(
-          controller: uidController,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'UID vanaf databasis',
-            labelStyle: const TextStyle(color: Colors.white70),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF7B61FF)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF00C2FF)),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Kanselleer'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Skryf'),
-          ),
-        ],
-      );
-    },
+  final klas = _rye.firstWhere(
+    (r) => r.lokasieId == id,
   );
 
-  if (ok != true || !mounted) {
-    uidController.dispose();
-    return;
-  }
+  final uid = klas.nfcUid;
 
-  final uid = uidController.text.trim();
-  uidController.dispose();
-
-  if (uid.isEmpty) {
+  if (uid == null || uid.trim().isEmpty) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('UID mag nie leeg wees nie.')),
+      const SnackBar(content: Text('Geen UID vir hierdie klas gevind nie.')),
     );
     return;
   }
@@ -151,14 +113,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
   final available = await NfcManager.instance.isAvailable();
 
   if (!available) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('NFC is nie beskikbaar op hierdie toestel nie.')),
     );
     return;
   }
 
+  if (!mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Hou nou die NFC tag teen die foon...')),
+    SnackBar(content: Text('Hou nou die NFC tag teen die foon... UID: $uid')),
   );
 
   NfcManager.instance.startSession(
@@ -174,7 +138,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         }
 
         final message = NdefMessage([
-          NdefRecord.createText(uid),
+          NdefRecord.createText(uid.trim()),
         ]);
 
         await ndef.write(message);
@@ -184,9 +148,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
         );
 
         if (!mounted) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('UID geskryf na NFC tag: $uid')),
+          SnackBar(content: Text('UID geskryf na NFC tag: ${uid.trim()}')),
         );
       } catch (e) {
         await NfcManager.instance.stopSession(
@@ -194,7 +157,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
         );
 
         if (!mounted) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fout: $e')),
         );
