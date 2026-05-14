@@ -93,14 +93,11 @@
       return;
     }
 
-    const kampusId = dataSelect ? dataSelect.value : null;
-
     try {
       const json = await window.MoonApi.createKlas({
-        naam: roomName,
+        kampus_naam: kampusName,
+        klas_naam: classRoomName,
         beskrywing: description,
-        nfc_uid: nfcTag,
-        kampus_id: kampusId,
       });
 
       if (json && json.sukses) {
