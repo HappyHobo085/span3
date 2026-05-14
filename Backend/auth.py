@@ -24,9 +24,29 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)
 
 
+# def _dev_fallback_user(db: Session) -> models.Gebruikers:
+#     """Eerste Administrateur in DB, anders enige gebruiker — slegs vir DISABLE_AUTH."""
+#     admin_rol = db.query(models.Rolle).filter(models.Rolle.ROL_Naam == "Administrateur").first()
+#     if admin_rol:
+#         user = (
+#             db.query(models.Gebruikers)
+#             .filter(models.Gebruikers.Rol_ID == admin_rol.Rol_ID)
+#             .first()
+#         )
+#         if user:
+#             return user
+#     user = db.query(models.Gebruikers).first()
+#     if user:
+#         return user
+#     raise HTTPException(
+#         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+#         detail="DISABLE_AUTH is aan maar die databasis het geen gebruikers nie.",
+#     )
+
+
 def _dev_fallback_user(db: Session) -> models.Gebruikers:
-    """Eerste Administrateur in DB, anders enige gebruiker — slegs vir DISABLE_AUTH."""
     admin_rol = db.query(models.Rolle).filter(models.Rolle.ROL_Naam == "Administrateur").first()
+
     if admin_rol:
         user = (
             db.query(models.Gebruikers)
@@ -35,13 +55,12 @@ def _dev_fallback_user(db: Session) -> models.Gebruikers:
         )
         if user:
             return user
+
     user = db.query(models.Gebruikers).first()
     if user:
         return user
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="DISABLE_AUTH is aan maar die databasis het geen gebruikers nie.",
-    )
+
+    return None
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)

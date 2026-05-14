@@ -103,18 +103,15 @@
       <h3 id="class-modal-title">Skep nuwe klas</h3>
 
       <div class="field">
-        <label for="class-room-name">Naam van kampus</label>
-        <input id="class-room-name" type="text" placeholder="Voer die kampus naam in">
+        <label for="class-room-name">Naam van klaskamer</label>
+        <input id="class-room-name" type="text" placeholder="Voer die klaskamer naam in">
       </div>
 
       <div class="field">
-        <label for="class-description">Naam van klas</label>
-        <textarea id="class-description" placeholder="Voer die klas naam in"></textarea>
-      </div>
-
-      <div class="field">
-        <label for="class-nfc-tag">Beskrywing</label>
-        <input id="class-nfc-tag" type="text" placeholder="Voer die beskrywing in">
+        <label for="class-kampus">Kies kampus</label>
+        <select id="class-kampus">
+          <option value="">Kies kampus...</option>
+        </select>
       </div>
 
       <div class="class-modal-actions">
@@ -125,6 +122,7 @@
   </div>
 
   <!-- main.js injects website_api_calls.js (MoonApi), then kampus.js runs page logic -->
+  <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
   <script src="kampus.js"></script>
 </body>

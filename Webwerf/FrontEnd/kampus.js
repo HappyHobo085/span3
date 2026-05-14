@@ -21,7 +21,7 @@
   const createClassButton = document.getElementById('create-class-button');
   const classModalOverlay = document.getElementById('class-modal-overlay');
   const classRoomName = document.getElementById('class-room-name');
-  const classDescription = document.getElementById('class-description');
+  const classKampus = document.getElementById('class-kampus');
   const classNfcTag = document.getElementById('class-nfc-tag');
   const dataSelect = document.getElementById('data-select');
 
@@ -57,71 +57,52 @@
    * Fetches campuses from the API and fills the dropdown (database IDs).
    */
   async function loadKampusDropdown() {
-    if (!dataSelect || !window.MoonApi) return;
-    try {
-      const json = await window.MoonApi.fetchKampusse();
-      if (json && json.sukses && Array.isArray(json.data) && json.data.length > 0) {
-        dataSelect.innerHTML = '';
-        json.data.forEach(function (k) {
-          const opt = document.createElement('option');
-          opt.value = String(k.Kampus_ID);
-          opt.textContent = k.KAM_Naam;
-          dataSelect.appendChild(opt);
-        });
-      }
-    } catch (e) {
-      console.warn('Kon nie kampuslys laai nie:', e);
-    }
+  if (!classKampus || !window.MoonApi) return;
+
+  const json = await window.MoonApi.fetchKampusse();
+
+  if (json && json.sukses && Array.isArray(json.data)) {
+    classKampus.innerHTML = '<option value="">Kies kampus...</option>';
+
+    json.data.forEach(function (k) {
+      const opt = document.createElement('option');
+      opt.value = String(k.Kampus_ID);
+      opt.textContent = k.KAM_Naam;
+      classKampus.appendChild(opt);
+    });
   }
+}
 
   /**
    * Neem vormdata en roep MoonApi.createKlas aan (POST /klasse via website_api_calls.js).
    * Reads modal fields, validates, POSTs new class, shows alerts for success/errors.
    */
   async function submitNewClass() {
-    const roomName = classRoomName ? classRoomName.value.trim() : '';
-    const description = classDescription ? classDescription.value.trim() : '';
-    const nfcTag = classNfcTag ? classNfcTag.value.trim() : '';
+  const roomName = classRoomName ? classRoomName.value.trim() : '';
+  const kampusId = classKampus ? Number(classKampus.value) : null;
 
-    if (!roomName || !description || !nfcTag) {
-      alert('Voltooi asseblief al die velde.');
-      return;
-    }
-
-    if (!window.MoonApi || typeof window.MoonApi.createKlas !== 'function') {
-      alert('API is nie beskikbaar nie. Laai main.js (laai website_api_calls.js outomaties).');
-      return;
-    }
-
-    try {
-      const json = await window.MoonApi.createKlas({
-        kampus_naam: kampusName,
-        klas_naam: classRoomName,
-        beskrywing: description,
-      });
-
-      if (json && json.sukses) {
-        alert('Klas suksesvol gestoor in die databasis.');
-        closeClassModal();
-        if (classRoomName) classRoomName.value = '';
-        if (classDescription) classDescription.value = '';
-        if (classNfcTag) classNfcTag.value = '';
-        return;
-      }
-
-      const fout =
-        (json && json.fout) ||
-        'Kon nie klas skep nie. Gaan na login-token (access_token) en backend.';
-      alert(fout);
-    } catch (err) {
-      console.error(err);
-      alert(
-        'Netwerkfout: maak seker die backend loop en CORS is aan (' +
-          (window.MoonApi && window.MoonApi.baseUrl) +
-          ').'
-      );
-    }
+  if (!roomName || !kampusId) {
+    alert('Voltooi asseblief die klaskamer naam en kampus.');
+    return;
   }
+
+  const json = await window.MoonApi.createKlas({
+    LOK_Naam: roomName,
+    LOK_Tipe: "Klaskamer",
+    Kampus_ID: kampusId,
+    NFC_UID: "TEMP",
+    NFC_Tipe: "Lokasie"
+  });
+
+  if (json && json.sukses) {
+    alert('Klas suksesvol gestoor. UID: ' + json.data.nfc_tag.NFC_UID);
+    closeClassModal();
+    classRoomName.value = '';
+    classKampus.value = '';
+  } else {
+    alert((json && json.fout) || 'Kon nie klas skep nie.');
+  }
+}
 
   // ----- Wire list filter -----
   if (listSearch) {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'app_shared.dart';
 import 'moon_api.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:nfc_manager/nfc_manager.dart';
 
 /// Een ry vir die admin-lys: data kom van dieselfde bron as kampus.html (`POST /klasse` → `lokasies`).
 class _AdminKlasRy {
@@ -80,77 +83,125 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   Future<void> _skryfUid() async {
-    final id = _gekoseLokasieId;
-    if (id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kies eers \'n ry in die lys.')),
-      );
-      return;
-    }
+  final id = _gekoseLokasieId;
 
-    final uidController = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: loginPageBackground,
-          title: const Text(
-            'Skryf UID',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: TextField(
-            controller: uidController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'NFC UID',
-              labelStyle: const TextStyle(color: Colors.white70),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF7B61FF)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF00C2FF)),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Kanselleer'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (ok != true || !mounted) {
-      uidController.dispose();
-      return;
-    }
-
-    final uid = uidController.text.trim();
-    uidController.dispose();
-    if (uid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('UID mag nie leeg wees nie.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _rye.removeWhere((r) => r.lokasieId == id);
-      _gekoseLokasieId = null;
-    });
-    if (!mounted) return;
+  if (id == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('UID gestoor: $uid')),
+      const SnackBar(content: Text('Kies eers \'n klas in die lys.')),
     );
+    return;
   }
+
+  final uidController = TextEditingController();
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        backgroundColor: loginPageBackground,
+        title: const Text(
+          'Skryf UID na NFC tag',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: TextField(
+          controller: uidController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'UID vanaf databasis',
+            labelStyle: const TextStyle(color: Colors.white70),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF7B61FF)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF00C2FF)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Kanselleer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Skryf'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (ok != true || !mounted) {
+    uidController.dispose();
+    return;
+  }
+
+  final uid = uidController.text.trim();
+  uidController.dispose();
+
+  if (uid.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('UID mag nie leeg wees nie.')),
+    );
+    return;
+  }
+
+  final available = await NfcManager.instance.isAvailable();
+
+  if (!available) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('NFC is nie beskikbaar op hierdie toestel nie.')),
+    );
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Hou nou die NFC tag teen die foon...')),
+  );
+
+  NfcManager.instance.startSession(
+    onDiscovered: (NfcTag tag) async {
+      try {
+        final ndef = Ndef.from(tag);
+
+        if (ndef == null || !ndef.isWritable) {
+          await NfcManager.instance.stopSession(
+            errorMessage: 'Hierdie NFC tag kan nie geskryf word nie.',
+          );
+          return;
+        }
+
+        final message = NdefMessage([
+          NdefRecord.createText(uid),
+        ]);
+
+        await ndef.write(message);
+
+        await NfcManager.instance.stopSession(
+          alertMessage: 'UID suksesvol geskryf!',
+        );
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('UID geskryf na NFC tag: $uid')),
+        );
+      } catch (e) {
+        await NfcManager.instance.stopSession(
+          errorMessage: 'Kon nie UID skryf nie.',
+        );
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fout: $e')),
+        );
+      }
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {

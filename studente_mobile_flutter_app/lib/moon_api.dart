@@ -4,14 +4,14 @@ import 'package:http/http.dart' as http;
 
 /// Een kampus soos FastAPI `/kampusse` dit terugstuur (onder `data`).
 class KampusDto {
-  final int kampusId;
+  final int? kampusId;
   final String naam;
 
   KampusDto({required this.kampusId, required this.naam});
 
   factory KampusDto.fromJson(Map<String, dynamic> json) {
     return KampusDto(
-      kampusId: json['Kampus_ID'] as int,
+      kampusId: json['Kampus_ID'] as int?,
       naam: json['KAM_Naam'] as String,
     );
   }
@@ -49,7 +49,7 @@ class LokasieDto {
 class MoonApi {
   MoonApi._();
 
-  static String baseUrl = 'http://10.0.2.2:8000';
+  static String baseUrl = "http://192.168.100.177:8000";
 
   /// JWT van `POST /token` (veld `access_token` binne `data`).
   static String? bearerToken;

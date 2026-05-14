@@ -340,18 +340,18 @@ def skep_klas_met_nfc(
     Skep 'n nuwe klas (lokasie/saal) en koppel die NFC-tag daaraan in een databasis-transaksie.
     """
 
-    if klas_in.kampus_id is not None:
+    if klas_in.Kampus_ID is not None:
         kampus_bestaan = db.query(models.Kampus).filter(
-            models.Kampus.Kampus_ID == klas_in.kampus_id
+            models.Kampus.Kampus_ID == klas_in.Kampus_ID
         ).first()
         if not kampus_bestaan:
             raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
 
     try:
         db_lokasie = models.Lokasie(
-            LOK_Naam=klas_in.naam.strip(),
+            LOK_Naam=klas_in.LOK_Naam.strip(),
             LOK_Tipe="Klaskamer",
-            Kampus_ID=klas_in.kampus_id,
+            Kampus_ID=klas_in.Kampus_ID,
         )
         db.add(db_lokasie)
         db.flush()
@@ -360,7 +360,6 @@ def skep_klas_met_nfc(
         
         db_tag = models.NFC_Tags(
             NFC_UID=generated_uid,
-            Gebruiker_ID=None,
             Lokasie_ID=db_lokasie.Lokasie_ID,
             NFC_Tipe="Lokasie",
             NFC_Is_Aktief=True,
