@@ -3,7 +3,7 @@
     <uses-feature android:name="android.hardware.nfc" android:required="true" />
     
     <application
-        android:label="Moon"
+        android:label="MOON Mobile"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
