@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'app_shared.dart';
 import 'moon_api.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:nfc_manager/nfc_manager.dart';
 
 // Home screen with two main panels.
 class HomePage extends StatelessWidget {
@@ -232,28 +235,87 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
   List<LokasieDto> _lokasies = [];
 
   Future<void> _onNfcTapped() async {
-    setState(() {
-      _nfcActivated = true;
-      _loading = true;
-      _errorMessage = null;
-    });
+  setState(() {
+    _nfcActivated = true;
+    _loading = true;
+    _errorMessage = null;
+    _lokasies = [];
+  });
 
-    try {
-      final list = await MoonApi.fetchLokasies();
-      if (!mounted) return;
-      setState(() {
-        _lokasies = list;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _errorMessage = e.toString();
-        _lokasies = [];
-      });
-    }
+  final available = await NfcManager.instance.isAvailable();
+
+  if (!available) {
+    setState(() {
+      _loading = false;
+      _errorMessage = 'NFC is nie beskikbaar op hierdie toestel nie.';
+    });
+    return;
   }
+
+  NfcManager.instance.startSession(
+    onDiscovered: (NfcTag tag) async {
+      try {
+        final ndef = Ndef.from(tag);
+
+        if (ndef == null || ndef.cachedMessage == null) {
+          await NfcManager.instance.stopSession(errorMessage: 'Geen UID op tag gevind nie.');
+          if (!mounted) return;
+          setState(() {
+            _loading = false;
+            _errorMessage = 'Geen UID op tag gevind nie.';
+          });
+          return;
+        }
+
+        final record = ndef.cachedMessage!.records.first;
+        final payload = record.payload;
+
+        final uid = String.fromCharCodes(payload.skip(3)).trim();
+
+        final response = await http.get(
+          Uri.parse('${MoonApi.baseUrl}/nfc-tags/$uid'),
+        );
+
+        final json = jsonDecode(response.body);
+
+        if (json['sukses'] == true) {
+          final lokasie = json['data']['lokasie'];
+          final klasNaam = lokasie['naam'];
+
+          await NfcManager.instance.stopSession();
+
+          if (!mounted) return;
+          setState(() {
+            _loading = false;
+            _errorMessage = null;
+            _lokasies = [
+              LokasieDto(
+                id: lokasie['id'] as int?,
+                naam: klasNaam.toString(),
+                beskrywing: 'Ingeskandeer met UID: $uid',
+                kampusId: null,
+              ),
+            ];
+          });
+        } else {
+          await NfcManager.instance.stopSession(errorMessage: 'Klas nie gevind nie.');
+          if (!mounted) return;
+          setState(() {
+            _loading = false;
+            _errorMessage = 'Klas nie gevind vir UID: $uid';
+          });
+        }
+      } catch (e) {
+        await NfcManager.instance.stopSession(errorMessage: 'Scan fout');
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _errorMessage = 'Scan fout: $e';
+        });
+      }
+    },
+  );
+}
 
   Widget _buildCenterPanelBody() {
     if (!_nfcActivated) {
