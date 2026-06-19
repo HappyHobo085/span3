@@ -1,78 +1,68 @@
 <!DOCTYPE html>
-<!--
-  Webwerf — Home (Tuis) after login.
-  Shows a small dashboard with sample stats and system updates, plus “Teken uit”.
-  main.js enforces login; styles.css controls layout and dark theme.
--->
 <html lang="en">
 <head>
-    <!-- UTF-8 so all characters display correctly -->
-    <meta charset="UTF-8">
-    <!-- Mobile-friendly scaling -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home - Twee Panele Webwerf</title>
-    <!-- All colours, spacing, and components live in this one file -->
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOON — Tuis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Site-wide links; same bar on every inner page -->
-    <nav class="navbar">
-        <a href="home.html">Tuis</a>
-        <a href="kampus.html">Kampus</a>
-        <a href="koshuis.html">Koshuis</a>
-        <a href="events.html">Events</a>
-        <a href="sub_stelsel.html">Sub Stelsel</a>
-    </nav>
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html" class="active">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
+  </nav>
 
-    <!-- id="home-page" triggers the dark “logged in” theme in styles.css -->
-    <main class="page" id="home-page">
-        <!-- Single wide column of content -->
-        <section class="panels">
-            <article class="panel wide-panel" aria-label="Mini Dashboard">
-                <h2>Mini Dashboard - Updates & Opsomming</h2>
-                <!-- Three summary tiles (uses modifier class for 3 columns) -->
-                <div class="dashboard-grid dashboard-grid--cols-3">
-                    <div class="card">
-                        <h3>Kampusse</h3>
-                        <p>3 Aktief</p>
-                    </div>
-                    <div class="card">
-                        <h3>Koshuise</h3>
-                        <p>12 Geregistreer</p>
-                    </div>
-                    <div class="card">
-                        <h3>Gebeure (Events)</h3>
-                        <p>5 Komende</p>
-                    </div>
-                </div>
+  <main class="page" id="home-page">
+    <div class="stat-grid" aria-label="Opsomming">
+      <div class="glass-card stat-card">
+        <div class="stat-label">Kampusse</div>
+        <div class="stat-value">3</div>
+        <div class="stat-sub">● Aktief</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:60%"></div></div>
+      </div>
+      <div class="glass-card stat-card">
+        <div class="stat-label">Koshuise</div>
+        <div class="stat-value">12</div>
+        <div class="stat-sub" style="color:var(--accent-2)">● Geregistreer</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:80%"></div></div>
+      </div>
+      <div class="glass-card stat-card">
+        <div class="stat-label">Gebeure (Events)</div>
+        <div class="stat-value">5</div>
+        <div class="stat-sub" style="color:var(--warning)">● Komende</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:40%"></div></div>
+      </div>
+    </div>
 
-                <!-- Bulleted-style updates in a dashed box -->
-                <div class="home-updates-block">
-                    <h3>Stelsel Opdaterings</h3>
-                    <ul class="empty-list empty-list--compact">
-                        <li>- Toegangsbestuur module is aanlyn.</li>
-                        <li>- Koshuis data is suksesvol gelaai vir 2026.</li>
-                        <li>- Nuwe studente kaarte is gedruk vir eerstejaars.</li>
-                    </ul>
-                </div>
-            </article>
-        </section>
+    <div class="glass-card" style="padding:20px">
+      <div class="section-label">Stelsel Opdaterings</div>
+      <ul class="updates-list" aria-label="Stelsel Opdaterings">
+        <li><span class="updates-dot"></span>Toegangsbestuur module is aanlyn.</li>
+        <li><span class="updates-dot" style="background:var(--success)"></span>Koshuis data is suksesvol gelaai vir 2026.</li>
+        <li><span class="updates-dot" style="background:var(--accent-2)"></span>Nuwe studente kaarte is gedruk vir eerstejaars.</li>
+      </ul>
+    </div>
+  </main>
 
-        <!-- Clears login flag and returns to login page (see small script below) -->
-        <button class="action-button back-button" type="button" onclick="logOut()">Teken uit</button>
-    </main>
+  <div class="action-bar">
+    <span></span>
+    <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+  </div>
 
-    <!-- Session guard: redirects to login if not authenticated -->
-    <script src="main.js"></script>
-    <script>
-        /**
-         * Signs the user out of the demo (browser-only “session”).
-         * Clears the flag main.js checks, then opens the login screen.
-         */
-        function logOut() {
-            localStorage.removeItem('isLoggedIn');
-            window.location.href = 'login.html';
-        }
-    </script>
+  <script src="main.js"></script>
+  <script>
+    function logOut() {
+      localStorage.removeItem('isLoggedIn');
+      window.location.href = 'login.html';
+    }
+  </script>
 </body>
 </html>

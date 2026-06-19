@@ -33,10 +33,10 @@ class LokasieDto {
 
   factory LokasieDto.fromJson(Map<String, dynamic> json) {
     return LokasieDto(
-      id: json['id'] as int,
-      naam: json['naam'] as String,
-      beskrywing: json['beskrywing'] as String?,
-      kampusId: json['kampus_id'] as int?,
+      id: json['Lokasie_ID'] as int,
+      naam: json['LOK_Naam'] as String,
+      beskrywing: json['LOK_Tipe'] as String?,
+      kampusId: json['Kampus_ID'] as int?,
     );
   }
 }

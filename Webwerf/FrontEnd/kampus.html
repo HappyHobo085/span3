@@ -1,53 +1,40 @@
 <!DOCTYPE html>
-<!--
-  Webwerf — Kampus (campus) admin view.
-  Loads campus list from the API into the dropdown (see kampus.js + website_api_calls.js).
-  “Skep nuwe klas” opens a modal; submitting posts a new class to the backend.
--->
-<!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
-<!-- Start of the page head (settings and linked files) -->
-
 <head>
-  <!-- Character set so text displays correctly -->
   <meta charset="UTF-8">
-  <!-- Makes the layout responsive on phones/tablets -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Browser tab title -->
-  <title>Twee Panele Webwerf</title>
-  <!-- Kampus-specific layout (modal, top row) lives in styles.css -->
+  <title>MOON — Kampus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<!-- Start of visible page content -->
-
 <body>
-    <!-- Navbar -->
-    <nav class="navbar">
-        <a href="home.html">Tuis</a>
-        <a href="kampus.html">Kampus</a>
-        <a href="koshuis.html">Koshuis</a>
-        <a href="events.html">Events</a>
-        <a href="sub_stelsel.html">Sub Stelsel</a>
-    </nav>
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html" class="active">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+  </nav>
 
-    <main class="page" id="home-page">
-        <!-- Top row: campus select (left) + open modal button (right) -->
-        <section class="top-controls kampus-controls" aria-label="Opsies">
-            <div class="left-control">
-              <label for="data-select">Kies Kampus:</label>
-              <!-- Options replaced by API when available; these are fallbacks -->
-              <select id="data-select" name="data-select">
-                  <option value="potchefstroom">Potchefstroom</option>
-                  <option value="vanderbijlpark">Vanderbijlpark</option>
-                  <option value="mahikeng">Mahikeng</option>
-              </select>
-            </div>
-            <button id="open-class-modal" class="create-class-button" type="button">Skep nuwe klas</button>
-        </section>
+  <main class="page" id="home-page">
+    <!-- Top controls: campus select left, new-class button right -->
+    <section class="top-controls space-between" aria-label="Opsies">
+      <div class="control-group">
+        <label class="field-label" for="data-select">Kies Kampus</label>
+        <select class="glass-select" id="data-select" name="data-select" style="width:220px">
+          <option value="potchefstroom">Potchefstroom</option>
+          <option value="vanderbijlpark">Vanderbijlpark</option>
+          <option value="mahikeng">Mahikeng</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="open-class-modal" type="button">+ Skep nuwe klas</button>
+    </section>
 
-    <!-- Two-panel main layout -->
+    <!-- Two-panel layout -->
     <section class="panels">
-      <article class="panel left-panel" aria-label="Mock dashboard">
+      <!-- Left: mock dashboard -->
+      <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
           <div class="card">Totale gebruikers</div>
@@ -68,63 +55,56 @@
         </div>
       </article>
 
-      <article class="panel right-panel" aria-label="Leë lys">
+      <!-- Right: searchable list -->
+      <article class="glass-card panel" aria-label="Lys">
         <h2>Lys</h2>
         <div class="list-search">
-          <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
+          <input class="glass-input" type="search" id="list-search"
+                 aria-label="Soek in Lys" placeholder="Soek student...">
         </div>
-        <ul id="data-list" class="empty-list" aria-label="Leë data lys">
-        </ul>
+        <ul id="data-list" class="empty-list" aria-label="Leë data lys"></ul>
 
-        <!-- Second search row (styling: list-search--spaced in CSS) -->
         <div class="list-search list-search--spaced">
-          <input type="search" id="bottom-search" aria-label="Bottom Soek" placeholder="Soek dosent...">
+          <input class="glass-input" type="search" id="bottom-search"
+                 aria-label="Soek dosent" placeholder="Soek dosent...">
         </div>
-
-        <!-- Empty inner panel reserved for future content -->
-        <div class="panel bottom-inner-panel bottom-inner-panel--kampus">
-        </div>
+        <div class="bottom-inner-panel" aria-label="Verdere inligting"></div>
       </article>
     </section>
-
-    <button class="action-button back-button" type="button" onclick="window.location.href='home.html'">Terug</button>
-    <div class="bottom-right-actions">
-      <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
-      <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
-    </div>
   </main>
 
-  <!--
-    Modal dialog (hidden until .open is toggled on the overlay).
-    Field labels in the UI are Afrikaans; IDs are used by kampus.js.
-  -->
+  <div class="action-bar">
+    <button class="btn-outline" type="button"
+            onclick="window.location.href='home.html'">← Terug</button>
+    <div class="action-bar-right">
+      <button class="btn-outline btn-danger" type="button">Verwyder gebruiker</button>
+      <button class="btn-primary" type="button">Skep nuwe gebruiker</button>
+    </div>
+  </div>
+
+  <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
   <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
       <h3 id="class-modal-title">Skep nuwe klas</h3>
-
       <div class="field">
         <label for="class-room-name">Naam van klaskamer</label>
         <input id="class-room-name" type="text" placeholder="Voer die klaskamer naam in">
       </div>
-
       <div class="field">
         <label for="class-kampus">Kies kampus</label>
         <select id="class-kampus">
           <option value="">Kies kampus...</option>
         </select>
       </div>
-
       <div class="class-modal-actions">
-        <button id="close-class-modal" type="button">Kanselleer</button>
-        <button id="create-class-button" type="button">Skep</button>
+        <button class="btn-outline" id="close-class-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-class-button" type="button">Skep</button>
       </div>
     </div>
   </div>
 
-  <!-- main.js injects website_api_calls.js (MoonApi), then kampus.js runs page logic -->
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
   <script src="kampus.js"></script>
 </body>
-
 </html>

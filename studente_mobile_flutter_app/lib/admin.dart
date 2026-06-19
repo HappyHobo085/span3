@@ -63,10 +63,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 kampusNaam: l.kampusId != null
                     ? (idNaKampus[l.kampusId!] ?? 'Kampus #${l.kampusId}')
                     : '—',
-                klasNaam: l.beskrywing?.trim().isNotEmpty == true
+                klasNaam: l.naam.trim().isNotEmpty ? l.naam.trim() : '—',
+                beskrywing: l.beskrywing?.trim().isNotEmpty == true
                     ? l.beskrywing!.trim()
                     : '—',
-                beskrywing: l.naam.trim().isNotEmpty ? l.naam.trim() : '—',
               ),
             ),
           );
