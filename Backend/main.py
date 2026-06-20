@@ -318,16 +318,33 @@ def skep_lokasie(
     db.refresh(db_lokasie)
     return schemas.APIResponse(sukses=True, data=db_lokasie)
 
-@app.get("/lokasies", response_model=schemas.APIResponse[List[schemas.Lokasie]])
+@app.get("/lokasies")
 def lys_lokasies(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
-    """
-    Stap 2: Lys alle klaskamers.
-    """
     lokasies = db.query(models.Lokasie).all()
-    return schemas.APIResponse(sukses=True, data=lokasies)
+
+    result = []
+
+    for l in lokasies:
+
+        tag = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True
+        ).first()
+
+        result.append({
+            "Lokasie_ID": l.Lokasie_ID,
+            "LOK_Naam": l.LOK_Naam,
+            "Kampus_ID": l.Kampus_ID,
+            "NFC_UID": tag.NFC_UID if tag else None
+        })
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=result
+    )
 
 @app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)
 def skep_klas_met_nfc(

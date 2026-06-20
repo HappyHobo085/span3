@@ -19,24 +19,27 @@ class KampusDto {
 
 /// Een rekord soos FastAPI `/lokasies` dit terugstuur (onder `data`).
 class LokasieDto {
-  final int id;
+  final int? id;
   final String naam;
   final String? beskrywing;
   final int? kampusId;
+  final String? nfcUid;
 
   LokasieDto({
     required this.id,
     required this.naam,
     this.beskrywing,
     this.kampusId,
+    this.nfcUid,
   });
 
-  factory LokasieDto.fromJson(Map<String, dynamic> json) {
+    factory LokasieDto.fromJson(Map<String, dynamic> json) {
     return LokasieDto(
-      id: json['Lokasie_ID'] as int,
+      id: json['Lokasie_ID'] as int?,
       naam: json['LOK_Naam'] as String,
       beskrywing: json['LOK_Tipe'] as String?,
       kampusId: json['Kampus_ID'] as int?,
+      nfcUid: json['NFC_UID'] as String?,
     );
   }
 }
@@ -49,7 +52,7 @@ class LokasieDto {
 class MoonApi {
   MoonApi._();
 
-  static String baseUrl = "http://192.168.100.177:8000";
+  static String baseUrl = "http://100.103.103.103:8000";
 
   /// JWT van `POST /token` (veld `access_token` binne `data`).
   static String? bearerToken;
