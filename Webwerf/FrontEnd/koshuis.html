@@ -1,123 +1,92 @@
 <!DOCTYPE html>
-<!--
-  Webwerf — Koshuis (residence) view.
-  Mock dashboard on the left, searchable student list on the right (list starts empty).
-  Bottom buttons are placeholders; “Terug” returns to home.
--->
-<!-- This tells the browser to use modern HTML5 mode -->
 <html lang="en">
-<!-- Start of the page head (settings and linked files) -->
-
 <head>
-    <!-- Character set so text displays correctly -->
-    <meta charset="UTF-8">
-    <!-- Makes the layout responsive on phones/tablets -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Browser tab title -->
-    <title>Twee Panele Webwerf</title>
-    <!-- Main external stylesheet -->
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOON — Koshuis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
-<!-- Start of visible page content -->
-
 <body>
-    <!-- Navbar -->
-    <nav class="navbar">
-        <a href="home.html">Tuis</a>
-        <a href="kampus.html">Kampus</a>
-        <a href="koshuis.html">Koshuis</a>
-        <a href="events.html">Events</a>
-        <a href="sub_stelsel.html">Sub Stelsel</a>
-    </nav>
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html" class="active">Koshuis</a>
+    <a href="events.html">Events</a>
+  </nav>
 
-    <!-- Main content uses #home-page for the same dark theme as other app pages -->
-    <main class="page" id="home-page">
-        <!-- Dropdown: which residence is selected (static options for now) -->
-        <section class="top-controls" aria-label="Opsies">
-            <label for="data-select">Kies Koshuis:</label>
-            <select id="data-select" name="data-select">
-                <option value="veritas">Veritas</option>
-                <option value="patria">Patria</option>
-                <option value="heide">Heide</option>
-                <option value="wagnbietjie">Wag-'n-Bietjie</option>
-                <option value="kasteel">Kasteel</option>
-            </select>
-        </section>
+  <main class="page" id="home-page">
+    <section class="top-controls" aria-label="Opsies">
+      <div class="control-group">
+        <label class="field-label" for="data-select">Kies Koshuis</label>
+        <select class="glass-select" id="data-select" name="data-select" style="width:220px">
+          <option value="veritas">Veritas</option>
+          <option value="patria">Patria</option>
+          <option value="heide">Heide</option>
+          <option value="wagnbietjie">Wag-'n-Bietjie</option>
+          <option value="kasteel">Kasteel</option>
+        </select>
+      </div>
+    </section>
 
-        <!-- Two-panel main layout -->
-        <section class="panels">
-            <!-- Left: fake charts / stats -->
-            <article class="panel left-panel" aria-label="Mock dashboard">
-                <h2>Dashboard</h2>
-                <div class="dashboard-grid">
-                    <div class="card">Totale gebruikers</div>
-                    <div class="card">Aktiewe sessies</div>
-                    <div class="card mock-circle-card">
-                        <div class="mock-circle" aria-label="Mock circle diagram"></div>
-                    </div>
-                    <div class="card mock-graph-card" aria-label="Mock graph">
-                        <div class="mock-graph">
-                            <span class="bar bar-1"></span>
-                            <span class="bar bar-2"></span>
-                            <span class="bar bar-3"></span>
-                            <span class="bar bar-4"></span>
-                            <span class="bar bar-5"></span>
-                        </div>
-                    </div>
-                    <div class="card wide">Toegang oorsig</div>
-                </div>
-            </article>
-
-            <!-- Right: search + list (items would be injected by a future API) -->
-            <article class="panel right-panel" aria-label="Leë lys">
-                <h2>Lys</h2>
-                <div class="list-search">
-                    <input type="search" id="list-search" aria-label="Soek in Lys" placeholder="Soek student...">
-                </div>
-                <ul id="data-list" class="empty-list" aria-label="Leë data lys">
-                </ul>
-            </article>
-        </section>
-
-        <!-- Single back button (fixed position in CSS) -->
-        <button class="action-button back-button" type="button"
-            onclick="window.location.href='home.html'">Terug</button>
-        <!-- Pair of actions on the bottom-right -->
-        <div class="bottom-right-actions">
-            <button class="action-button delete-button" type="button">Verwyder gebruiker</button>
-            <button class="action-button generate-button" type="button">skep nuwe gebruiker</button>
+    <section class="panels">
+      <article class="glass-card panel" aria-label="Dashboard">
+        <h2>Dashboard</h2>
+        <div class="dashboard-grid">
+          <div class="card">Totale gebruikers</div>
+          <div class="card">Aktiewe sessies</div>
+          <div class="card mock-circle-card">
+            <div class="mock-circle" aria-label="Mock circle diagram"></div>
+          </div>
+          <div class="card mock-graph-card" aria-label="Mock graph">
+            <div class="mock-graph">
+              <span class="bar bar-1"></span>
+              <span class="bar bar-2"></span>
+              <span class="bar bar-3"></span>
+              <span class="bar bar-4"></span>
+              <span class="bar bar-5"></span>
+            </div>
+          </div>
+          <div class="card wide">Toegang oorsig</div>
         </div>
-    </main>
+      </article>
 
-    <!-- Page-only script: filters #data-list rows as the user types -->
-    <script>
-        /**
-         * List search: show only <li> elements whose text includes the search string.
-         * Wrapped in an IIFE so temp variables are not global.
-         */
-        (function () {
-            const listSearch = document.getElementById('list-search');
-            const dataList = document.getElementById('data-list');
+      <article class="glass-card panel" aria-label="Lys">
+        <h2>Lys</h2>
+        <div class="list-search">
+          <input class="glass-input" type="search" id="list-search"
+                 aria-label="Soek in Lys" placeholder="Soek student...">
+        </div>
+        <ul id="data-list" class="empty-list" aria-label="Leë data lys"></ul>
+      </article>
+    </section>
+  </main>
 
-            function applyListFilter() {
-                if (!listSearch || !dataList) return;
-                const query = listSearch.value.trim().toLowerCase();
-                const items = dataList.querySelectorAll('li');
+  <div class="action-bar">
+    <button class="btn-outline" type="button"
+            onclick="window.location.href='home.html'">← Terug</button>
+    <div class="action-bar-right">
+      <button class="btn-outline btn-danger" type="button">Verwyder gebruiker</button>
+      <button class="btn-primary" type="button">Skep nuwe gebruiker</button>
+    </div>
+  </div>
 
-                items.forEach((li) => {
-                    const text = (li.textContent || '').trim().toLowerCase();
-                    const matches = query === '' || text.includes(query);
-                    li.hidden = !matches;
-                });
-            }
-
-            if (listSearch) {
-                listSearch.addEventListener('input', applyListFilter);
-            }
-        })();
-    </script>
-    <!-- Redirects to login if session flag missing -->
-    <script src="main.js"></script>
+  <script>
+    (function () {
+      const listSearch = document.getElementById('list-search');
+      const dataList   = document.getElementById('data-list');
+      function applyListFilter() {
+        if (!listSearch || !dataList) return;
+        const query = listSearch.value.trim().toLowerCase();
+        dataList.querySelectorAll('li').forEach((li) => {
+          li.hidden = query !== '' && !(li.textContent || '').trim().toLowerCase().includes(query);
+        });
+      }
+      if (listSearch) listSearch.addEventListener('input', applyListFilter);
+    })();
+  </script>
+  <script src="main.js"></script>
 </body>
-
 </html>

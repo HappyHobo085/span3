@@ -1,57 +1,44 @@
 <!DOCTYPE html>
-<!--
-  Webwerf — Login page.
-  Demo login only: credentials are checked in login.js against a fixed test user.
-  Successful login sets localStorage so main.js allows other pages.
--->
-<!-- HTML5 document mode -->
 <html lang="en">
-<!-- Document metadata and linked assets -->
-
 <head>
-  <!-- Character set so text displays correctly -->
   <meta charset="UTF-8">
-  <!-- Makes the layout responsive on phones/tablets -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Browser tab title -->
-  <title>Login - Twee Panele Webwerf</title>
-  <!-- Shared layout and colours for the whole site -->
+  <title>MOON — Teken In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-
 </head>
-<!-- Visible page content starts here -->
-
 <body>
-  <!-- Full-screen dark section styled in CSS via #login-page -->
   <section id="login-page" aria-label="Login page">
-    <!-- Centered card: logo + form -->
-    <div aria-label="Login panel">
-      <!-- Brand image path is relative to this HTML file (served under nginx) -->
-      <img class="login-brand-image" src="../assets/ChatGPT_Image_Mar_26_2026_04_16_53_PM.png" alt="Login">
-      <!-- Submitted by login.js (prevent default, then validate) -->
-      <!-- Login image -->
-      <img src="../assets/MOON.png" alt="Login"
-        style="width: 340px; height: auto; display: block; margin: 0 auto 110px auto;">
-      <!-- Login form -->
-      <form id="login-form">
-        <!-- Email row -->
-        <div>
-          <input type="email" id="email" name="email" placeholder="Enter your email" required>
-        </div>
-        <!-- Password row -->
-        <div>
-          <input type="password" id="password" name="password" placeholder="Enter your password" required>
-        </div>
-        <!-- Primary action -->
-        <div>
-          <button type="submit">Log in</button>
-        </div>
-      </form>
+    <div class="login-container">
+      <div class="login-logo">
+        <!-- Brand image path is relative to this HTML file (served under nginx) -->
+      <img class="login-brand-image" src="../assets/MOON.png" alt="Login">
+        <div class="login-logo-sub">Toegangsbestuur Stelsel</div>
+      </div>
+      <div class="glass-card login-card">
+        <form id="login-form">
+          <div class="field">
+            <label class="field-label" for="email">E-pos</label>
+            <input class="glass-input" type="email" id="email" name="email"
+                   placeholder="Voer u e-pos in" required>
+          </div>
+          <div class="field">
+            <label class="field-label" for="password">Wagwoord</label>
+            <input class="glass-input" type="password" id="password" name="password"
+                   placeholder="Voer u wagwoord in" required>
+          </div>
+          <button class="btn-primary" type="submit">Teken In</button>
+        </form>
+      </div>
     </div>
   </section>
-
-  <!-- Fills demo credentials, handles submit, sets isLoggedIn -->
   <script src="login.js"></script>
 </body>
-
 </html>
+
+<!-- Hierdie is 'n idee van 'n logo -->
+<!-- <div class="login-logo">
+  <div class="login-logo-text">MOON</div>
+  <div class="login-logo-sub">Kampus Bestuur Stelsel</div>
+</div> --> 
