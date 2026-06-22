@@ -66,6 +66,7 @@ class NFC_Tags(Base):
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
                            
     lokasie   = relationship("Lokasie", back_populates="nfc_tags")
+    toegangs_logs = relationship("ToegangsLogs", back_populates="nfc_tag")
 class Kampus(Base):
     __tablename__ = 'kampus'
     Kampus_ID  = Column(Integer, primary_key=True, index=True)
@@ -84,28 +85,62 @@ class Lokasie(Base):
 
     kampus    = relationship("Kampus", back_populates="lokasies")
     nfc_tags  = relationship("NFC_Tags", back_populates="lokasie")
+    toegangs_logs = relationship("ToegangsLogs", back_populates="lokasie")
 
 class ToegangsLogs(Base):
     __tablename__ = 'toegangs_logs'
 
     Log_ID        = Column(Integer,  primary_key=True, index=True)
-    NFC_Tags_ID   = Column(Integer,  ForeignKey('nfc_tags.NFC_Tags_ID'), nullable=False)
     Gebruiker_ID  = Column(Integer,  ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
     Lokasie_ID    = Column(Integer,  ForeignKey('lokasie.Lokasie_ID'), nullable=False)
-    LOG_Status    = Column(String(32), nullable=False, default='TOEGELAAT')
-    # "TOEGELAAT" | "GEWEIER" | "ONBEKEND"
-    LOG_Tydstempel = Column(DateTime, default=datetime.utcnow, nullable=False)
+    TOE_Tydstempel      = Column(DateTime, default=datetime.utcnow, nullable=False)
+    TOE_Rigting         = Column(String(16), nullable=False) # "IN" | "UIT"
+    TOE_Metode          = Column(String(32), nullable=False) # "NFC" | "HANDMATIG" | "QR"
+    TOE_Auto_Uitgecheck = Column(Boolean, nullable=False, default=False)
 
-    nfc_tag   = relationship("NFC_Tags",   back_populates="toegangs_logs")
     gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
     lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
+    gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
+    lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
+
+class Besoekers_Groep(Base):
+    __tablename__ = 'besoekers_groep'
+
+    Besoekers_Groep_ID = Column(Integer, primary_key=True, index=True)
+    BESG_Selfoon_Nr    = Column(String(15),  nullable=False)
+    BESG_Kode          = Column(String(20),  nullable=False, unique=True)
+    # BESG_Kode is die unieke identifikasiekode wat aan die groep toegeken word
+    # (bv. 'n QR-kode of voorafgegenereerde toegangskode)
+
+    besoekers           = relationship("Besoeker",           back_populates="besoekers_groep")
+    onverwagte_besoekers = relationship("Onverwagte_Besoeker", back_populates="besoekers_groep")
+
+class Besoeker(Base):
+    __tablename__ = 'besoeker'
+
+    Besoeker_ID        = Column(Integer, primary_key=True, index=True)
+    BES_Naam           = Column(String(200), nullable=False)
+    Besoekers_Groep_ID = Column(Integer, ForeignKey('besoekers_groep.Besoekers_Groep_ID'), nullable=False)
+
+    besoekers_groep = relationship("Besoekers_Groep", back_populates="besoekers")
+
+class Onverwagte_Besoeker(Base):
+    __tablename__ = 'onverwagte_besoeker'
+
+    Onverwagte_Besoeker_ID = Column(Integer, primary_key=True, index=True)
+    ONV_Bestuurslisensie   = Column(String(20),  nullable=True)
+    ONV_Beskrywing         = Column(Text,        nullable=True)
+    ONV_Kode               = Column(String(20),  nullable=True)
+    Besoekers_Groep_ID     = Column(Integer, ForeignKey('besoekers_groep.Besoekers_Groep_ID'), nullable=False)
+
+    besoekers_groep = relationship("Besoekers_Groep", back_populates="onverwagte_besoekers")
 
 class Waarskuwings(Base):
     __tablename__ = 'waarskuwings'
     Waarskuwing_ID = Column(Integer, primary_key=True, index=True)
     Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
     WAA_Beskrywing = Column(Text, nullable=False)
-    WAA_Status     = Column(String(32), nullable=False, default='OOP')
+    WAA_Status     = Column(String(32), nullable=False, default='OOP') # "OOP" | "ERKEN" | "GESLUIT"
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
 
     gebruiker = relationship("Gebruikers")
@@ -115,7 +150,11 @@ class Kampus_Opsigter(Base):
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
 
+    gebruiker = relationship("Gebruikers", back_populates="kampus_opsigter")
+
 class Sekuriteit_Wag(Base):
     __tablename__ = 'sekuriteit_wag'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     SEK_Nommer   = Column(String(20), nullable=False, unique=True)
+
+    gebruiker = relationship("Gebruikers", back_populates="sekuriteit_wag")

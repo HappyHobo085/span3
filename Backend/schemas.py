@@ -218,10 +218,11 @@ class KlasSkepResult(BaseModel):
 # Model: Log_ID, NFC_Tags_ID, Gebruiker_ID, Lokasie_ID, LOG_Tydstempel, LOG_Status
 
 class ToegangsLogBase(BaseModel):
-    NFC_Tags_ID: int            # FK → NFC_Tags.NFC_Tags_ID
     Gebruiker_ID: int           # FK → Gebruikers.Gebruiker_ID
     Lokasie_ID: int             # FK → Lokasies.Lokasie_ID
-    LOG_Status: str = "TOEGELAAT"   # "TOEGELAAT" | "GEWEIER" | "ONBEKEND"
+    TOE_Rigting:         str        # "IN" | "UIT"
+    TOE_Metode:          str        # "NFC" | "HANDMATIG" | "QR"
+    TOE_Auto_Uitgecheck: bool = False
 
 class ToegangsLogCreate(ToegangsLogBase):
     pass
@@ -236,13 +237,14 @@ class ToegangsLog(ToegangsLogBase):
 class ToegangsLogRead(BaseModel):
     """Uitgebreide log-lees met gebruiker- en lokasiebesonderhede."""
     Log_ID: int
-    LOG_Tydstempel: datetime
-    LOG_Status: str
-    NFC_UID: str
-    GEB_Naam: str
-    GEB_Van: str
-    LOK_Naam: str
-    LOK_Tipe: str
+    TOE_Tydstempel:      datetime
+    TOE_Rigting:         str
+    TOE_Metode:          str
+    TOE_Auto_Uitgecheck: bool
+    GEB_Naam:            str
+    GEB_Van:             str
+    LOK_Naam:            str
+    LOK_Tipe:            str
 
     class Config:
         from_attributes = True
@@ -255,6 +257,80 @@ class HandmatigeToegangSoek(BaseModel):
     """
     soek_term: str              # Naam, Van, of GEB_ID_Nommer
     Lokasie_ID: int             # Hek / punt waar toegang gevra word
+
+# --- BESOEKERS_GROEP SCHEMAS ---
+# Model: Besoekers_Groep_ID, BESG_Selfoon_Nr, BESG_Kode
+
+class BesoekersGroepBase(BaseModel):
+    BESG_Selfoon_Nr: str
+    BESG_Kode: str
+
+class BesoekersGroepCreate(BesoekersGroepBase):
+    pass
+
+class BesoekersGroepUpdate(BaseModel):
+    BESG_Selfoon_Nr: Optional[str] = None
+    BESG_Kode: Optional[str] = None
+
+class BesoekersGroep(BesoekersGroepBase):
+    Besoekers_Groep_ID: int
+
+    class Config:
+        from_attributes = True
+
+# --- BESOEKER SCHEMAS ---
+# Model: Besoeker_ID, BES_Naam, Besoekers_Groep_ID (FK)
+
+class BesoekerBase(BaseModel):
+    BES_Naam: str
+    Besoekers_Groep_ID: int     # FK → Besoekers_Groep.Besoekers_Groep_ID
+
+class BesoekerCreate(BesoekerBase):
+    pass
+
+class BesoekerUpdate(BaseModel):
+    BES_Naam: Optional[str] = None
+    Besoekers_Groep_ID: Optional[int] = None
+
+class Besoeker(BesoekerBase):
+    Besoeker_ID: int
+
+    class Config:
+        from_attributes = True
+
+class BesoekersGroepRead(BaseModel):
+    """Groep met sy volledige lys besoekers — vir die wag se besigtigingskerm."""
+    Besoekers_Groep_ID: int
+    BESG_Selfoon_Nr: str
+    BESG_Kode: str
+    besoekers: List[Besoeker] = []
+
+    class Config:
+        from_attributes = True
+
+# --- ONVERWAGTE_BESOEKER SCHEMAS ---
+# Model: Onverwagte_Besoeker_ID, ONV_Bestuurslisensie, ONV_Beskrywing,
+#        ONV_Kode, Besoekers_Groep_ID (FK)
+
+class OnverwagteBesoekBase(BaseModel):
+    ONV_Bestuurslisensie: Optional[str] = None
+    ONV_Beskrywing: Optional[str] = None
+    ONV_Kode: Optional[str] = None
+    Besoekers_Groep_ID: int             # FK → Besoekers_Groep.Besoekers_Groep_ID
+
+class OnverwagteBesoekCreate(OnverwagteBesoekBase):
+    pass
+
+class OnverwagteBesoekUpdate(BaseModel):
+    ONV_Bestuurslisensie: Optional[str] = None
+    ONV_Beskrywing: Optional[str] = None
+    ONV_Kode: Optional[str] = None
+
+class OnverwagteBesoeker(OnverwagteBesoekBase):
+    Onverwagte_Besoeker_ID: int
+
+    class Config:
+        from_attributes = True
 
 # --- Waarskuwings Schemas ---
 # Model: Waarskuwing_ID, Gebruiker_ID, WAA_Beskrywing, WAA_Status, WAA_Tydstempel
