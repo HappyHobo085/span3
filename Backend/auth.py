@@ -20,7 +20,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dag
 # Span-toetsing / Docker: stel DISABLE_AUTH=1 om JWT- en roltoetsing te omseil (moet AF wees in produksie).
 DISABLE_AUTH = os.getenv("DISABLE_AUTH", "").strip().lower() in ("1", "true", "yes", "on")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)
 
 
@@ -62,11 +63,14 @@ def _dev_fallback_user(db: Session) -> models.Gebruikers:
 
     return None
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
