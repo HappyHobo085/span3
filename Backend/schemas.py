@@ -315,3 +315,21 @@ class TokenRespns(BaseModel):
     token_tipe: str = "bearer"
     gebruiker_id: int
     rol: str                    # bv. "STUDENT" | "PERSONEEL" | "WAG" | "ADMIN"
+
+# --- Handmatige Toegangsvalidering Schemas ---
+class ToegangHandmatigRequest(BaseModel):
+    soek_term: str
+
+class ToegangHandmatigResult(BaseModel):
+    Gebruiker_ID: int
+    GEB_Naam: str
+    GEB_Van: str
+    GEB_ID_Nommer: str
+    GEB_Profiel_Foto: Optional[str] = None
+    Rol_Naam: str
+    Is_Aktief: bool
+    Toegang_Verleen: bool
+    Boodskap: str
+
+    class Config:
+        from_attributes = True
