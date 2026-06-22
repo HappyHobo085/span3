@@ -23,8 +23,40 @@ class Gebruikers(Base):
     Geskep_Op        = Column(DateTime, default=datetime.utcnow)
     Gewysig_Op       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    rol = relationship("Rolle")
+    rol              = relationship("Rolle")
+    gebruikers_rolle = relationship("GebruikersRolle", back_populates="gebruiker")
+    student          = relationship("Student",         back_populates="gebruiker", uselist=False)
+    personeel        = relationship("Personeel",       back_populates="gebruiker", uselist=False)
+    kampus_opsigter  = relationship("Kampus_Opsigter", back_populates="gebruiker", uselist=False)
+    sekuriteit_wag   = relationship("Sekuriteit_Wag",  back_populates="gebruiker", uselist=False)
+    toegangs_logs    = relationship("ToegangsLogs",    back_populates="gebruiker")
+    waarskuwings     = relationship("Waarskuwings",    back_populates="gebruiker")
 
+class GebruikersRolle(Base):
+    __tablename__ = 'gebruikers_rolle'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Rol_ID       = Column(Integer, ForeignKey('rolle.Rol_ID'),            primary_key=True)
+
+    gebruiker = relationship("Gebruikers", back_populates="gebruikers_rolle")
+    rol       = relationship("Rolle",      back_populates="gebruikers_rolle")
+
+class Student(Base):
+    __tablename__ = 'student'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    STU_Nommer   = Column(String(20), nullable=False, unique=True)
+
+    gebruiker = relationship("Gebruikers", back_populates="student")
+
+class Personeel(Base):
+    __tablename__ = 'personeel'
+
+    Gebruiker_ID    = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    PER_Nommer      = Column(String(20),  nullable=False, unique=True)
+    PER_Departement = Column(String(100))
+
+    gebruiker = relationship("Gebruikers", back_populates="personeel")
 class NFC_Tags(Base):
     __tablename__ = 'nfc_tags'
     NFC_Tags_ID   = Column(Integer, primary_key=True, index=True)
@@ -52,6 +84,21 @@ class Lokasie(Base):
 
     kampus    = relationship("Kampus", back_populates="lokasies")
     nfc_tags  = relationship("NFC_Tags", back_populates="lokasie")
+
+class ToegangsLogs(Base):
+    __tablename__ = 'toegangs_logs'
+
+    Log_ID        = Column(Integer,  primary_key=True, index=True)
+    NFC_Tags_ID   = Column(Integer,  ForeignKey('nfc_tags.NFC_Tags_ID'), nullable=False)
+    Gebruiker_ID  = Column(Integer,  ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Lokasie_ID    = Column(Integer,  ForeignKey('lokasie.Lokasie_ID'), nullable=False)
+    LOG_Status    = Column(String(32), nullable=False, default='TOEGELAAT')
+    # "TOEGELAAT" | "GEWEIER" | "ONBEKEND"
+    LOG_Tydstempel = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    nfc_tag   = relationship("NFC_Tags",   back_populates="toegangs_logs")
+    gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
+    lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
 
 class Waarskuwings(Base):
     __tablename__ = 'waarskuwings'
