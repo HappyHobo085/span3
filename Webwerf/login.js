@@ -7,6 +7,9 @@
  */
 
 (function () {
+  // Clear any previous session so the user must log in again
+  localStorage.removeItem('isLoggedIn');
+
   // ----- Demo credentials (no real server login in this prototype) -----
   const testUser = {
     email: "test@demo.com",
