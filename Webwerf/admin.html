@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOON — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Admin toegang: slegs admins -->
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+    <a href="admin.html" class="active">Admin</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
+  </nav>
+
+  <main class="page" id="admin-page">
+    <!-- Action bar top -->
+    <section class="top-controls space-between" aria-label="Admin aksies">
+      <div class="control-group" style="flex-direction:row;gap:10px">
+        <button class="btn-primary" id="open-create-user-modal" type="button">+ Skep Gebruiker</button>
+        <button class="btn-outline" id="upload-csv-btn" type="button">Oplaai CSV</button>
+        <input type="file" id="csv-file-input" accept=".csv" style="display:none">
+      </div>
+      <button class="btn-primary" id="open-create-venue-modal" type="button">+ Skep Lokaal</button>
+    </section>
+
+    <!-- Two-panel layout -->
+    <section class="panels">
+      <article class="glass-card panel" aria-label="Gebruikers">
+        <h2>Gebruikers</h2>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="user-search"
+                 aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
+          <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
+            <option value="">Alle Rolle</option>
+            <option value="studente">Studente</option>
+            <option value="dosente">Dosente</option>
+            <option value="hekwagter">Hek Wagter</option>
+            <option value="opsigter">Opsigter</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="admin-list" id="user-list">
+          <!-- User 1: Admin -->
+          <div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">Admin User</div>
+              <div class="admin-user-email">admin@moon.co.za</div>
+            </div>
+            <div class="admin-user-roles">
+              <span class="role-badge role-badge--admin">admin</span>
+            </div>
+            <div class="admin-user-actions">
+              <button class="btn-outline btn-sm" type="button">Rol</button>
+              <button class="btn-outline btn-sm" type="button">Wagwoord</button>
+            </div>
+          </div>
+          <!-- User 2: Student -->
+          <div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">Jan de Wet</div>
+              <div class="admin-user-email">jan@student.moon.co.za</div>
+            </div>
+            <div class="admin-user-roles">
+              <span class="role-badge role-badge--studente">studente</span>
+            </div>
+            <div class="admin-user-actions">
+              <button class="btn-outline btn-sm" type="button">Rol</button>
+              <button class="btn-outline btn-sm" type="button">Wagwoord</button>
+            </div>
+          </div>
+          <!-- User 3: Dosent -->
+          <div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">Prof. Botha</div>
+              <div class="admin-user-email">botha@moon.co.za</div>
+            </div>
+            <div class="admin-user-roles">
+              <span class="role-badge role-badge--dosente">dosente</span>
+            </div>
+            <div class="admin-user-actions">
+              <button class="btn-outline btn-sm" type="button">Rol</button>
+              <button class="btn-outline btn-sm" type="button">Wagwoord</button>
+            </div>
+          </div>
+          <!-- User 4: Multiple roles -->
+          <div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">Pieter Smit</div>
+              <div class="admin-user-email">pieter@moon.co.za</div>
+            </div>
+            <div class="admin-user-roles">
+              <span class="role-badge role-badge--hekwagter">hek wagter</span>
+              <span class="role-badge role-badge--opsigter">opsigter</span>
+            </div>
+            <div class="admin-user-actions">
+              <button class="btn-outline btn-sm" type="button">Rol</button>
+              <button class="btn-outline btn-sm" type="button">Wagwoord</button>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="glass-card panel" aria-label="Lokale">
+        <h2>Lokale</h2>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="venue-search"
+                 aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
+          <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
+            <option value="">Alle Kampusse</option>
+            <option value="potchefstroom">Potchefstroom</option>
+            <option value="vanderbijlpark">Vanderbijlpark</option>
+            <option value="mahikeng">Mahikeng</option>
+          </select>
+        </div>
+        <div class="admin-list" id="venue-list">
+          <!-- Venue 1 -->
+          <div class="admin-venue-row">
+            <span class="admin-venue-name">B201</span>
+            <span class="campus-badge">Potchefstroom</span>
+          </div>
+          <!-- Venue 2 -->
+          <div class="admin-venue-row">
+            <span class="admin-venue-name">GK-Saal</span>
+            <span class="campus-badge">Vanderbijlpark</span>
+          </div>
+          <!-- Venue 3 -->
+          <div class="admin-venue-row">
+            <span class="admin-venue-name">A105</span>
+            <span class="campus-badge">Mahikeng</span>
+          </div>
+          <!-- Venue 4 -->
+          <div class="admin-venue-row">
+            <span class="admin-venue-name">C302</span>
+            <span class="campus-badge">Potchefstroom</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div class="action-bar">
+    <button class="btn-outline" type="button"
+            onclick="window.location.href='home.html'">← Terug</button>
+    <span></span>
+  </div>
+
+  <!-- Modal 1: Skep Gebruiker -->
+  <div id="createUserModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+      <h3 id="create-user-title">Skep Gebruiker</h3>
+      <div class="field">
+        <label for="new-user-name">Naam</label>
+        <input class="glass-input" id="new-user-name" type="text" placeholder="Voer naam in">
+      </div>
+      <div class="field">
+        <label for="new-user-email">E-pos</label>
+        <input class="glass-input" id="new-user-email" type="email" placeholder="Voer e-posadres in">
+      </div>
+      <div class="field">
+        <label for="new-user-password">Wagwoord</label>
+        <input class="glass-input" id="new-user-password" type="password" placeholder="Voer wagwoord in">
+      </div>
+      <div class="field">
+        <label for="new-user-role">Rol</label>
+        <select class="glass-select" id="new-user-role">
+          <option value="">Kies rol...</option>
+          <option value="studente">Studente</option>
+          <option value="dosente">Dosente</option>
+          <option value="hekwagter">Hek Wagter</option>
+          <option value="opsigter">Opsigter</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-outline" id="close-create-user-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-user-btn" type="button">Skep</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Bestuur Rolle -->
+  <div id="roleModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
+      <h3 id="role-modal-title">Bestuur Rolle — <span id="role-modal-user-name">Gebruiker</span></h3>
+      <div class="field">
+        <label>Huidige Rolle</label>
+        <div class="role-badges-container" id="current-roles">
+          <span class="role-badge-removable role-badge--studente">studente <button class="role-badge-remove" type="button">&times;</button></span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="add-role-select">Voeg Rol By</label>
+        <div class="add-role-row">
+          <select class="glass-select" id="add-role-select">
+            <option value="">Kies rol...</option>
+            <option value="studente">Studente</option>
+            <option value="dosente">Dosente</option>
+            <option value="hekwagter">Hek Wagter</option>
+            <option value="opsigter">Opsigter</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="btn-primary btn-sm" id="add-role-btn" type="button">Voeg By</button>
+        </div>
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-primary" id="close-role-modal" type="button">Klaar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Verander Wagwoord -->
+  <div id="passwordModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+      <h3 id="password-modal-title">Verander Wagwoord — <span id="password-modal-user-name">Gebruiker</span></h3>
+      <div class="field">
+        <label for="new-password">Nuwe Wagwoord</label>
+        <input class="glass-input" id="new-password" type="password" placeholder="Voer nuwe wagwoord in">
+      </div>
+      <div class="field">
+        <label for="confirm-password">Bevestig Wagwoord</label>
+        <input class="glass-input" id="confirm-password" type="password" placeholder="Bevestig nuwe wagwoord">
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-outline" id="close-password-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="change-password-btn" type="button">Verander</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Skep Lokaal -->
+  <div id="createVenueModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-venue-title">
+      <h3 id="create-venue-title">Skep Lokaal</h3>
+      <div class="field">
+        <label for="new-venue-name">Lokaal Naam</label>
+        <input class="glass-input" id="new-venue-name" type="text" placeholder="Voer lokaal naam in">
+      </div>
+      <div class="field">
+        <label for="new-venue-campus">Kampus</label>
+        <select class="glass-select" id="new-venue-campus">
+          <option value="">Kies kampus...</option>
+          <option value="potchefstroom">Potchefstroom</option>
+          <option value="vanderbijlpark">Vanderbijlpark</option>
+          <option value="mahikeng">Mahikeng</option>
+        </select>
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-outline" id="close-create-venue-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-venue-btn" type="button">Skep</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="website_api_calls.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
