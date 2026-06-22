@@ -33,13 +33,11 @@ services:
     image: nginx:alpine
     container_name: webwerf_frontend
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
-      - ./Webwerf/Frontend:/usr/share/nginx/html:ro
+      - ./Webwerf:/usr/share/nginx/html:ro
       - ./Webwerf/assets:/usr/share/nginx/assets:ro
       - ./Webwerf/nginx.docker.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - backend
     restart: unless-stopped
 
 volumes:

@@ -38,11 +38,14 @@
 // Login gate: reads flag set by login.js on successful demo login
 // -----------------------------------------------------------------------------
 (function () {
-  // --- SPAN-TOETSING: webwerf-sessie / redirect na login AF (aktiveer weer vir produksie) ---
-  localStorage.setItem('isLoggedIn', 'true');
-  // const isLoggedIn = localStorage.getItem('isLoggedIn');
-  // const currentPage = window.location.pathname.split('/').pop();
-  // if (!isLoggedIn && currentPage !== 'login.html') {
-  //   window.location.href = 'login.html';
-  // }
+  const isLoggedIn = localStorage.getItem('isLoggedIn');
+  const currentPage = window.location.pathname.split('/').pop();
+  if (!isLoggedIn && currentPage !== 'login.html') {
+    window.location.href = 'login.html';
+  }
 })();
+
+function logOut() {
+  localStorage.removeItem('isLoggedIn');
+  window.location.href = 'login.html';
+}
