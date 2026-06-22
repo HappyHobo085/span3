@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 import uuid
 from typing import List, Optional, Any
 
@@ -519,3 +520,53 @@ def kry_lokasie_deur_nfc_uid(
             }
         }
     )
+
+
+@app.post("/toegang/handmatig", response_model=schemas.APIResponse[List[schemas.ToegangHandmatigResult]])
+def handmatige_toegangsvalidering(
+    req: schemas.ToegangHandmatigRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit)
+):
+    """
+    POST /toegang/handmatig
+    Naam/ID soek vir wagte. Stuur profielfoto, naam, rol en toegangstatus terug.
+    """
+    soek_term = req.soek_term.strip()
+    if not soek_term:
+        raise HTTPException(status_code=400, detail="Soekterm mag nie leeg wees nie")
+
+    filters = [
+        models.Gebruikers.GEB_Naam.ilike(f"%{soek_term}%"),
+        models.Gebruikers.GEB_Van.ilike(f"%{soek_term}%"),
+        models.Gebruikers.GEB_ID_Nommer.ilike(f"%{soek_term}%")
+    ]
+
+    # As die soekterm 'n getal is, soek ook op Gebruiker_ID
+    if soek_term.isdigit():
+        filters.append(models.Gebruikers.Gebruiker_ID == int(soek_term))
+
+    gebruikers = db.query(models.Gebruikers).filter(or_(*filters)).limit(50).all()
+
+    resultate = []
+    for g in gebruikers:
+        rol_naam = g.rol.ROL_Naam if g.rol else "Onbekend"
+        toegang_verleen = g.Is_Aktief
+        boodskap = "Toegang Verleen" if toegang_verleen else "Toegang Geweier: Gebruiker is deaktiveer"
+        
+        resultate.append(
+            schemas.ToegangHandmatigResult(
+                Gebruiker_ID=g.Gebruiker_ID,
+                GEB_Naam=g.GEB_Naam,
+                GEB_Van=g.GEB_Van,
+                GEB_ID_Nommer=g.GEB_ID_Nommer,
+                GEB_Profiel_Foto=g.GEB_Profiel_Foto,
+                Rol_Naam=rol_naam,
+                Is_Aktief=g.Is_Aktief,
+                Toegang_Verleen=toegang_verleen,
+                Boodskap=boodskap
+            )
+        )
+
+    return schemas.APIResponse(sukses=True, data=resultate)
