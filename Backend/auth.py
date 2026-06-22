@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
+from starlette.middleware.base import BaseHTTPMiddleware
 import os
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -20,7 +21,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dag
 # Span-toetsing / Docker: stel DISABLE_AUTH=1 om JWT- en roltoetsing te omseil (moet AF wees in produksie).
 DISABLE_AUTH = os.getenv("DISABLE_AUTH", "").strip().lower() in ("1", "true", "yes", "on")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)
 
 
@@ -62,11 +64,14 @@ def _dev_fallback_user(db: Session) -> models.Gebruikers:
 
     return None
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -78,32 +83,102 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Stel verstekwaardes vir request.state
+        request.state.user = None
+        request.state.role = None
+
+        if DISABLE_AUTH:
+            db = database.SessionLocal()
+            try:
+                fallback = _dev_fallback_user(db)
+                if fallback:
+                    request.state.user = fallback
+                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == fallback.Rol_ID).first()
+                    if rol:
+                        request.state.role = rol.ROL_Naam
+            except Exception:
+                pass
+            finally:
+                db.close()
+            return await call_next(request)
+
+        # 1. Probeer token kry uit Authorization Header
+        token = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+
+        # 2. Probeer token kry uit Cookies (Sessie-gebaseerde/koekie auth)
+        if not token:
+            token = request.cookies.get("access_token")
+
+        # 3. Probeer user_id kry uit Starlette Sessie
+        user_id = None
+        if not token and "session" in request.scope and "user_id" in request.session:
+            user_id = request.session.get("user_id")
+
+        # As ons 'n token gekry het, dekodeer dit
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                user_id = payload.get("sub")
+            except JWTError:
+                pass  # Ongeldige token, verontagsaam
+
+        # As ons 'n geldige user_id het, haal gebruiker en rol uit databasis
+        if user_id:
+            db = database.SessionLocal()
+            try:
+                user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
+                if user:
+                    request.state.user = user
+                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
+                    if rol:
+                        request.state.role = rol.ROL_Naam
+            except Exception:
+                pass
+            finally:
+                db.close()
+
+        response = await call_next(request)
+        return response
+
 async def get_current_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(database.get_db),
 ):
     if DISABLE_AUTH:
         return _dev_fallback_user(db)
 
-    credentials_exception = HTTPException(
+    # Check of die gebruiker reeds deur die AuthMiddleware op request.state gestel is
+    if hasattr(request.state, "user") and request.state.user is not None:
+        return request.state.user
+
+    # As dit nie op request.state is nie, maar ons het wel 'n token gekry via oauth2_scheme (bvl. Swagger UI)
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
+                if user:
+                    request.state.user = user
+                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
+                    if rol:
+                        request.state.role = rol.ROL_Naam
+                    return user
+        except JWTError:
+            pass
+
+    # Indien daar geen geldige gebruiker gevind is nie, gooi ongemagtig
+    raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Kon nie geloofsbriewe verifieer nie",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
-        raise credentials_exception
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
-    if user is None:
-        raise credentials_exception
-    return user
 
 # --- ROL MIDDLEWARE ---
 
@@ -112,22 +187,26 @@ class RoleChecker:
         self.allowed_roles = allowed_roles
 
     def __call__(self, 
+        request: Request,
         current_user: models.Gebruikers = Depends(get_current_user), 
         db: Session = Depends(database.get_db)
     ):
         if DISABLE_AUTH:
             return True
 
-        rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
-        if not rol:
-            raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
+        rol_naam = getattr(request.state, "role", None)
+        if not rol_naam:
+            rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+            if not rol:
+                raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
+            rol_naam = rol.ROL_Naam
 
         # Admins het universele toegang
-        if rol.ROL_Naam == "Administrateur":
+        if rol_naam == "Administrateur":
             return True
 
         # Check of die rol in die toegelate lys is
-        if rol.ROL_Naam not in self.allowed_roles:
+        if rol_naam not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Toegang geweier. Benodig een van: {self.allowed_roles}"
@@ -136,6 +215,7 @@ class RoleChecker:
         return True
 
 async def verifieer_kampus_toegang(
+    request: Request,
     kampus_id: int, 
     current_user: models.Gebruikers = Depends(get_current_user), 
     db: Session = Depends(database.get_db)
@@ -147,12 +227,15 @@ async def verifieer_kampus_toegang(
     if DISABLE_AUTH:
         return True
 
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+    rol_naam = getattr(request.state, "role", None)
+    if not rol_naam:
+        rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+        rol_naam = rol.ROL_Naam if rol else None
     
-    if rol.ROL_Naam == "Administrateur":
+    if rol_naam == "Administrateur":
         return True
     
-    if rol.ROL_Naam == "Kampus_Opsigter":
+    if rol_naam == "Kampus_Opsigter":
         opsigter_rekord = db.query(models.Kampus_Opsigter).filter(
             models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID,
             models.Kampus_Opsigter.Kampus_ID == kampus_id

@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 import uuid
 from typing import List, Optional, Any
 
@@ -51,6 +53,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Voeg die AuthMiddleware by (naby aan die app vir inner-exec)
+app.add_middleware(auth.AuthMiddleware)
+
+# Voeg die SessionMiddleware by vir sessie-gebaseerde auth
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=auth.SECRET_KEY,
+    session_cookie="moon_session"
+)
+
 # --- HULPFUNKSIES (Interne Kontrakte) ---
 
 def _deaktiveer_nfc_tags_logika(db: Session, user_id: int):
@@ -70,7 +82,12 @@ def read_root():
 # --- AUTH ROETES ---
 
 @app.post("/token", response_model=schemas.APIResponse[dict])
-def login_vir_toegang_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_vir_toegang_token(
+    response: Response,
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
     user = db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.GEB_Wagwoord):
         raise HTTPException(
@@ -86,10 +103,36 @@ def login_vir_toegang_token(form_data: OAuth2PasswordRequestForm = Depends(), db
         data={"sub": str(user.Gebruiker_ID), "rol": user.Rol_ID, "rol_naam": rol_naam}, 
         expires_delta=access_token_expires
     )
+
+    # Sessie-gebaseerde auth: stoor in sessie-koekie
+    request.session["user_id"] = user.Gebruiker_ID
+    request.session["rol"] = user.Rol_ID
+    request.session["rol_naam"] = rol_naam
+
+    # JWT in HTTP-Only koekie vir sessie-ondersteuning in blaaiers
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires=auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=False  # Kan in produksie True wees met HTTPS
+    )
+
     return schemas.APIResponse(
         sukses=True, 
         data={"access_token": access_token, "token_type": "bearer"}
     )
+
+@app.post("/logout", response_model=schemas.APIResponse[dict])
+def logout(response: Response, request: Request):
+    """
+    Meld die gebruiker af deur sessie en koekies skoon te maak.
+    """
+    request.session.clear()
+    response.delete_cookie("access_token")
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Suksesvol afgemeld"})
 
 # --- GEBRUIKER ROETES ---
 
@@ -293,9 +336,13 @@ def lees_kampusse(db: Session = Depends(get_db)):
     return schemas.APIResponse(sukses=True, data=kampusse)
 
 @app.get("/rolle", response_model=schemas.APIResponse[List[schemas.Rol]])
-def lees_rolle(db: Session = Depends(get_db)):
+def lees_rolle(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin)
+):
     """
-    Stuur 'n lys van alle rolle terug.
+    Stuur 'n lys van alle rolle terug. Slegs Admin.
     """
     rolle = db.query(models.Rolle).all()
     return schemas.APIResponse(sukses=True, data=rolle)
@@ -519,3 +566,53 @@ def kry_lokasie_deur_nfc_uid(
             }
         }
     )
+
+
+@app.post("/toegang/handmatig", response_model=schemas.APIResponse[List[schemas.ToegangHandmatigResult]])
+def handmatige_toegangsvalidering(
+    req: schemas.ToegangHandmatigRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit)
+):
+    """
+    POST /toegang/handmatig
+    Naam/ID soek vir wagte. Stuur profielfoto, naam, rol en toegangstatus terug.
+    """
+    soek_term = req.soek_term.strip()
+    if not soek_term:
+        raise HTTPException(status_code=400, detail="Soekterm mag nie leeg wees nie")
+
+    filters = [
+        models.Gebruikers.GEB_Naam.ilike(f"%{soek_term}%"),
+        models.Gebruikers.GEB_Van.ilike(f"%{soek_term}%"),
+        models.Gebruikers.GEB_ID_Nommer.ilike(f"%{soek_term}%")
+    ]
+
+    # As die soekterm 'n getal is, soek ook op Gebruiker_ID
+    if soek_term.isdigit():
+        filters.append(models.Gebruikers.Gebruiker_ID == int(soek_term))
+
+    gebruikers = db.query(models.Gebruikers).filter(or_(*filters)).limit(50).all()
+
+    resultate = []
+    for g in gebruikers:
+        rol_naam = g.rol.ROL_Naam if g.rol else "Onbekend"
+        toegang_verleen = g.Is_Aktief
+        boodskap = "Toegang Verleen" if toegang_verleen else "Toegang Geweier: Gebruiker is deaktiveer"
+        
+        resultate.append(
+            schemas.ToegangHandmatigResult(
+                Gebruiker_ID=g.Gebruiker_ID,
+                GEB_Naam=g.GEB_Naam,
+                GEB_Van=g.GEB_Van,
+                GEB_ID_Nommer=g.GEB_ID_Nommer,
+                GEB_Profiel_Foto=g.GEB_Profiel_Foto,
+                Rol_Naam=rol_naam,
+                Is_Aktief=g.Is_Aktief,
+                Toegang_Verleen=toegang_verleen,
+                Boodskap=boodskap
+            )
+        )
+
+    return schemas.APIResponse(sukses=True, data=resultate)

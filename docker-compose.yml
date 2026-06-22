@@ -24,7 +24,7 @@ services:
     environment:
       - DB_HOST=db
       # Span-toetsing: sit op 0 of verwyder vir regte JWT- / rolbeveiliging
-      - DISABLE_AUTH=1
+      - DISABLE_AUTH=0
     depends_on:
       db:
         condition: service_healthy
