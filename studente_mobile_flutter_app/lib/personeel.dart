@@ -1,468 +1,519 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 
-class PersoneelHomePage extends StatelessWidget {
+class PersoneelHomePage extends StatefulWidget {
   const PersoneelHomePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: loginPageBackground,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              height: 240,
-              width: double.infinity,
-              child: Row(
-                children: [
-                  // Left panel = Kampus Inskandering
-                  Expanded(
-                    child: _OutlinedPanel(
-                      text: 'Kampus Skandering',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const PersoneelKampusInskanderingPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Right panel = Klas Bywoning
-                  Expanded(
-                    child: _OutlinedPanel(
-                      text: 'Klas Bywoning',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const KlasBywoningPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  State<PersoneelHomePage> createState() => _PersoneelHomePageState();
 }
 
-// Reusable clickable panel
-class _OutlinedPanel extends StatelessWidget {
-  final String text;
-  final VoidCallback onTap;
+class _PersoneelHomePageState extends State<PersoneelHomePage> {
+  int _selectedIndex = 0;
 
-  const _OutlinedPanel({
-    required this.text,
-    required this.onTap,
-  });
+  void _onNavTap(int index) {
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PersoneelKampusInskanderingPage()),
+      );
+      return;
+    }
+    if (index == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const KlasBywoningPage()),
+      );
+      return;
+    }
+    setState(() => _selectedIndex = index);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: loginPageBackground,
-          border: const Border.fromBorderSide(
-            BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 18,
-              spreadRadius: 1,
-              color: Color(0x4D7B61FF),
-              offset: Offset(0, 0),
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [NfcStatusBadge()],
+              ),
+            ),
+            Expanded(
+              child: _selectedIndex == 0
+                  ? const _TuisTab()
+                  : const _ProfielTab(),
             ),
           ],
-          borderRadius: BorderRadius.circular(2),
         ),
-        child: Center(
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
+      ),
+      bottomNavigationBar: _PersoneelNavBar(
+        selectedIndex: _selectedIndex,
+        onTap: _onNavTap,
       ),
     );
   }
 }
 
-// Reusable back/action button wrapper.
-class _BackButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
+// ─── Tuis tab ─────────────────────────────────────────────────────────────────
+class _TuisTab extends StatelessWidget {
+  const _TuisTab();
 
-  const _BackButton({
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tuis',
+                        style: GoogleFonts.inter(
+                          color: kText1,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Personeel',
+                        style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: kSurface1,
+                    border: Border.all(color: kBorder, width: 1.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.notifications_outlined,
+                      color: kTextMuted, size: 18),
+                ),
+              ],
+            ),
+          ),
+
+          // Stat cards
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  label: 'STUDENTE',
+                  value: '142',
+                  valueColor: kText1,
+                  badge: '♦ Vandag',
+                  badgeColor: kSuccess,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  label: 'BYWONING',
+                  value: '87%',
+                  valueColor: kAccent2,
+                  badge: '♦ Hierdie week',
+                  badgeColor: kAccent2,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Current class card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+            decoration: kGlassDecoration(radius: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'HUIDIGE KLAS',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Wiskunde 301',
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Lokaal B204 · 10:30',
+                  style: GoogleFonts.inter(color: kText2, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  final String badge;
+  final Color badgeColor;
+
+  const _StatCard({
     required this.label,
-    required this.onPressed,
+    required this.value,
+    required this.valueColor,
+    required this.badge,
+    required this.badgeColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GradientActionButton(
-      label: label,
-      onTap: onPressed,
-      width: 160,
-      height: 45,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: kGlassDecoration(radius: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: kTextMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: valueColor,
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            badge,
+            style: GoogleFonts.inter(
+              color: badgeColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Left scanning page for Personeel (same layout as student's LeftEmptyPage)
-class PersoneelKampusInskanderingPage extends StatelessWidget {
-  const PersoneelKampusInskanderingPage({super.key});
-
-  Widget _buildNeonSearchBox() {
-    return Container(
-      width: 160,
-      height: 48,
-      decoration: BoxDecoration(
-        color: loginPageBackground,
-        border: const Border.fromBorderSide(
-          BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 18,
-            spreadRadius: 1,
-            color: Color(0x4D7B61FF),
-            offset: Offset(0, 0),
-          ),
-        ],
-        borderRadius: BorderRadius.circular(2),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: const Row(
-        children: [
-          Icon(Icons.search, color: Colors.white, size: 20),
-          SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              style: TextStyle(color: Colors.white, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: 'Soek...',
-                hintStyle: TextStyle(color: Colors.white54, fontSize: 16),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _ProfielTab extends StatelessWidget {
+  const _ProfielTab();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: loginPageBackground,
-      body: Stack(
-        children: [
-          const SizedBox.expand(),
-          // Top-left NFC panel
-          Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                  top: 60,
-                  left:
-                      16), // adjust top padding slightly to miss safe area visually
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: loginPageBackground,
-                  border: const Border.fromBorderSide(
-                    BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 18,
-                      spreadRadius: 1,
-                      color: Color(0x4D7B61FF),
-                      offset: Offset(0, 0),
-                    ),
-                  ],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: const Center(
-                  child: Text(
-                    'NFC',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // Center content panel and its top controls
-          Align(
-            alignment: Alignment.center,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+    return Center(
+      child: Text('Profiel',
+          style: GoogleFonts.inter(color: kTextMuted, fontSize: 14)),
+    );
+  }
+}
+
+// ─── Bottom nav ────────────────────────────────────────────────────────────────
+class _PersoneelNavBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+
+  const _PersoneelNavBar({required this.selectedIndex, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
+      _NavItem(icon: Icons.nfc_rounded, label: 'Kampus'),
+      _NavItem(icon: Icons.people_rounded, label: 'Bywoning'),
+      _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1120),
+        border: const Border(top: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 20,
+              offset: const Offset(0, -4)),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        top: 10,
+        bottom: MediaQuery.of(context).padding.bottom + 10,
+      ),
+      child: Row(
+        children: List.generate(items.length, (i) {
+          final active = i == selectedIndex;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onTap(i),
+              behavior: HitTestBehavior.opaque,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GradientActionButton(
-                        label: 'Saam ry',
-                        width: 140,
-                        height: 48,
-                        onTap: () {},
-                      ),
-                      _buildNeonSearchBox(),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                   Container(
-                    height: 220,
-                    width: double.infinity,
+                    width: active ? 28 : 0,
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 6),
                     decoration: BoxDecoration(
-                      color: loginPageBackground,
-                      border: const Border.fromBorderSide(
-                        BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 18,
-                          spreadRadius: 1,
-                          color: Color(0x4D7B61FF),
-                          offset: Offset(0, 0),
-                        ),
-                      ],
-                      borderRadius: BorderRadius.circular(2),
+                      color: active ? kAccent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                  Icon(items[i].icon,
+                      size: 22, color: active ? kAccent : kTextMuted),
+                  const SizedBox(height: 4),
+                  Text(
+                    items[i].label,
+                    style: GoogleFonts.inter(
+                      color: active ? kText1 : kTextMuted,
+                      fontSize: 10,
+                      fontWeight:
+                          active ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          // Bottom-left action button
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _BackButton(
-                label: 'Skandeer in',
-                onPressed: () {},
-              ),
-            ),
-          ),
-          // Bottom-right back button
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _BackButton(
-                label: 'Terug',
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ),
-        ],
+          );
+        }),
       ),
     );
   }
 }
 
-// Klas Bywoning page for Personeel
-class KlasBywoningPage extends StatelessWidget {
-  const KlasBywoningPage({super.key});
+class _NavItem {
+  final IconData icon;
+  final String label;
+  const _NavItem({required this.icon, required this.label});
+}
 
-  Widget _buildNeonSearchBox() {
-    return Container(
-      width: 160,
-      height: 48,
-      decoration: BoxDecoration(
-        color: loginPageBackground,
-        border: const Border.fromBorderSide(
-          BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 18,
-            spreadRadius: 1,
-            color: Color(0x4D7B61FF),
-            offset: Offset(0, 0),
-          ),
-        ],
-        borderRadius: BorderRadius.circular(2),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: const Row(
-        children: [
-          Icon(Icons.search, color: Colors.white, size: 20),
-          SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              style: TextStyle(color: Colors.white, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: 'Soek...',
-                hintStyle: TextStyle(color: Colors.white54, fontSize: 16),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+// ─── Kampus Inskandering ──────────────────────────────────────────────────────
+class PersoneelKampusInskanderingPage extends StatelessWidget {
+  const PersoneelKampusInskanderingPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: loginPageBackground,
-      body: Stack(
-        children: [
-          // Fill page area
-          const SizedBox.expand(),
-
-          // 5.1 Dropdown box slightly below the top left
-          Positioned(
-            top: 60, // slightly below top
-            left: 16,
-            child: _buildNeonDropdown('Opsie 1'),
-          ),
-
-          // Center area containing the center panel (5.2) and Filtreer section (5.3)
-          Align(
-            alignment: Alignment.center,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min, // Wrap content height-wise
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 5.3 dropdown box slightly above the panel on the left side labeled "Filtreer" and a search box slightly right
-                  Row(
-                    children: [
-                      _buildNeonDropdown('Filtreer'),
-                      const SizedBox(width: 16),
-                      _buildNeonSearchBox(),
-                    ],
-                  ),
-                  const SizedBox(
-                      height:
-                          16), // space between filtreer bar and center panel
-
-                  // 5.2 Panel in the center of the screen
-                  Container(
-                    height: 220,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: loginPageBackground,
-                      border: const Border.fromBorderSide(
-                        BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 18,
-                          spreadRadius: 1,
-                          color: Color(0x4D7B61FF),
-                          offset: Offset(0, 0),
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Kampus Skandering',
+              subtitle: 'Personeel',
+              showBack: true,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        GlassCard(
+                          padding: const EdgeInsets.all(12),
+                          radius: 12,
+                          child: Column(
+                            children: [
+                              const Icon(Icons.nfc, color: kAccent, size: 24),
+                              const SizedBox(height: 4),
+                              Text('NFC',
+                                  style: GoogleFonts.inter(
+                                      color: kAccent,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const NfcStatusBadge(),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        GradientActionButton(
+                          label: 'Saam Ry',
+                          onTap: () {},
+                          width: 120,
+                          height: 40,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(child: GlassSearchRow()),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Expanded(child: GlassCard(child: SizedBox.expand())),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GradientActionButton(
+                            label: 'Skandeer In',
+                            onTap: () {},
+                            height: 44,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlineActionButton(
+                          label: 'Terug',
+                          onTap: () => Navigator.pop(context),
+                          width: 100,
+                          height: 44,
                         ),
                       ],
-                      borderRadius: BorderRadius.circular(2),
                     ),
-                    child: const Center(
-                      child: Text(
-                        '(Klas Bywoning Inligting)',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: GradientActionButton(
-                      label: 'Verfris',
-                      width: 140,
-                      height: 48,
-                      onTap: () {},
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 5.4 Bottom right Terug button
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _BackButton(
-                label: 'Terug',
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // helper widget to build neon dropdown boxes
-  Widget _buildNeonDropdown(String value) {
-    return Container(
-      decoration: BoxDecoration(
-        color: loginPageBackground,
-        border: const Border.fromBorderSide(
-          BorderSide(color: Color(0xFF7B61FF), width: 1.5),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 18,
-            spreadRadius: 1,
-            color: Color(0x4D7B61FF),
-            offset: Offset(0, 0),
-          ),
-        ],
-        borderRadius: BorderRadius.circular(2),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          dropdownColor: loginPageBackground,
-          items: [
-            DropdownMenuItem(
-              value: value,
-              child: Text(
-                value,
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            const DropdownMenuItem(
-              value: 'Ander',
-              child: Text(
-                'Ander',
-                style: TextStyle(color: Colors.white),
+                  ],
+                ),
               ),
             ),
           ],
-          onChanged: (_) {},
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Klas Bywoning ────────────────────────────────────────────────────────────
+class KlasBywoningPage extends StatefulWidget {
+  const KlasBywoningPage({super.key});
+
+  @override
+  State<KlasBywoningPage> createState() => _KlasBywoningPageState();
+}
+
+class _KlasBywoningPageState extends State<KlasBywoningPage> {
+  String _selectedOpsie = 'Opsie 1';
+  String _selectedFilter = 'Filtreer';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Klas Bywoning',
+              subtitle: 'Personeel',
+              showBack: true,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassSelect<String>(
+                      value: _selectedOpsie,
+                      items: ['Opsie 1', 'Opsie 2', 'Opsie 3']
+                          .map((v) => DropdownMenuItem(
+                              value: v,
+                              child: Text(v,
+                                  style: GoogleFonts.inter(
+                                      color: kText1, fontSize: 12))))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setState(() => _selectedOpsie = v);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          child: GlassSelect<String>(
+                            value: _selectedFilter,
+                            items: ['Filtreer', 'Ander']
+                                .map((v) => DropdownMenuItem(
+                                    value: v,
+                                    child: Text(v,
+                                        style: GoogleFonts.inter(
+                                            color: kText1, fontSize: 12))))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null)
+                                setState(() => _selectedFilter = v);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(child: GlassSearchRow()),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: GlassCard(
+                        child: Center(
+                          child: Text(
+                            'Klas Bywoning Inligting',
+                            style: GoogleFonts.inter(
+                                color: kTextMuted, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        GradientActionButton(
+                          label: 'Verfris',
+                          onTap: () {},
+                          width: 120,
+                          height: 44,
+                        ),
+                        const SizedBox(width: 10),
+                        OutlineActionButton(
+                          label: 'Terug',
+                          onTap: () => Navigator.pop(context),
+                          width: 100,
+                          height: 44,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
