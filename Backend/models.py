@@ -8,6 +8,8 @@ class Rolle(Base):
     Rol_ID   = Column(Integer, primary_key=True, index=True)
     ROL_Naam = Column(String(50), nullable=False, unique=True)
 
+    gebruikers_rolle = relationship("GebruikersRolle", back_populates="rol")
+
 class Gebruikers(Base):
     __tablename__ = 'gebruikers'
     Gebruiker_ID     = Column(Integer, primary_key=True, index=True)
@@ -65,7 +67,9 @@ class NFC_Tags(Base):
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
                            
-    lokasie   = relationship("Lokasie", back_populates="nfc_tags")
+    lokasie       = relationship("Lokasie", back_populates="nfc_tags")
+    toegangs_logs = relationship("ToegangsLogs", back_populates="nfc_tag")
+
 class Kampus(Base):
     __tablename__ = 'kampus'
     Kampus_ID  = Column(Integer, primary_key=True, index=True)
@@ -82,8 +86,9 @@ class Lokasie(Base):
     LOK_Tipe   = Column(String(50),  nullable=False)
     Kampus_ID  = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
 
-    kampus    = relationship("Kampus", back_populates="lokasies")
-    nfc_tags  = relationship("NFC_Tags", back_populates="lokasie")
+    kampus        = relationship("Kampus", back_populates="lokasies")
+    nfc_tags      = relationship("NFC_Tags", back_populates="lokasie")
+    toegangs_logs = relationship("ToegangsLogs", back_populates="lokasie")
 
 class ToegangsLogs(Base):
     __tablename__ = 'toegangs_logs'
@@ -108,14 +113,18 @@ class Waarskuwings(Base):
     WAA_Status     = Column(String(32), nullable=False, default='OOP')
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
 
-    gebruiker = relationship("Gebruikers")
+    gebruiker = relationship("Gebruikers", back_populates="waarskuwings")
 
 class Kampus_Opsigter(Base):
     __tablename__ = 'kampus_opsigter'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
 
+    gebruiker = relationship("Gebruikers", back_populates="kampus_opsigter")
+
 class Sekuriteit_Wag(Base):
     __tablename__ = 'sekuriteit_wag'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     SEK_Nommer   = Column(String(20), nullable=False, unique=True)
+
+    gebruiker = relationship("Gebruikers", back_populates="sekuriteit_wag")

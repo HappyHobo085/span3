@@ -282,12 +282,14 @@ body{
   min-height:100vh;display:flex;
   align-items:center;justify-content:center;
   padding:32px 24px;
+  background:#0D132C;
 }
 .login-container{
   width:100%;max-width:400px;
   display:flex;flex-direction:column;align-items:center;gap:32px;
 }
-.login-logo{text-align:center}
+.login-logo{text-align:center;width:100%}
+.login-logo-img{width:400px;max-width:100%;height:auto}
 .login-logo-text{
   font-size:32px;font-weight:800;letter-spacing:4px;line-height:1;
   background:var(--gradient);
