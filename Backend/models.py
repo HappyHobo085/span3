@@ -63,7 +63,8 @@ class NFC_Tags(Base):
     __tablename__ = 'nfc_tags'
     NFC_Tags_ID   = Column(Integer, primary_key=True, index=True)
     NFC_UID       = Column(String(64), nullable=False, unique=True)
-    Lokasie_ID    = Column(Integer, ForeignKey('lokasie.Lokasie_ID'))
+    Gebruiker_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
+    Lokasie_ID    = Column(Integer, ForeignKey('lokasie.Lokasie_ID'), nullable=True)
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
                            
@@ -92,16 +93,16 @@ class Lokasie(Base):
 class ToegangsLogs(Base):
     __tablename__ = 'toegangs_logs'
 
-    Log_ID        = Column(Integer,  primary_key=True, index=True)
-    Gebruiker_ID  = Column(Integer,  ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
-    Lokasie_ID    = Column(Integer,  ForeignKey('lokasie.Lokasie_ID'), nullable=False)
+    Log_ID              = Column(Integer,  primary_key=True, index=True)
+    NFC_Tags_ID         = Column(Integer,  ForeignKey('nfc_tags.NFC_Tags_ID'), nullable=True)
+    Gebruiker_ID        = Column(Integer,  ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Lokasie_ID          = Column(Integer,  ForeignKey('lokasie.Lokasie_ID'), nullable=False)
     TOE_Tydstempel      = Column(DateTime, default=datetime.utcnow, nullable=False)
     TOE_Rigting         = Column(String(16), nullable=False) # "IN" | "UIT"
     TOE_Metode          = Column(String(32), nullable=False) # "NFC" | "HANDMATIG" | "QR"
     TOE_Auto_Uitgecheck = Column(Boolean, nullable=False, default=False)
 
-    gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
-    lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
+    nfc_tag   = relationship("NFC_Tags",    back_populates="toegangs_logs")
     gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
     lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
 
