@@ -1,13 +1,18 @@
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
-/// Een kampus soos FastAPI `/kampusse` dit terugstuur (onder `data`).
+/// =========================
+/// Kampus DTO
+/// =========================
+
 class KampusDto {
   final int? kampusId;
   final String naam;
 
-  KampusDto({required this.kampusId, required this.naam});
+  KampusDto({
+    required this.kampusId,
+    required this.naam,
+  });
 
   factory KampusDto.fromJson(Map<String, dynamic> json) {
     return KampusDto(
@@ -17,7 +22,10 @@ class KampusDto {
   }
 }
 
-/// Een rekord soos FastAPI `/lokasies` dit terugstuur (onder `data`).
+/// =========================
+/// Lokasie DTO
+/// =========================
+
 class LokasieDto {
   final int id;
   final String naam;
@@ -41,22 +49,26 @@ class LokasieDto {
   }
 }
 
-/// HTTP-koppel aan die FastAPI-backend (`main.py`).
-///
-/// Stel [bearerToken] ná werklike login (`POST /token`) sodat beskermde roetes werk.
-/// Vir Android-emulator: gebruik gewoonlik `http://10.0.2.2:8000`.
-/// Vir fisiese toestel: jou rekenaar se LAN-IP, bv. `http://192.168.1.10:8000`.
+/// =========================
+/// Moon API
+/// =========================
+
 class MoonApi {
   MoonApi._();
 
+  /// Verander na jou backend IP
   static String baseUrl = "http://192.168.100.177:8000";
 
-  /// JWT van `POST /token` (veld `access_token` binne `data`).
+  /// JWT token indien benodig
   static String? bearerToken;
 
-  /// Haal alle kampusse (`GET /kampusse` — gewoonlik sonder JWT).
+  /// -------------------------
+  /// Kampusse
+  /// -------------------------
+
   static Future<List<KampusDto>> fetchKampusse() async {
     final uri = Uri.parse('$baseUrl/kampusse');
+
     final headers = <String, String>{
       'Accept': 'application/json',
       if (bearerToken != null && bearerToken!.trim().isNotEmpty)
@@ -72,30 +84,29 @@ class MoonApi {
     }
 
     final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('Ongeldige JSON-antwoord');
-    }
 
     if (decoded['sukses'] != true) {
-      final fout = decoded['fout']?.toString() ?? 'Onbekende fout';
-      throw Exception(fout);
+      throw Exception(
+        decoded['fout']?.toString() ?? 'Kon nie kampusse laai nie',
+      );
     }
 
     final raw = decoded['data'];
+
     if (raw == null) return [];
 
-    if (raw is! List) {
-      throw Exception('Verwag \'data\' as lys');
-    }
-
-    return raw
-        .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e as Map)))
+    return (raw as List)
+        .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
 
-  /// Haal alle klasse/lokasies uit die databasis (`GET /lokasies`).
+  /// -------------------------
+  /// Lokasies
+  /// -------------------------
+
   static Future<List<LokasieDto>> fetchLokasies() async {
     final uri = Uri.parse('$baseUrl/lokasies');
+
     final headers = <String, String>{
       'Accept': 'application/json',
       if (bearerToken != null && bearerToken!.trim().isNotEmpty)
@@ -106,8 +117,7 @@ class MoonApi {
 
     if (response.statusCode == 401 || response.statusCode == 403) {
       throw Exception(
-        'Geen toegang tot /lokasies (HTTP ${response.statusCode}). '
-        'Stel MoonApi.bearerToken na \'n geldige JWT (POST /token).',
+        'Geen toegang tot lokasies nie. Login asseblief weer.',
       );
     }
 
@@ -118,24 +128,64 @@ class MoonApi {
     }
 
     final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('Ongeldige JSON-antwoord');
-    }
 
     if (decoded['sukses'] != true) {
-      final fout = decoded['fout']?.toString() ?? 'Onbekende fout';
-      throw Exception(fout);
+      throw Exception(
+        decoded['fout']?.toString() ?? 'Kon nie lokasies laai nie',
+      );
     }
 
     final raw = decoded['data'];
+
     if (raw == null) return [];
 
-    if (raw is! List) {
-      throw Exception('Verwag \'data\' as lys');
+    return (raw as List)
+        .map((e) => LokasieDto.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// -------------------------
+  /// Wagte Student Scan
+  /// -------------------------
+
+  static Future<Map<String, dynamic>> wagteStudentScan({
+    required String studentNomOrId,
+    required int lokasieId,
+    required String rigting,
+    required String metode,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/wagte/student/scan'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+      body: jsonEncode({
+        'student_nom_or_id': studentNomOrId,
+        'lokasie_id': lokasieId,
+        'rigting': rigting,
+        'metode': metode,
+      }),
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Student skandering het misluk',
+      );
     }
 
-    return raw
-        .map((e) => LokasieDto.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    if (decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? 'Student skandering het misluk',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data']);
   }
 }
