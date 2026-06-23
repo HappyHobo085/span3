@@ -77,6 +77,41 @@ def _deaktiveer_nfc_tags_logika(db: Session, user_id: int):
         models.NFC_Tags.NFC_Is_Aktief == True
     ).update({"NFC_Is_Aktief": False})
 
+
+def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
+    """Veilige JSON-serialisering vir Gebruikers + rol/subrol data."""
+    rol_naam = g.rol.ROL_Naam if getattr(g, "rol", None) else None
+
+    data = {
+        "Gebruiker_ID": g.Gebruiker_ID,
+        "GEB_Naam": g.GEB_Naam,
+        "GEB_Van": g.GEB_Van,
+        "GEB_ID_Nommer": g.GEB_ID_Nommer,
+        "GEB_Epos": g.GEB_Epos,
+        "GEB_Selfoon_Nr": g.GEB_Selfoon_Nr,
+        "GEB_Profiel_Foto": g.GEB_Profiel_Foto,
+        "Rol_ID": g.Rol_ID,
+        "Rol_Naam": rol_naam,
+        "Is_Aktief": g.Is_Aktief,
+        "Geskep_Op": g.Geskep_Op.isoformat() if g.Geskep_Op else None,
+        "Gewysig_Op": g.Gewysig_Op.isoformat() if g.Gewysig_Op else None,
+    }
+
+    if getattr(g, "student", None):
+        data["STU_Nommer"] = g.student.STU_Nommer
+
+    if getattr(g, "personeel", None):
+        data["PER_Nommer"] = g.personeel.PER_Nommer
+        data["PER_Departement"] = g.personeel.PER_Departement
+
+    if getattr(g, "kampus_opsigter", None):
+        data["KAMO_Nommer"] = g.kampus_opsigter.KAMO_Nommer
+
+    if getattr(g, "sekuriteit_wag", None):
+        data["SEK_Nommer"] = g.sekuriteit_wag.SEK_Nommer
+
+    return data
+
 @app.get("/", response_model=schemas.APIResponse[dict])
 def read_root():
     return schemas.APIResponse(sukses=True, data={"message": "Backend is working"})
@@ -138,7 +173,7 @@ def logout(response: Response, request: Request):
 
 # --- GEBRUIKER ROETES ---
 
-@app.post("/gebruikers", response_model=schemas.APIResponse[schemas.User], status_code=status.HTTP_201_CREATED)
+@app.post("/gebruikers", response_model=schemas.APIResponse[Any], status_code=status.HTTP_201_CREATED)
 def skep_gebruiker(
     user_in: schemas.UserCreate,
     db: Session = Depends(get_db),
@@ -221,7 +256,7 @@ def skep_gebruiker(
         db.commit()
         db.refresh(db_user)
 
-        return schemas.APIResponse(sukses=True, data=db_user)
+        return schemas.APIResponse(sukses=True, data=_gebruiker_to_dict(db_user))
 
     except HTTPException:
         db.rollback()
@@ -251,7 +286,7 @@ def opdateer_gebruiker(
 
     db.commit()
     db.refresh(db_user)
-    return schemas.APIResponse(sukses=True, data=db_user)
+    return schemas.APIResponse(sukses=True, data=_gebruiker_to_dict(db_user))
 
 @app.delete("/gebruikers/{user_id}", response_model=schemas.APIResponse[dict])
 def verwyder_gebruiker(
@@ -300,11 +335,24 @@ def lees_gebruikers(
     # F21: Data Filtering vir Sekuriteitswagte
     if rol.ROL_Naam == "Sekuriteit_Wag":
         return schemas.APIResponse(
-            sukses=True, 
-            data=[schemas.UserSecurityRead.from_orm(g) for g in gebruikers]
+            sukses=True,
+            data=[
+                {
+                    "Gebruiker_ID": g.Gebruiker_ID,
+                    "GEB_Naam": g.GEB_Naam,
+                    "GEB_Van": g.GEB_Van,
+                    "GEB_ID_Nommer": g.GEB_ID_Nommer,
+                    "GEB_Profiel_Foto": g.GEB_Profiel_Foto,
+                    "Is_Aktief": g.Is_Aktief,
+                }
+                for g in gebruikers
+            ]
         )
 
-    return schemas.APIResponse(sukses=True, data=gebruikers)
+    return schemas.APIResponse(
+        sukses=True,
+        data=[_gebruiker_to_dict(g) for g in gebruikers]
+    )
 
 @app.get("/gebruikers/{user_id}", response_model=schemas.APIResponse[Any])
 def lees_gebruiker(
@@ -335,9 +383,19 @@ def lees_gebruiker(
 
     # F21: Data Filtering vir Sekuriteitswagte
     if rol.ROL_Naam == "Sekuriteit_Wag":
-        return schemas.APIResponse(sukses=True, data=schemas.UserSecurityRead.from_orm(gebruiker))
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "Gebruiker_ID": gebruiker.Gebruiker_ID,
+                "GEB_Naam": gebruiker.GEB_Naam,
+                "GEB_Van": gebruiker.GEB_Van,
+                "GEB_ID_Nommer": gebruiker.GEB_ID_Nommer,
+                "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+                "Is_Aktief": gebruiker.Is_Aktief,
+            }
+        )
 
-    return schemas.APIResponse(sukses=True, data=gebruiker)
+    return schemas.APIResponse(sukses=True, data=_gebruiker_to_dict(gebruiker))
 
 @app.patch("/gebruikers/{user_id}/status", response_model=schemas.APIResponse[dict])
 def opdateer_gebruiker_status(
