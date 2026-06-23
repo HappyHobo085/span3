@@ -42,67 +42,11 @@
                  aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
           <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
             <option value="">Alle Rolle</option>
-            <option value="studente">Studente</option>
-            <option value="dosente">Dosente</option>
-            <option value="hekwagter">Hek Wagter</option>
-            <option value="opsigter">Opsigter</option>
-            <option value="admin">Admin</option>
+            <!-- Loaded from API by admin.js -->
           </select>
         </div>
         <div class="admin-list" id="user-list">
-          <!-- User 1: Admin -->
-          <div class="admin-user-row">
-            <div class="admin-user-info">
-              <div class="admin-user-name">Admin User</div>
-              <div class="admin-user-email">admin@moon.co.za</div>
-            </div>
-            <div class="admin-user-roles">
-              <span class="role-badge role-badge--admin">admin</span>
-            </div>
-            <div class="admin-user-actions">
-              <button class="btn-outline btn-sm" type="button">Wysig</button>
-            </div>
-          </div>
-          <!-- User 2: Student -->
-          <div class="admin-user-row">
-            <div class="admin-user-info">
-              <div class="admin-user-name">Jan de Wet</div>
-              <div class="admin-user-email">jan@student.moon.co.za</div>
-            </div>
-            <div class="admin-user-roles">
-              <span class="role-badge role-badge--studente">studente</span>
-            </div>
-            <div class="admin-user-actions">
-              <button class="btn-outline btn-sm" type="button">Wysig</button>
-            </div>
-          </div>
-          <!-- User 3: Dosent -->
-          <div class="admin-user-row">
-            <div class="admin-user-info">
-              <div class="admin-user-name">Prof. Botha</div>
-              <div class="admin-user-email">botha@moon.co.za</div>
-            </div>
-            <div class="admin-user-roles">
-              <span class="role-badge role-badge--dosente">dosente</span>
-            </div>
-            <div class="admin-user-actions">
-              <button class="btn-outline btn-sm" type="button">Wysig</button>
-            </div>
-          </div>
-          <!-- User 4: Multiple roles -->
-          <div class="admin-user-row">
-            <div class="admin-user-info">
-              <div class="admin-user-name">Pieter Smit</div>
-              <div class="admin-user-email">pieter@moon.co.za</div>
-            </div>
-            <div class="admin-user-roles">
-              <span class="role-badge role-badge--hekwagter">hek wagter</span>
-              <span class="role-badge role-badge--opsigter">opsigter</span>
-            </div>
-            <div class="admin-user-actions">
-              <button class="btn-outline btn-sm" type="button">Wysig</button>
-            </div>
-          </div>
+          <!-- Loaded from API by admin.js -->
         </div>
       </article>
       <article class="glass-card panel" aria-label="Lokale">
@@ -112,32 +56,11 @@
                  aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
           <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
             <option value="">Alle Kampusse</option>
-            <option value="potchefstroom">Paarl</option>
-            <option value="vanderbijlpark">Gerhardstraat</option>
-            <option value="mahikeng">Leriba</option>
+            <!-- Loaded from API by admin.js -->
           </select>
         </div>
         <div class="admin-list" id="venue-list">
-          <!-- Venue 1 -->
-          <div class="admin-venue-row"> 
-            <span class="admin-venue-name">B201</span>
-            <span class="campus-badge">Paarl</span>
-          </div>
-          <!-- Venue 2 -->
-          <div class="admin-venue-row">
-            <span class="admin-venue-name">GK-Saal</span>
-            <span class="campus-badge">Gerhardstraat</span>
-          </div>
-          <!-- Venue 3 -->
-          <div class="admin-venue-row">
-            <span class="admin-venue-name">A105</span>
-            <span class="campus-badge">Leriba</span>
-          </div>
-          <!-- Venue 4 -->
-          <div class="admin-venue-row">
-            <span class="admin-venue-name">C302</span>
-              <span class="campus-badge">Paarl</span>
-          </div>
+          <!-- Loaded from API by admin.js -->
         </div>
       </article>
     </section>
@@ -158,8 +81,16 @@
         <input class="glass-input" id="new-user-name" type="text" placeholder="Voer naam in">
       </div>
       <div class="field">
+        <label for="new-user-surname">Van</label>
+        <input class="glass-input" id="new-user-surname" type="text" placeholder="Voer van in">
+      </div>
+      <div class="field">
         <label for="new-user-email">E-pos</label>
         <input class="glass-input" id="new-user-email" type="email" placeholder="Voer e-posadres in">
+      </div>
+      <div class="field" id="student-number-field" style="display:none">
+        <label for="new-user-student-nr">Studentenommer</label>
+        <input class="glass-input" id="new-user-student-nr" type="text" placeholder="Voer studentenommer in">
       </div>
       <div class="field">
         <label for="new-user-password">Wagwoord</label>
@@ -169,11 +100,11 @@
         <label for="new-user-role">Rol</label>
         <select class="glass-select" id="new-user-role">
           <option value="">Kies rol...</option>
-          <option value="studente">Studente</option>
-          <option value="dosente">Dosente</option>
-          <option value="hekwagter">Hek Wagter</option>
-          <option value="opsigter">Opsigter</option>
-          <option value="admin">Admin</option>
+          <option value="1">Admin</option>
+          <option value="4">Student</option>
+          <option value="3">Personeel</option>
+          <option value="2">Opsigter</option>
+          <option value="5">Sekuriteits Wag</option>
         </select>
       </div>
       <div class="class-modal-actions">
@@ -255,5 +186,6 @@
 
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>

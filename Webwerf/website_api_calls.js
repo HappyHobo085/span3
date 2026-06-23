@@ -84,6 +84,55 @@
       return r.body;
     },
 
+    /**
+     * GET /lokasies
+     */
+    fetchLokasies: async function () {
+
+      const r = await apiRequest('/lokasies', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * GET /rolle
+     */
+    fetchRolle: async function () {
+
+      const r = await apiRequest('/rolle', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * GET /gebruikers
+     */
+    fetchGebruikers: async function () {
+
+      const r = await apiRequest('/gebruikers', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * POST /gebruikers
+     */
+    createGebruiker: async function (data) {
+
+      const r = await apiRequest('/gebruikers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
   };
 
 })();
