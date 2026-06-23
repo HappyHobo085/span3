@@ -57,7 +57,7 @@ class MoonApi {
   MoonApi._();
 
   /// Verander na jou backend IP
-  static String baseUrl = "http://192.168.100.177:8000";
+  static String baseUrl = "http://100.103.103.103:8000";
 
   /// JWT token indien benodig
   static String? bearerToken;
