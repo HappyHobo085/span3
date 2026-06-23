@@ -12,7 +12,7 @@
   localStorage.removeItem('user_role');
 
   const API_BASE_URL =
-    localStorage.getItem('apiBaseUrl') || 'http://127.0.0.1:8000';
+    localStorage.getItem('apiBaseUrl') || 'http://100.103.103.103:8000';
 
   const loginForm = document.getElementById('login-form');
 
