@@ -40,6 +40,10 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     GEB_Wagwoord: str
+    STU_Nommer: Optional[str] = None
+    PER_Nommer: Optional[str] = None
+    KAMO_Nommer: Optional[str] = None
+    SEK_Nommer: Optional[str] = None
 
 class UserUpdate(BaseModel):
     GEB_Naam: Optional[str] = None

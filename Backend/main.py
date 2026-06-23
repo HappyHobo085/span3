@@ -140,38 +140,95 @@ def logout(response: Response, request: Request):
 
 @app.post("/gebruikers", response_model=schemas.APIResponse[schemas.User], status_code=status.HTTP_201_CREATED)
 def skep_gebruiker(
-    user_in: schemas.UserCreate, 
+    user_in: schemas.UserCreate,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
-    """
-    F2: Skep 'n nuwe gebruiker. Slegs vir Admin.
-    """
-    # Check vir bestaande e-pos
     if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == user_in.GEB_Epos).first():
         raise HTTPException(status_code=400, detail="E-pos reeds geregistreer")
-    
-    # Check vir bestaande ID nommer
+
     if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_ID_Nommer == user_in.GEB_ID_Nommer).first():
         raise HTTPException(status_code=400, detail="ID Nommer reeds in gebruik")
 
-    db_user = models.Gebruikers(
-        GEB_Naam=user_in.GEB_Naam,
-        GEB_Van=user_in.GEB_Van,
-        GEB_ID_Nommer=user_in.GEB_ID_Nommer,
-        GEB_Epos=user_in.GEB_Epos,
-        GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord), # Hash wagwoord (F2)
-        GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
-        GEB_Profiel_Foto=user_in.GEB_Profiel_Foto,
-        Rol_ID=user_in.Rol_ID,
-        Is_Aktief=user_in.Is_Aktief
-    )
-    
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return schemas.APIResponse(sukses=True, data=db_user)
+    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user_in.Rol_ID).first()
+    if not rol:
+        raise HTTPException(status_code=400, detail="Rol bestaan nie")
+
+    rol_naam = rol.ROL_Naam
+
+    if rol_naam == "Student" and not user_in.STU_Nommer:
+        raise HTTPException(status_code=400, detail="Studentenommer is verpligtend")
+
+    if rol_naam == "Personeel" and not user_in.PER_Nommer:
+        raise HTTPException(status_code=400, detail="Personeelnommer is verpligtend")
+
+    if rol_naam == "Kampus_Opsigter" and not user_in.KAMO_Nommer:
+        raise HTTPException(status_code=400, detail="Opsigternommer is verpligtend")
+
+    if rol_naam == "Sekuriteit_Wag" and not user_in.SEK_Nommer:
+        raise HTTPException(status_code=400, detail="Wagnommer is verpligtend")
+
+    try:
+        db_user = models.Gebruikers(
+            GEB_Naam=user_in.GEB_Naam,
+            GEB_Van=user_in.GEB_Van,
+            GEB_ID_Nommer=user_in.GEB_ID_Nommer,
+            GEB_Epos=user_in.GEB_Epos,
+            GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord),
+            GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
+            GEB_Profiel_Foto=user_in.GEB_Profiel_Foto,
+            Rol_ID=user_in.Rol_ID,
+            Is_Aktief=user_in.Is_Aktief
+        )
+
+        db.add(db_user)
+        db.flush()
+
+        if rol_naam == "Student":
+            if db.query(models.Student).filter(models.Student.STU_Nommer == user_in.STU_Nommer).first():
+                raise HTTPException(status_code=400, detail="Studentenommer reeds in gebruik")
+            db.add(models.Student(
+                Gebruiker_ID=db_user.Gebruiker_ID,
+                STU_Nommer=user_in.STU_Nommer
+            ))
+
+        elif rol_naam == "Personeel":
+            if db.query(models.Personeel).filter(models.Personeel.PER_Nommer == user_in.PER_Nommer).first():
+                raise HTTPException(status_code=400, detail="Personeelnommer reeds in gebruik")
+            db.add(models.Personeel(
+                Gebruiker_ID=db_user.Gebruiker_ID,
+                PER_Nommer=user_in.PER_Nommer,
+                PER_Departement=None
+            ))
+
+        elif rol_naam == "Kampus_Opsigter":
+            if db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.KAMO_Nommer == user_in.KAMO_Nommer).first():
+                raise HTTPException(status_code=400, detail="Opsigternommer reeds in gebruik")
+            db.add(models.Kampus_Opsigter(
+                Gebruiker_ID=db_user.Gebruiker_ID,
+                KAMO_Nommer=user_in.KAMO_Nommer
+            ))
+
+        elif rol_naam == "Sekuriteit_Wag":
+            if db.query(models.Sekuriteit_Wag).filter(models.Sekuriteit_Wag.SEK_Nommer == user_in.SEK_Nommer).first():
+                raise HTTPException(status_code=400, detail="Wagnommer reeds in gebruik")
+            db.add(models.Sekuriteit_Wag(
+                Gebruiker_ID=db_user.Gebruiker_ID,
+                SEK_Nommer=user_in.SEK_Nommer
+            ))
+
+        db.commit()
+        db.refresh(db_user)
+
+        return schemas.APIResponse(sukses=True, data=db_user)
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Kon nie gebruiker skep nie: {str(e)}")
 
 @app.put("/gebruikers/{user_id}", response_model=schemas.APIResponse[schemas.User])
 def opdateer_gebruiker(

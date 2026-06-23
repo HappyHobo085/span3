@@ -10,8 +10,8 @@
 (function () {
 
   // Backend URL
-  const API_BASE_URL =
-    localStorage.getItem('apiBaseUrl') || 'http://127.0.0.1:8000';
+const API_BASE_URL =
+  localStorage.getItem('apiBaseUrl') || 'http://happyhobo-pc.tail251156.ts.net:8000';
 
   /**
    * Generic API request helper
