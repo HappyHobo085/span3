@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 class SekuriteitswagHomePage extends StatefulWidget {
   const SekuriteitswagHomePage({super.key});
 
@@ -301,7 +303,16 @@ class BesoekersPage extends StatelessWidget {
                         subtitle: 'Neem lisensie foto',
                         icon: '📷',
                         borderColor: const Color(0x3300C2FF),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => OnbeplandeBesoekerPage(
+                                kampusNaam: kampusNaam,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -391,6 +402,134 @@ class _BeplandeBesoekerOtpPageState extends State<BeplandeBesoekerOtpPage> {
                     GradientActionButton(
                       label: _loading ? 'Besig...' : 'Verifieer OTP',
                       onTap: _loading ? () {} : _checkOtp,
+                      height: 48,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OnbeplandeBesoekerPage extends StatefulWidget {
+  final String kampusNaam;
+
+  const OnbeplandeBesoekerPage({
+    super.key,
+    required this.kampusNaam,
+  });
+
+  @override
+  State<OnbeplandeBesoekerPage> createState() => _OnbeplandeBesoekerPageState();
+}
+
+class _OnbeplandeBesoekerPageState extends State<OnbeplandeBesoekerPage> {
+  final TextEditingController _redeController = TextEditingController();
+  XFile? _lisensieFoto;
+
+  @override
+  void dispose() {
+    _redeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _neemFoto() async {
+    final picker = ImagePicker();
+
+    final foto = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 75,
+    );
+
+    if (foto == null) return;
+
+    setState(() {
+      _lisensieFoto = foto;
+    });
+  }
+
+  void _stoorBesoeker() {
+    if (_lisensieFoto == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Neem eers ’n lisensie foto')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Onbeplande besoeker gereed om te stoor')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Onbeplande Besoeker',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassInput(
+                      controller: _redeController,
+                      hintText: 'Rede bv. Delivery / Onderhoud',
+                      prefixIcon: const Icon(
+                        Icons.description_outlined,
+                        color: kTextMuted,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          if (_lisensieFoto == null)
+                            Text(
+                              'Geen lisensie foto geneem nie',
+                              style: GoogleFonts.inter(
+                                color: kTextMuted,
+                                fontSize: 13,
+                              ),
+                            )
+                          else
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(_lisensieFoto!.path),
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          GradientActionButton(
+                            label: 'Neem Lisensie Foto',
+                            onTap: _neemFoto,
+                            height: 46,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GradientActionButton(
+                      label: 'Stoor Besoeker',
+                      onTap: _stoorBesoeker,
                       height: 48,
                     ),
                   ],
