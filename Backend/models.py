@@ -8,6 +8,8 @@ class Rolle(Base):
     Rol_ID   = Column(Integer, primary_key=True, index=True)
     ROL_Naam = Column(String(50), nullable=False, unique=True)
 
+    gebruikers_rolle = relationship("GebruikersRolle", back_populates="rol")
+
 class Gebruikers(Base):
     __tablename__ = 'gebruikers'
     Gebruiker_ID     = Column(Integer, primary_key=True, index=True)
@@ -143,7 +145,7 @@ class Waarskuwings(Base):
     WAA_Status     = Column(String(32), nullable=False, default='OOP') # "OOP" | "ERKEN" | "GESLUIT"
     WAA_Tydstempel = Column(DateTime, default=datetime.utcnow)
 
-    gebruiker = relationship("Gebruikers")
+    gebruiker = relationship("Gebruikers", back_populates="waarskuwings")
 
 class Kampus_Opsigter(Base):
     __tablename__ = 'kampus_opsigter'
