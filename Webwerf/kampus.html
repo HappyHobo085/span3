@@ -23,9 +23,9 @@
       <div class="control-group">
         <label class="field-label" for="data-select">Kies Kampus</label>
         <select class="glass-select" id="data-select" name="data-select" style="width:220px">
-          <option value="potchefstroom">Potchefstroom</option>
-          <option value="vanderbijlpark">Vanderbijlpark</option>
-          <option value="mahikeng">Mahikeng</option>
+          <option value="paarl">Paarl</option>
+          <option value="gerhard">Gerhard</option>
+          <option value="leriba">Leriba</option>
         </select>
       </div>
       <button class="btn-primary" id="open-class-modal" type="button">+ Skep nuwe klas</button>
@@ -76,31 +76,6 @@
   <div class="action-bar">
     <button class="btn-outline" type="button"
             onclick="window.location.href='home.html'">← Terug</button>
-    <div class="action-bar-right">
-      <button class="btn-outline btn-danger" type="button">Verwyder gebruiker</button>
-      <button class="btn-primary" type="button">Skep nuwe gebruiker</button>
-    </div>
-  </div>
-
-  <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
-  <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
-    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
-      <h3 id="class-modal-title">Skep nuwe klas</h3>
-      <div class="field">
-        <label for="class-room-name">Naam van klaskamer</label>
-        <input id="class-room-name" type="text" placeholder="Voer die klaskamer naam in">
-      </div>
-      <div class="field">
-        <label for="class-kampus">Kies kampus</label>
-        <select id="class-kampus">
-          <option value="">Kies kampus...</option>
-        </select>
-      </div>
-      <div class="class-modal-actions">
-        <button class="btn-outline" id="close-class-modal" type="button">Kanselleer</button>
-        <button class="btn-primary" id="create-class-button" type="button">Skep</button>
-      </div>
-    </div>
   </div>
 
   <script src="website_api_calls.js"></script>

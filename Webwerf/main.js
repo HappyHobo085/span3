@@ -3,8 +3,12 @@
  *
  * Part 1 — API script loader (Afrikaans comments preserved below):
  *   Ensures website_api_calls.js runs after this tag so `window.MoonApi` exists for kampus.js.
- * Part 2 — Simple “gate”:
+ * Part 2 — Simple "gate":
  *   If the user is not marked logged in, force redirect to login.html (except when already there).
+ * Part 3 — Admin gate:
+ *   If the current page is admin.html and the user is not an Administrateur, block access.
+ * Part 4 — Admin nav link:
+ *   Dynamically adds an "Admin" link in the navbar for admin users only.
  */
 
 // -----------------------------------------------------------------------------
@@ -35,17 +39,53 @@
 })();
 
 // -----------------------------------------------------------------------------
-// Login gate: reads flag set by login.js on successful demo login
+// Login gate + Admin gate + Admin nav link
 // -----------------------------------------------------------------------------
 (function () {
-  const isLoggedIn = localStorage.getItem('isLoggedIn');
-  const currentPage = window.location.pathname.split('/').pop();
+  var isLoggedIn = localStorage.getItem('isLoggedIn');
+  var currentPage = window.location.pathname.split('/').pop();
+
+  // If not logged in, redirect to login
   if (!isLoggedIn && currentPage !== 'login.html') {
     window.location.href = 'login.html';
+    return;
+  }
+
+  var userRole = localStorage.getItem('user_role') || '';
+
+  // Silently redirect non-admins away from admin.html
+  if (currentPage === 'admin.html' && userRole !== 'Administrateur') {
+    window.location.href = 'home.html';
+    return;
+  }
+
+  // Show the Admin nav link only for admin users
+  if (userRole === 'Administrateur' && currentPage !== 'login.html') {
+    document.addEventListener('DOMContentLoaded', function () {
+      var navbar = document.querySelector('.navbar');
+      if (!navbar) return;
+
+      // Don't add if already present (e.g. on admin.html itself)
+      if (navbar.querySelector('a[href="admin.html"]')) return;
+
+      var adminLink = document.createElement('a');
+      adminLink.href = 'admin.html';
+      adminLink.textContent = 'Admin';
+
+      // Insert before navbar-right if it exists, otherwise append to end of navbar
+      var navRight = navbar.querySelector('.navbar-right');
+      if (navRight) {
+        navbar.insertBefore(adminLink, navRight);
+      } else {
+        navbar.appendChild(adminLink);
+      }
+    });
   }
 })();
 
 function logOut() {
   localStorage.removeItem('isLoggedIn');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('user_role');
   window.location.href = 'login.html';
 }

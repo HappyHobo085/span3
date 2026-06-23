@@ -232,26 +232,23 @@
     </div>
   </div>
 
-  <!-- Modal 4: Skep Lokaal -->
-  <div id="createVenueModal" class="class-modal-overlay" aria-hidden="true">
-    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-venue-title">
-      <h3 id="create-venue-title">Skep Lokaal</h3>
+    <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
+  <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+      <h3 id="class-modal-title">Skep nuwe klas</h3>
       <div class="field">
-        <label for="new-venue-name">Lokaal Naam</label>
-        <input class="glass-input" id="new-venue-name" type="text" placeholder="Voer lokaal naam in">
+        <label for="class-room-name">Naam van klaskamer</label>
+        <input id="class-room-name" type="text" placeholder="Voer die klaskamer naam in">
       </div>
       <div class="field">
-        <label for="new-venue-campus">Kampus</label>
-        <select class="glass-select" id="new-venue-campus">
+        <label for="class-kampus">Kies kampus</label>
+        <select id="class-kampus">
           <option value="">Kies kampus...</option>
-          <option value="potchefstroom">Paarl</option>
-          <option value="vanderbijlpark">Gerhardstraat</option>
-          <option value="mahikeng">Leriba</option>
         </select>
       </div>
       <div class="class-modal-actions">
-        <button class="btn-outline" id="close-create-venue-modal" type="button">Kanselleer</button>
-        <button class="btn-primary" id="create-venue-btn" type="button">Skep</button>
+        <button class="btn-outline" id="close-class-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-class-button" type="button">Skep</button>
       </div>
     </div>
   </div>
