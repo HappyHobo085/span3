@@ -36,7 +36,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   google_fonts: ^6.3.2
   cupertino_icons: ^1.0.8
-  image_picker: ^1.1.2
+  image_picker: 1.0.7
   http: ^1.2.2
   nfc_manager: ^3.5.0
 
