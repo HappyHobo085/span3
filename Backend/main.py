@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from sqlalchemy import or_
 import uuid
 from typing import List, Optional, Any
 
+from models import Gebruikers, Student, Lokasie, ToegangsLogs
 from database import engine, get_db
 import models, schemas, auth
 
@@ -616,3 +618,104 @@ def handmatige_toegangsvalidering(
         )
 
     return schemas.APIResponse(sukses=True, data=resultate)
+
+
+# --- WAGTE ROETES (F20) ---
+@app.get("/wagte/kampusse")
+def wagte_kampusse(db: Session = Depends(get_db)):
+    kampusse = db.query(models.Kampus).all()
+
+    return {
+        "sukses": True,
+        "data": [
+            {
+                "kampus_id": k.Kampus_ID,
+                "naam": k.KAM_Naam,
+                "adres": k.KAM_Adres,
+            }
+            for k in kampusse
+        ],
+    }
+    
+
+# --- WAGTE STUDENT SCAN ROETE (F20) ---
+class WagteStudentScanRequest(BaseModel):
+    student_nom_or_id: str
+    lokasie_id: int
+    rigting: str   # IN / UIT
+    metode: str    # NFC / QR
+
+
+@app.post("/wagte/student/scan")
+def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_db)):
+    if data.rigting not in ["IN", "UIT"]:
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+
+    if data.metode not in ["NFC", "QR", "HANDMATIG"]:
+        raise HTTPException(status_code=400, detail="Metode moet NFC, QR of HANDMATIG wees")
+
+    lokasie = db.query(Lokasie).filter(
+        Lokasie.Lokasie_ID == data.lokasie_id
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokasie nie gevind nie")
+
+    student = db.query(Student).filter(
+        Student.STU_Nommer == data.student_nom_or_id
+    ).first()
+
+    if not student and data.student_nom_or_id.isdigit():
+        student = db.query(Student).filter(
+            Student.Gebruiker_ID == int(data.student_nom_or_id)
+        ).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student nie gevind nie")
+
+    gebruiker = db.query(Gebruikers).filter(
+        Gebruikers.Gebruiker_ID == student.Gebruiker_ID,
+        Gebruikers.Is_Aktief == True
+    ).first()
+
+    if not gebruiker:
+        raise HTTPException(status_code=403, detail="Student is nie aktief nie")
+
+    nfc_tags_id = None
+    if data.metode == "NFC":
+        tag = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.Gebruiker_ID == student.Gebruiker_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True
+        ).first()
+        if tag:
+            nfc_tags_id = tag.NFC_Tags_ID
+
+    log = ToegangsLogs(
+        Gebruiker_ID=student.Gebruiker_ID,
+        Lokasie_ID=data.lokasie_id,
+        NFC_Tags_ID=nfc_tags_id,
+        TOE_Rigting=data.rigting,
+        TOE_Metode=data.metode,
+        TOE_Auto_Uitgecheck=False,
+    )
+
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return {
+        "sukses": True,
+        "message": "Student skandering suksesvol",
+        "data": {
+            "log_id": log.Log_ID,
+            "student_id": student.Gebruiker_ID,
+            "student_nommer": student.STU_Nommer,
+            "naam": gebruiker.GEB_Naam,
+            "van": gebruiker.GEB_Van,
+            "foto_url": gebruiker.GEB_Profiel_Foto,
+            "lokasie": lokasie.LOK_Naam,
+            "rigting": log.TOE_Rigting,
+            "metode": log.TOE_Metode,
+            "tyd": log.TOE_Tydstempel,
+        },
+    }

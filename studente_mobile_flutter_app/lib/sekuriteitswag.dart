@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
-
+import 'moon_api.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 class SekuriteitswagHomePage extends StatefulWidget {
   const SekuriteitswagHomePage({super.key});
 
@@ -10,256 +12,7 @@ class SekuriteitswagHomePage extends StatefulWidget {
 }
 
 class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
-  int _selectedIndex = 0;
-
-  void _onNavTap(int index) {
-    if (index == 1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const _SkanderingPage()),
-      );
-      return;
-    }
-    if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => const _PlaceholderPage(title: 'Rekords')),
-      );
-      return;
-    }
-    setState(() => _selectedIndex = index);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [NfcStatusBadge()],
-              ),
-            ),
-            Expanded(
-              child: _selectedIndex == 0
-                  ? const _TuisTab()
-                  : const _ProfielTab(),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _SekuriteitNavBar(
-        selectedIndex: _selectedIndex,
-        onTap: _onNavTap,
-      ),
-    );
-  }
-}
-
-// ─── Tuis tab ─────────────────────────────────────────────────────────────────
-class _TuisTab extends StatelessWidget {
-  const _TuisTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tuis',
-                        style: GoogleFonts.inter(
-                          color: kText1,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Sekuriteitswag',
-                        style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: kSurface1,
-                    border: Border.all(color: kBorder, width: 1.5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.notifications_outlined,
-                      color: kTextMuted, size: 18),
-                ),
-              ],
-            ),
-          ),
-
-          // Stat cards
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'INS VANDAG',
-                  value: '24',
-                  valueColor: kText1,
-                  badge: '♦ Aktief',
-                  badgeColor: kSuccess,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'BESOEKERS',
-                  value: '3',
-                  valueColor: kAccent2,
-                  badge: '♦ Tans op kampus',
-                  badgeColor: kAccent2,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Scan prompt card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-            decoration: kGlassDecoration(radius: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'SKANDEER TOEGANG',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Skandeer Akademia Lede',
-                  style: GoogleFonts.inter(
-                    color: kText1,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'of Skandeer Besoeker',
-                  style: GoogleFonts.inter(color: kText2, fontSize: 13),
-                ),
-                const SizedBox(height: 14),
-                GradientActionButton(
-                  label: 'Gaan na Skandeer',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const _SkanderingPage()),
-                  ),
-                  height: 42,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  final String badge;
-  final Color badgeColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-    required this.badge,
-    required this.badgeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: kGlassDecoration(radius: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: kTextMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              color: valueColor,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            badge,
-            style: GoogleFonts.inter(
-              color: badgeColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfielTab extends StatelessWidget {
-  const _ProfielTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text('Profiel',
-          style: GoogleFonts.inter(color: kTextMuted, fontSize: 14)),
-    );
-  }
-}
-
-// ─── Skandering selection page ────────────────────────────────────────────────
-class _SkanderingPage extends StatelessWidget {
-  const _SkanderingPage();
+  String? _gekoseKampus = 'Hoofkampus';
 
   @override
   Widget build(BuildContext context) {
@@ -269,10 +22,27 @@ class _SkanderingPage extends StatelessWidget {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Skandeer',
-              subtitle: 'Sekuriteitswag',
-              showBack: true,
-              trailing: const NfcStatusBadge(),
+              title: 'Wagte',
+              subtitle: _gekoseKampus ?? 'Kies kampus',
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: DropdownButton<String>(
+                  value: _gekoseKampus,
+                  dropdownColor: kBg,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: GoogleFonts.inter(color: kText1),
+                  items: const [
+                    DropdownMenuItem(value: 'Hoofkampus', child: Text('Hoofkampus')),
+                    DropdownMenuItem(value: 'Koshuis', child: Text('Koshuis')),
+                    DropdownMenuItem(value: 'Sportkampus', child: Text('Sportkampus')),
+                  ],
+                  onChanged: (value) => setState(() => _gekoseKampus = value),
+                ),
+              ),
             ),
             Expanded(
               child: Padding(
@@ -281,28 +51,38 @@ class _SkanderingPage extends StatelessWidget {
                   children: [
                     Expanded(
                       child: GlassTapPanel(
-                        label: 'Skandeer Akademia Lede',
-                        subtitle: 'Tap om te skandeer',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const _PlaceholderPage(
-                                  title: 'Skandeer Akademia lede')),
-                        ),
+                        label: 'Kampus Skandeer',
+                        subtitle: 'IN / UIT',
+                        icon: '🚪',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => KampusSkandeerPage(
+                                kampusNaam: _gekoseKampus ?? 'Hoofkampus',
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: GlassTapPanel(
-                        label: 'Skandeer Besoeker',
-                        subtitle: 'Tap om te skandeer',
+                        label: 'Besoekers',
+                        subtitle: 'OTP / Lisensie Foto',
+                        icon: '👤',
                         borderColor: const Color(0x3300C2FF),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const _PlaceholderPage(
-                                  title: 'Skandeer Besoeker')),
-                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BesoekersPage(
+                                kampusNaam: _gekoseKampus ?? 'Hoofkampus',
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -316,10 +96,60 @@ class _SkanderingPage extends StatelessWidget {
   }
 }
 
-// ─── Placeholder page ─────────────────────────────────────────────────────────
-class _PlaceholderPage extends StatelessWidget {
-  final String title;
-  const _PlaceholderPage({required this.title});
+class KampusSkandeerPage extends StatefulWidget {
+  final String kampusNaam;
+
+  const KampusSkandeerPage({super.key, required this.kampusNaam});
+
+  @override
+  State<KampusSkandeerPage> createState() => _KampusSkandeerPageState();
+}
+
+class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
+  final TextEditingController _studentController = TextEditingController();
+  bool _loading = false;
+  Map<String, dynamic>? _studentResult;
+
+  @override
+  void dispose() {
+    _studentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanStudent(String rigting, String metode) async {
+    final studentId = _studentController.text.trim();
+
+    if (studentId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Voer eers student nommer of ID in')),
+      );
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _studentResult = null;
+    });
+
+    try {
+      final result = await MoonApi.wagteStudentScan(
+        studentNomOrId: studentId,
+        lokasieId: 1, // hardcode vir nou
+        rigting: rigting,
+        metode: metode,
+      );
+
+      setState(() {
+        _studentResult = result;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout: $e')),
+      );
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -328,13 +158,95 @@ class _PlaceholderPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(title: title, showBack: true),
+            AppScreenHeader(
+              title: 'Kampus Skandeer',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+              trailing: const NfcStatusBadge(),
+            ),
             Expanded(
-              child: Center(
-                child: Text(
-                  '$title\nBladsy is tans onder konstruksie',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassInput(
+                      controller: _studentController,
+                      hintText: 'Student nommer / ID',
+                      prefixIcon: const Icon(
+                        Icons.badge_outlined,
+                        color: kTextMuted,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'IN',
+                            subtitle: 'Student kom in kampus',
+                            icon: '⬇️',
+                            onTap: () => _scanStudent('IN', 'NFC'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'UIT',
+                            subtitle: 'Student verlaat kampus',
+                            icon: '⬆️',
+                            borderColor: const Color(0x3300C2FF),
+                            onTap: () => _scanStudent('UIT', 'NFC'),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GradientActionButton(
+                      label: _loading ? 'Besig...' : 'Gebruik QR Backup',
+                      onTap: _loading ? () {} : () => _scanStudent('IN', 'QR'),
+                      height: 48,
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    if (_studentResult != null)
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Text(
+                              '${_studentResult!['naam']} ${_studentResult!['van']}',
+                              style: GoogleFonts.inter(
+                                color: kText1,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Student Nr: ${_studentResult!['student_nommer']}',
+                              style: GoogleFonts.inter(
+                                color: kText2,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${_studentResult!['rigting']} via ${_studentResult!['metode']}',
+                              style: GoogleFonts.inter(
+                                color: kSuccess,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -345,79 +257,288 @@ class _PlaceholderPage extends StatelessWidget {
   }
 }
 
-// ─── Bottom nav ────────────────────────────────────────────────────────────────
-class _SekuriteitNavBar extends StatelessWidget {
-  final int selectedIndex;
-  final ValueChanged<int> onTap;
+class BesoekersPage extends StatelessWidget {
+  final String kampusNaam;
 
-  const _SekuriteitNavBar({required this.selectedIndex, required this.onTap});
+  const BesoekersPage({super.key, required this.kampusNaam});
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
-      _NavItem(icon: Icons.nfc_rounded, label: 'Skandeer'),
-      _NavItem(icon: Icons.history_rounded, label: 'Rekords'),
-      _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D1120),
-        border: const Border(top: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, -4)),
-        ],
-      ),
-      padding: EdgeInsets.only(
-        top: 10,
-        bottom: MediaQuery.of(context).padding.bottom + 10,
-      ),
-      child: Row(
-        children: List.generate(items.length, (i) {
-          final active = i == selectedIndex;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onTap(i),
-              behavior: HitTestBehavior.opaque,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: active ? 28 : 0,
-                    height: 2,
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: active ? kAccent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(1),
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Besoekers',
+              subtitle: kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GlassTapPanel(
+                        label: 'Beplande Besoeker',
+                        subtitle: 'Voer OTP in',
+                        icon: '🔐',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BeplandeBesoekerOtpPage(
+                                kampusNaam: kampusNaam,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  Icon(items[i].icon,
-                      size: 22, color: active ? kAccent : kTextMuted),
-                  const SizedBox(height: 4),
-                  Text(
-                    items[i].label,
-                    style: GoogleFonts.inter(
-                      color: active ? kText1 : kTextMuted,
-                      fontSize: 10,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: GlassTapPanel(
+                        label: 'Onbeplande Besoeker',
+                        subtitle: 'Neem lisensie foto',
+                        icon: '📷',
+                        borderColor: const Color(0x3300C2FF),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => OnbeplandeBesoekerPage(
+                                kampusNaam: kampusNaam,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          );
-        }),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _NavItem {
-  final IconData icon;
-  final String label;
-  const _NavItem({required this.icon, required this.label});
+class BeplandeBesoekerOtpPage extends StatefulWidget {
+  final String kampusNaam;
+
+  const BeplandeBesoekerOtpPage({
+    super.key,
+    required this.kampusNaam,
+  });
+
+  @override
+  State<BeplandeBesoekerOtpPage> createState() =>
+      _BeplandeBesoekerOtpPageState();
+}
+
+class _BeplandeBesoekerOtpPageState extends State<BeplandeBesoekerOtpPage> {
+  final TextEditingController _otpController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _checkOtp() {
+    final otp = _otpController.text.trim();
+
+    if (otp.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Voer asseblief die OTP in')),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    // Backend call kom volgende
+    Future.delayed(const Duration(seconds: 1), () {
+      setState(() => _loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('OTP ontvang: $otp')),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Beplande Besoeker',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassInput(
+                      controller: _otpController,
+                      hintText: 'Voer OTP kode in',
+                      keyboardType: TextInputType.number,
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: kTextMuted,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    GradientActionButton(
+                      label: _loading ? 'Besig...' : 'Verifieer OTP',
+                      onTap: _loading ? () {} : _checkOtp,
+                      height: 48,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OnbeplandeBesoekerPage extends StatefulWidget {
+  final String kampusNaam;
+
+  const OnbeplandeBesoekerPage({
+    super.key,
+    required this.kampusNaam,
+  });
+
+  @override
+  State<OnbeplandeBesoekerPage> createState() => _OnbeplandeBesoekerPageState();
+}
+
+class _OnbeplandeBesoekerPageState extends State<OnbeplandeBesoekerPage> {
+  final TextEditingController _redeController = TextEditingController();
+  XFile? _lisensieFoto;
+
+  @override
+  void dispose() {
+    _redeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _neemFoto() async {
+    final picker = ImagePicker();
+
+    final foto = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 75,
+    );
+
+    if (foto == null) return;
+
+    setState(() {
+      _lisensieFoto = foto;
+    });
+  }
+
+  void _stoorBesoeker() {
+    if (_lisensieFoto == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Neem eers ’n lisensie foto')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Onbeplande besoeker gereed om te stoor')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Onbeplande Besoeker',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassInput(
+                      controller: _redeController,
+                      hintText: 'Rede bv. Delivery / Onderhoud',
+                      prefixIcon: const Icon(
+                        Icons.description_outlined,
+                        color: kTextMuted,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          if (_lisensieFoto == null)
+                            Text(
+                              'Geen lisensie foto geneem nie',
+                              style: GoogleFonts.inter(
+                                color: kTextMuted,
+                                fontSize: 13,
+                              ),
+                            )
+                          else
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(_lisensieFoto!.path),
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          GradientActionButton(
+                            label: 'Neem Lisensie Foto',
+                            onTap: _neemFoto,
+                            height: 46,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GradientActionButton(
+                      label: 'Stoor Besoeker',
+                      onTap: _stoorBesoeker,
+                      height: 48,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
