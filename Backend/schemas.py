@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, Generic, TypeVar
+from typing import Optional, Generic, TypeVar, List
 from datetime import datetime
 
 T = TypeVar("T")
@@ -149,6 +149,7 @@ class PersoneelRead(BaseModel):
 # Model: NFC_Tags_ID, NFC_UID, Lokasie_ID, NFC_Tipe, NFC_Is_Aktief
 class NFCTagBase(BaseModel):
     NFC_UID: str
+    Gebruiker_ID: Optional[int] = None
     Lokasie_ID: Optional[int] = None   # verwys na lokasie.Lokasie_ID
     NFC_Tipe: str
     NFC_Is_Aktief: bool = True
@@ -220,6 +221,7 @@ class KlasSkepResult(BaseModel):
 class ToegangsLogBase(BaseModel):
     Gebruiker_ID: int           # FK → Gebruikers.Gebruiker_ID
     Lokasie_ID: int             # FK → Lokasies.Lokasie_ID
+    NFC_Tags_ID: Optional[int] = None
     TOE_Rigting:         str        # "IN" | "UIT"
     TOE_Metode:          str        # "NFC" | "HANDMATIG" | "QR"
     TOE_Auto_Uitgecheck: bool = False
