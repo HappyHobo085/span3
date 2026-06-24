@@ -6,6 +6,7 @@ import 'personeel.dart';
 import 'opsigter.dart';
 import 'sekuriteitswag.dart';
 import 'admin.dart';
+import 'moon_api.dart';
 
 export 'moon_api.dart';
 
@@ -55,7 +56,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // All routing logic unchanged.
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     final input = _usernameController.text.trim();
     final lower = input.toLowerCase();
     Widget nextPage;
@@ -75,9 +76,22 @@ class _LoginPageState extends State<LoginPage> {
         break;
       default:
         if (lower == 'admin') {
-          nextPage = const AdminHomePage();
-          break;
-        }
+            try {
+              await MoonApi.login(
+                email: 'admin@moon.com',
+                password: 'admin123',
+              );
+
+              nextPage = const AdminHomePage();
+              break;
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Login fout: $e')),
+              );
+              return;
+            }
+          }
+          
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
