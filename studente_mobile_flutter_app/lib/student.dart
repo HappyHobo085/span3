@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'dart:convert';
 
 // ─── Student Home — dashboard with bottom nav ────────────────────────────────
 class HomePage extends StatefulWidget {
@@ -487,15 +488,27 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
           try {
             String uid = '';
 
-            final data = tag.data;
+            final ndef = Ndef.from(tag);
 
-            if (data.containsKey('nfca')) {
-              final id = data['nfca']['identifier'] as List<dynamic>;
-              uid = id
-                  .map((e) => e.toRadixString(16).padLeft(2, '0'))
-                  .join()
-                  .toUpperCase();
+            if (ndef != null) {
+              final message = await ndef.read();
+
+              for (final record in message.records) {
+                if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
+                    String.fromCharCodes(record.type) == 'T') {
+                  final payload = record.payload;
+
+                  if (payload.isNotEmpty) {
+                    final languageCodeLength = payload.first & 0x3F;
+                    uid = utf8.decode(
+                      payload.sublist(1 + languageCodeLength),
+                    ).trim().toUpperCase();
+                  }
+                }
+              }
             }
+
+            debugPrint('NDEF UID GELEES = $uid');
 
             if (uid.isEmpty) {
               await NfcManager.instance.stopSession(
