@@ -466,9 +466,14 @@ const json = await window.MoonApi.createGebruiker(payload);
   // =====================================================================
 
   document.addEventListener('DOMContentLoaded', async function () {
-    await loadKampusDropdown();
-    toggleStudentField();
-    await loadLokale();
-    await loadGebruikers();
+  await loadKampusDropdown();
+
+  // BELANGRIK
+  await loadRolleDropdown();
+
+  toggleStudentField();
+
+  await loadLokale();
+  await loadGebruikers();
   });
 })();
