@@ -925,7 +925,7 @@ def kry_lokasie_deur_uid(
     uid: str,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
-):
+    ):
     tag = db.query(models.NFC_Tags).filter(
         models.NFC_Tags.NFC_UID == uid.strip(),
         models.NFC_Tags.NFC_Is_Aktief == True
