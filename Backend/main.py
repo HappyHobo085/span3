@@ -133,28 +133,33 @@ def login_vir_toegang_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-
     username = form_data.username.strip()
 
-    user = db.query(models.Gebruikers).filter(
-        models.Gebruikers.GEB_Epos == username
-    ).first()
+    user = None
 
+    # 1. As dit soos e-pos lyk, probeer eers e-pos login
+    if "@" in username:
+        user = db.query(models.Gebruikers).filter(
+            models.Gebruikers.GEB_Epos == username
+        ).first()
+
+    # 2. Anders probeer studentenommer login
     if not user:
         student = db.query(models.Student).filter(
             models.Student.STU_Nommer == username
         ).first()
 
-    if student:
-        user = db.query(models.Gebruikers).filter(
-            models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
-        ).first()
+        if student:
+            user = db.query(models.Gebruikers).filter(
+                models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
+            ).first()
+
     if not user or not auth.verify_password(form_data.password, user.GEB_Wagwoord):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Verkeerde e-pos of wagwoord"
+            detail="Verkeerde gebruikersnaam of wagwoord"
         )
-    
+
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
     rol_naam = rol.ROL_Naam if rol else "Onbekend"
 
