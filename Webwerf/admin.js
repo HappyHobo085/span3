@@ -194,27 +194,41 @@
 
   /** Load roles from API into the filter dropdown and build rolleMap. */
   async function loadRolleDropdown() {
-    if (!window.MoonApi) return;
+  if (!window.MoonApi) return;
 
-    const json = await window.MoonApi.fetchRolle();
-    if (!json || !json.sukses || !Array.isArray(json.data)) return;
+  const json = await window.MoonApi.fetchRolle();
+  if (!json || !json.sukses || !Array.isArray(json.data)) return;
 
-    // Build lookup map with friendly display names
-    json.data.forEach(function (r) {
-      rolleMap[String(r.Rol_ID)] = rolDisplayNames[r.ROL_Naam] || r.ROL_Naam;
-    });
+  rolleMap = {};
 
-    // Fill filter dropdown with friendly names
-    if (userRoleFilter) {
-      userRoleFilter.innerHTML = '<option value="">Alle Rolle</option>';
-      json.data.forEach(function (r) {
-        const opt = document.createElement('option');
-        opt.value = String(r.Rol_ID);
-        opt.textContent = rolDisplayNames[r.ROL_Naam] || r.ROL_Naam;
-        userRoleFilter.appendChild(opt);
-      });
-    }
+  if (userRoleFilter) {
+    userRoleFilter.innerHTML = '<option value="">Alle Rolle</option>';
   }
+
+  if (newUserRole) {
+    newUserRole.innerHTML = '<option value="">Kies rol...</option>';
+  }
+
+  json.data.forEach(function (r) {
+    const displayName = rolDisplayNames[r.ROL_Naam] || r.ROL_Naam;
+    rolleMap[String(r.Rol_ID)] = displayName;
+
+    if (userRoleFilter) {
+      const opt = document.createElement('option');
+      opt.value = String(r.Rol_ID);
+      opt.textContent = displayName;
+      userRoleFilter.appendChild(opt);
+    }
+
+    if (newUserRole) {
+      const opt = document.createElement('option');
+      opt.value = String(r.Rol_ID);
+      opt.textContent = displayName;
+      opt.dataset.rolNaam = r.ROL_Naam;
+      newUserRole.appendChild(opt);
+    }
+  });
+}
 
   /** Load all gebruikers from the API into the user list. */
   async function loadGebruikers() {
@@ -287,11 +301,13 @@
 
   /** Show/hide the studentenommer field based on selected role. */
   function toggleStudentField() {
-    if (!newUserRole || !studentNumberField) return;
+  if (!newUserRole || !studentNumberField) return;
 
-    // Rol_ID 4 = Student
-    studentNumberField.style.display = newUserRole.value === '4' ? '' : 'none';
-  }
+  const selected = newUserRole.options[newUserRole.selectedIndex];
+  const rolNaam = selected ? selected.dataset.rolNaam : '';
+
+  studentNumberField.style.display = rolNaam === 'Student' ? '' : 'none';
+}
 
   /** Submit new user to the backend. */
   async function submitNewUser() {
