@@ -140,6 +140,37 @@ class MoonApi {
   /// -------------------------
   /// Lokasies
   /// -------------------------
+  static Future<Map<String, dynamic>> studentScanKlas({
+    required String nfcUid,
+    required String rigting,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/student/scan-klas'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${bearerToken!}',
+      },
+      body: jsonEncode({
+        'nfc_uid': nfcUid,
+        'rigting': rigting,
+      }),
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 ||
+        decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Scan het misluk',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data']);
+  }
+
 
   static Future<List<LokasieDto>> fetchLokasies() async {
     final uri = Uri.parse('$baseUrl/lokasies');
@@ -226,3 +257,6 @@ class MoonApi {
     return Map<String, dynamic>.from(decoded['data']);
   }
 }
+
+
+

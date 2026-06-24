@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 
 // ─── Student Home — dashboard with bottom nav ────────────────────────────────
 class HomePage extends StatefulWidget {
@@ -463,8 +464,109 @@ class LeftEmptyPage extends StatelessWidget {
 }
 
 // ─── Class scanning placeholder ───────────────────────────────────────────────
-class RightEmptyPage extends StatelessWidget {
+class RightEmptyPage extends StatefulWidget {
   const RightEmptyPage({super.key});
+
+  @override
+  State<RightEmptyPage> createState() => _RightEmptyPageState();
+}
+
+class _RightEmptyPageState extends State<RightEmptyPage> {
+  bool _busy = false;
+  String _status = 'Tap om klas te skandeer';
+
+  Future<void> _scanKlas() async {
+    setState(() {
+      _busy = true;
+      _status = 'Hou NFC tag teen toestel...';
+    });
+
+    try {
+      await NfcManager.instance.startSession(
+        onDiscovered: (tag) async {
+          try {
+            String uid = '';
+
+            final data = tag.data;
+
+            if (data.containsKey('nfca')) {
+              final id = data['nfca']['identifier'] as List<dynamic>;
+              uid = id
+                  .map((e) => e.toRadixString(16).padLeft(2, '0'))
+                  .join()
+                  .toUpperCase();
+            }
+
+            if (uid.isEmpty) {
+              await NfcManager.instance.stopSession(
+                errorMessage: 'Geen UID gevind nie',
+              );
+              return;
+            }
+
+            final result = await MoonApi.studentScanKlas(
+              nfcUid: uid,
+              rigting: 'IN',
+            );
+
+            await NfcManager.instance.stopSession();
+
+            if (!mounted) return;
+
+            setState(() {
+              _busy = false;
+              _status =
+                  'Welkom by ${result["LOK_Naam"]}';
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: Colors.green,
+                content: Text(
+                  '${result["LOK_Naam"]} aangeteken',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            );
+          } catch (e) {
+            await NfcManager.instance.stopSession();
+
+            if (!mounted) return;
+
+            setState(() {
+              _busy = false;
+              _status = 'Fout';
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: Colors.red,
+                content: Text(
+                  '$e',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _busy = false;
+        _status = 'Fout';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            '$e',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -483,9 +585,32 @@ class RightEmptyPage extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: GlassCard(
                   child: Center(
-                    child: Text(
-                      'Skandeer area',
-                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.nfc,
+                          color: kAccent,
+                          size: 64,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _status,
+                          style: GoogleFonts.inter(
+                            color: kText1,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: _busy ? null : _scanKlas,
+                          child: Text(
+                            _busy
+                                ? 'Besig...'
+                                : 'Scan Klas',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
