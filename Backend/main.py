@@ -133,7 +133,22 @@ def login_vir_toegang_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == form_data.username).first()
+
+    username = form_data.username.strip()
+
+    user = db.query(models.Gebruikers).filter(
+        models.Gebruikers.GEB_Epos == username
+    ).first()
+
+    if not user:
+        student = db.query(models.Student).filter(
+            models.Student.STU_Nommer == username
+        ).first()
+
+    if student:
+        user = db.query(models.Gebruikers).filter(
+            models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
+        ).first()
     if not user or not auth.verify_password(form_data.password, user.GEB_Wagwoord):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
