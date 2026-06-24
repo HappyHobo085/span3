@@ -496,28 +496,39 @@ def lys_lokasies(
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
     lokasies = db.query(models.Lokasie).all()
-
     result = []
 
     for l in lokasies:
-
         tag = db.query(models.NFC_Tags).filter(
             models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
             models.NFC_Tags.NFC_Is_Aktief == True
         ).first()
 
+        if not tag:
+            tag = models.NFC_Tags(
+                NFC_UID=_generate_unique_nfc_uid(db),
+                Lokasie_ID=l.Lokasie_ID,
+                Gebruiker_ID=None,
+                NFC_Tipe="Lokasie",
+                NFC_Is_Aktief=True
+            )
+            db.add(tag)
+            db.flush()
+
         result.append({
             "Lokasie_ID": l.Lokasie_ID,
             "LOK_Naam": l.LOK_Naam,
             "Kampus_ID": l.Kampus_ID,
-            "NFC_UID": tag.NFC_UID if tag else None
+            "NFC_UID": tag.NFC_UID
         })
+
+    db.commit()
 
     return schemas.APIResponse(
         sukses=True,
         data=result
     )
-
+    
 @app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)
 def skep_klas_met_nfc(
     klas_in: schemas.KlasSkep,
