@@ -169,8 +169,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${gekoseKlas.klasNaam} se UID is suksesvol geskryf.'),
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text(
+              'NFC tag suksesvol geskryf.',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         );
       },
@@ -179,7 +183,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Fout: $e')),
+      SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(
+          'Fout: $e',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 }
@@ -378,16 +388,25 @@ class _KlasseTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              'Klasse',
-              style: GoogleFonts.inter(
-                color: kText1,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Klasse',
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+              IconButton(
+                icon: const Icon(Icons.refresh, color: kAccent),
+                onPressed: () {
+                  // call _herlaai()
+                },
+              ),
+            ],
           ),
           Expanded(
             child: GlassCard(
