@@ -481,13 +481,14 @@ const json = await window.MoonApi.createGebruiker(payload);
 
   document.addEventListener('DOMContentLoaded', async function () {
   await loadKampusDropdown();
-
-  // BELANGRIK
   await loadRolleDropdown();
 
   toggleStudentField();
 
   await loadLokale();
+  applyVenueFilter();
+
   await loadGebruikers();
+  applyUserFilter();
   });
 })();
