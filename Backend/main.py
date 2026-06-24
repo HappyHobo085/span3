@@ -920,4 +920,33 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
         },
     }
     
-    
+@app.get("/lokasies/uid/{uid}")
+def kry_lokasie_deur_uid(
+    uid: str,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user)
+):
+    tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.NFC_UID == uid.strip(),
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).first()
+
+    if not tag:
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == tag.Lokasie_ID
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Lokasie_ID": lokasie.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Kampus_ID": lokasie.Kampus_ID,
+            "NFC_UID": tag.NFC_UID
+        }
+    )
