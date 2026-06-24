@@ -31,12 +31,14 @@ class LokasieDto {
   final String naam;
   final String? beskrywing;
   final int? kampusId;
+  final String? nfcUid;
 
   LokasieDto({
     required this.id,
     required this.naam,
     this.beskrywing,
     this.kampusId,
+    this.nfcUid,
   });
 
   factory LokasieDto.fromJson(Map<String, dynamic> json) {
@@ -45,6 +47,7 @@ class LokasieDto {
       naam: json['LOK_Naam'] as String,
       beskrywing: json['LOK_Tipe'] as String?,
       kampusId: json['Kampus_ID'] as int?,
+      nfcUid: json['NFC_UID'] as String?,
     );
   }
 }
@@ -61,7 +64,41 @@ class MoonApi {
 
   /// JWT token indien benodig
   static String? bearerToken;
+  static Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+    }) async {
+    final uri = Uri.parse('$baseUrl/token');
 
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: {
+        'grant_type': 'password',
+        'username': email,
+        'password': password,
+        'scope': '',
+        'client_id': '',
+        'client_secret': '',
+      },
+    );
+
+  final decoded = jsonDecode(response.body);
+
+  if (response.statusCode != 200 || decoded['sukses'] != true) {
+    throw Exception(
+      decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
+    );
+  }
+
+  final token = decoded['data']['access_token'] as String;
+  bearerToken = token;
+
+  return Map<String, dynamic>.from(decoded['data']);
+}
   /// -------------------------
   /// Kampusse
   /// -------------------------
