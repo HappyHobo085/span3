@@ -306,7 +306,10 @@
   const selected = newUserRole.options[newUserRole.selectedIndex];
   const rolNaam = selected ? selected.dataset.rolNaam : '';
 
-  studentNumberField.style.display = rolNaam === 'Student' ? '' : 'none';
+  studentNumberField.style.display =
+  rolNaam === 'Student'
+    ? 'block'
+    : 'none';
 }
 
   /** Submit new user to the backend. */
@@ -324,23 +327,69 @@
     }
 
     // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
-    const isStudent = rolId === 4;
+    const selected = newUserRole.options[newUserRole.selectedIndex];
+const rolNaam = selected ? selected.dataset.rolNaam : '';
 
-    if (isStudent && !studentNr) {
-      alert('Voer asseblief die studentenommer in.');
-      return;
-    }
+const payload = {
+  GEB_Naam: naam,
+  GEB_Van: van,
+  GEB_Epos: epos,
+  GEB_Wagwoord: wagwoord,
+  Rol_ID: rolId,
+  Is_Aktief: true,
+};
 
-    const idNommer = isStudent ? studentNr : epos;
+if (rolNaam === 'Student') {
+  if (!studentNr) {
+    alert('Voer asseblief die studentenommer in.');
+    return;
+  }
 
-    const json = await window.MoonApi.createGebruiker({
-      GEB_Naam: naam,
-      GEB_Van: van,
-      GEB_ID_Nommer: idNommer,
-      GEB_Epos: epos,
-      GEB_Wagwoord: wagwoord,
-      Rol_ID: rolId
-    });
+  payload.GEB_ID_Nommer = studentNr;
+  payload.STU_Nommer = studentNr;
+}
+
+else if (rolNaam === 'Personeel') {
+  const perNr = prompt('Voer personeelnommer in');
+
+  if (!perNr) {
+    alert('Personeelnommer is verpligtend');
+    return;
+  }
+
+  payload.GEB_ID_Nommer = perNr;
+  payload.PER_Nommer = perNr;
+}
+
+else if (rolNaam === 'Sekuriteit_Wag') {
+  const sekNr = prompt('Voer wagnommer in');
+
+  if (!sekNr) {
+    alert('Wagnommer is verpligtend');
+    return;
+  }
+
+  payload.GEB_ID_Nommer = sekNr;
+  payload.SEK_Nommer = sekNr;
+}
+
+else if (rolNaam === 'Kampus_Opsigter') {
+  const kamoNr = prompt('Voer opsigternommer in');
+
+  if (!kamoNr) {
+    alert('Opsigternommer is verpligtend');
+    return;
+  }
+
+  payload.GEB_ID_Nommer = kamoNr;
+  payload.KAMO_Nommer = kamoNr;
+}
+
+else {
+  payload.GEB_ID_Nommer = epos;
+}
+
+const json = await window.MoonApi.createGebruiker(payload);
 
     if (json && json.sukses) {
       alert('Gebruiker suksesvol geskep.');
@@ -418,7 +467,7 @@
 
   document.addEventListener('DOMContentLoaded', async function () {
     await loadKampusDropdown();
-    await loadRolleDropdown();
+    toggleStudentField();
     await loadLokale();
     await loadGebruikers();
   });
