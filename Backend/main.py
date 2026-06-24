@@ -856,6 +856,31 @@ def student_scan_klas(
     )
 
 
+@app.get("/toegangslogs")
+def lys_toegangslogs(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user)
+):
+    logs = db.query(models.ToegangsLogs)\
+        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())\
+        .limit(50)\
+        .all()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=[
+            {
+                "Log_ID": l.Log_ID,
+                "Gebruiker_ID": l.Gebruiker_ID,
+                "Lokasie_ID": l.Lokasie_ID,
+                "Rigting": l.TOE_Rigting,
+                "Metode": l.TOE_Metode,
+                "Tyd": l.TOE_Tydstempel.isoformat(),
+            }
+            for l in logs
+        ]
+    )
+
 # --- WAGTE STUDENT SCAN ROETE (F20) ---
 class WagteStudentScanRequest(BaseModel):
     student_nom_or_id: str
@@ -1014,6 +1039,7 @@ def kry_lokasie_deur_uid(
             "NFC_UID": tag.NFC_UID
         }
     )
+    
     
     
     
