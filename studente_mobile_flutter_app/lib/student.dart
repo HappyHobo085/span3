@@ -516,7 +516,7 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
               );
               return;
             }
-
+            debugPrint('UID WAT NA BACKEND GESTUUR WORD = [$uid]');
             final result = await MoonApi.studentScanKlas(
               nfcUid: uid,
               rigting: 'IN',
