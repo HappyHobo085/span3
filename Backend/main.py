@@ -790,7 +790,71 @@ def wagte_kampusse(db: Session = Depends(get_db)):
             for k in kampusse
         ],
     }
-    
+
+
+class StudentKlasScanRequest(BaseModel):
+    nfc_uid: str
+    rigting: str = "IN"
+
+
+@app.post("/student/scan-klas")
+def student_scan_klas(
+    data: StudentKlasScanRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    if data.rigting not in ["IN", "UIT"]:
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+
+    student = db.query(models.Student).filter(
+        models.Student.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    if not student:
+        raise HTTPException(status_code=403, detail="Net studente kan klas scan")
+
+    tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.NFC_UID == data.nfc_uid.strip(),
+        models.NFC_Tags.NFC_Is_Aktief == True
+    ).first()
+
+    if not tag or not tag.Lokasie_ID:
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == tag.Lokasie_ID
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    log = models.ToegangsLogs(
+        NFC_Tags_ID=tag.NFC_Tags_ID,
+        Gebruiker_ID=current_user.Gebruiker_ID,
+        Lokasie_ID=lokasie.Lokasie_ID,
+        TOE_Rigting=data.rigting,
+        TOE_Metode="NFC",
+        TOE_Auto_Uitgecheck=False,
+    )
+
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Log_ID": log.Log_ID,
+            "Student_Nommer": student.STU_Nommer,
+            "Lokasie_ID": lokasie.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Kampus_ID": lokasie.Kampus_ID,
+            "NFC_UID": tag.NFC_UID,
+            "Rigting": log.TOE_Rigting,
+            "Tyd": log.TOE_Tydstempel.isoformat(),
+        }
+    )
+
 
 # --- WAGTE STUDENT SCAN ROETE (F20) ---
 class WagteStudentScanRequest(BaseModel):
@@ -950,3 +1014,6 @@ def kry_lokasie_deur_uid(
             "NFC_UID": tag.NFC_UID
         }
     )
+    
+    
+    
