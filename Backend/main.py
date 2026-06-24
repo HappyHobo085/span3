@@ -77,6 +77,14 @@ def _deaktiveer_nfc_tags_logika(db: Session, user_id: int):
         models.NFC_Tags.NFC_Is_Aktief == True
     ).update({"NFC_Is_Aktief": False})
 
+def _generate_unique_nfc_uid(db: Session, length: int = 8) -> str:
+    while True:
+        uid = uuid.uuid4().hex[:length].upper()
+        exists = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.NFC_UID == uid
+        ).first()
+        if not exists:
+            return uid
 
 def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
     """Veilige JSON-serialisering vir Gebruikers + rol/subrol data."""
@@ -537,7 +545,7 @@ def skep_klas_met_nfc(
         db.add(db_lokasie)
         db.flush()
         
-        generated_uid = uuid.uuid4().hex[:6].upper()
+        generated_uid = _generate_unique_nfc_uid(db)
         
         db_tag = models.NFC_Tags(
             NFC_UID=generated_uid,
@@ -761,6 +769,52 @@ class WagteStudentScanRequest(BaseModel):
     metode: str    # NFC / QR
 
 
+@app.post("/admin/lokasies/genereer-missing-uids")
+def genereer_missing_lokasie_uids(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    lokasies = db.query(models.Lokasie).all()
+    geskep = []
+
+    for l in lokasies:
+        bestaande_tag = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True
+        ).first()
+
+        if bestaande_tag:
+            continue
+
+        uid = _generate_unique_nfc_uid(db)
+
+        nuwe_tag = models.NFC_Tags(
+            NFC_UID=uid,
+            Lokasie_ID=l.Lokasie_ID,
+            Gebruiker_ID=None,
+            NFC_Tipe="Lokasie",
+            NFC_Is_Aktief=True
+        )
+
+        db.add(nuwe_tag)
+
+        geskep.append({
+            "Lokasie_ID": l.Lokasie_ID,
+            "LOK_Naam": l.LOK_Naam,
+            "NFC_UID": uid
+        })
+
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "geskep_count": len(geskep),
+            "geskep": geskep
+        }
+    )
+
 @app.post("/wagte/student/scan")
 def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_db)):
     if data.rigting not in ["IN", "UIT"]:
@@ -834,3 +888,5 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
             "tyd": log.TOE_Tydstempel,
         },
     }
+    
+    
