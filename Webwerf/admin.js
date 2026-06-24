@@ -153,7 +153,7 @@
     const matchesCampus =
       campusFilter === '' || kampusId === campusFilter;
 
-    row.hidden = !(matchesSearch && matchesCampus);
+    row.style.display = (matchesSearch && matchesCampus) ? '' : 'none';
   });
 }
 
@@ -311,7 +311,7 @@
     const matchesRole =
       roleFilter === '' || rolId === roleFilter;
 
-    row.hidden = !(matchesSearch && matchesRole);
+    row.style.display = (matchesSearch && matchesRole) ? '' : 'none';
   });
 }
 
