@@ -135,6 +135,7 @@
   }
 
  function applyVenueFilter() {
+  console.log('applyVenueFilter running');
   if (!venueList) return;
 
   const query = venueSearch ? venueSearch.value.trim().toLowerCase() : '';
@@ -292,7 +293,8 @@
 
   /** Filter user list by search text and role dropdown. */
   function applyUserFilter() {
-  if (!userList) return;
+    console.log('applyUserFilter running');
+    if (!userList) return;
 
   const query = userSearch ? userSearch.value.trim().toLowerCase() : '';
   const roleFilter = userRoleFilter ? userRoleFilter.value : '';
@@ -444,10 +446,16 @@ const json = await window.MoonApi.createGebruiker(payload);
     createClassBtn.addEventListener('click', function () { submitNewClass(); });
   }
   if (venueSearch) {
-    venueSearch.addEventListener('input', applyVenueFilter);
-  }
+    venueSearch.addEventListener('input', function () {
+      console.log('VENUE SEARCH FIRED');
+      applyVenueFilter();
+    });
+}
   if (venueCampusFilter) {
-    venueCampusFilter.addEventListener('change', applyVenueFilter);
+    venueCampusFilter.addEventListener('change', function () {
+      console.log('VENUE CAMPUS FILTER FIRED');
+      applyVenueFilter();
+    });
   }
 
   // --- User events ---
@@ -466,10 +474,16 @@ const json = await window.MoonApi.createGebruiker(payload);
     createUserBtn.addEventListener('click', function () { submitNewUser(); });
   }
   if (userSearch) {
-    userSearch.addEventListener('input', applyUserFilter);
+    userSearch.addEventListener('input', function () {
+      console.log('USER SEARCH FIRED');
+      applyUserFilter();
+    });
   }
   if (userRoleFilter) {
-    userRoleFilter.addEventListener('change', applyUserFilter);
+    userRoleFilter.addEventListener('change', function () {
+      console.log('ROLE FILTER FIRED');
+      applyUserFilter();
+    });
   }
   if (newUserRole) {
     newUserRole.addEventListener('change', toggleStudentField);
