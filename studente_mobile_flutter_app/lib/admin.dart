@@ -13,6 +13,7 @@ class _AdminKlasRy {
   final String klasNaam;
   final String beskrywing;
   final String? nfcUid;
+  
 
   _AdminKlasRy({
     required this.lokasieId,
@@ -215,8 +216,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           laai: _laai,
                           fout: _fout,
                           gekoseLokasieId: _gekoseLokasieId,
-                          onKies: (id) =>
-                              setState(() => _gekoseLokasieId = id),
+                          onKies: (id) => setState(() => _gekoseLokasieId = id),
+                          onHerlaai: _herlaai,
                         )
                       : _selectedIndex == 2
                           ? _NfcTab(
@@ -372,6 +373,7 @@ class _KlasseTab extends StatelessWidget {
   final String? fout;
   final int? gekoseLokasieId;
   final ValueChanged<int> onKies;
+  final VoidCallback onHerlaai;
 
   const _KlasseTab({
     required this.rye,
@@ -379,6 +381,7 @@ class _KlasseTab extends StatelessWidget {
     required this.fout,
     required this.gekoseLokasieId,
     required this.onKies,
+    required this.onHerlaai,
   });
 
   @override
@@ -401,10 +404,9 @@ class _KlasseTab extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, color: kAccent),
-                onPressed: () {
-                  // call _herlaai()
-                },
+                tooltip: 'Herlaai klasse',
+                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                onPressed: onHerlaai,
               ),
             ],
           ),
