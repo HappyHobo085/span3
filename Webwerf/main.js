@@ -53,6 +53,14 @@
 
   var userRole = localStorage.getItem('user_role') || '';
 
+  // Studente mag nie die website gebruik nie.
+// Hulle gebruik slegs die Flutter app.
+if (userRole === 'Student' && currentPage !== 'login.html') {
+  alert('Studente gebruik asseblief die Moon Flutter app.');
+  logOut();
+  return;
+}
+
   // Silently redirect non-admins away from admin.html
   if (currentPage === 'admin.html' && userRole !== 'Administrateur') {
     window.location.href = 'home.html';

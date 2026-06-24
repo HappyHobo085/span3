@@ -128,25 +128,33 @@
     badge.textContent = kampusMap[String(kampusId)] || 'Onbekend';
 
     row.dataset.kampusId = String(kampusId);
+    row.dataset.name = name.toLowerCase();
     row.appendChild(nameSpan);
     row.appendChild(badge);
     venueList.appendChild(row);
   }
 
-  function applyVenueFilter() {
-    if (!venueList) return;
+ function applyVenueFilter() {
+  if (!venueList) return;
 
-    const query = venueSearch ? venueSearch.value.trim().toLowerCase() : '';
-    const campusFilter = venueCampusFilter ? venueCampusFilter.value : '';
-    const rows = venueList.querySelectorAll('.admin-venue-row');
+  const query = venueSearch ? venueSearch.value.trim().toLowerCase() : '';
+  const campusFilter = venueCampusFilter ? venueCampusFilter.value : '';
 
-    rows.forEach(function (row) {
-      const name = (row.querySelector('.admin-venue-name') || {}).textContent || '';
-      const matchesSearch = query === '' || name.toLowerCase().includes(query);
-      const matchesCampus = campusFilter === '' || row.dataset.kampusId === campusFilter;
-      row.hidden = !(matchesSearch && matchesCampus);
-    });
-  }
+  const rows = venueList.querySelectorAll('.admin-venue-row');
+
+  rows.forEach(function (row) {
+    const name = row.dataset.name || '';
+    const kampusId = row.dataset.kampusId || '';
+
+    const matchesSearch =
+      query === '' || name.includes(query);
+
+    const matchesCampus =
+      campusFilter === '' || kampusId === campusFilter;
+
+    row.hidden = !(matchesSearch && matchesCampus);
+  });
+}
 
   async function submitNewClass() {
     const roomName = classRoomName ? classRoomName.value.trim() : '';
@@ -275,6 +283,7 @@
 
     // Store rol ID for filtering
     row.dataset.rolId = String(rolId);
+    row.dataset.search = `${naam} ${van} ${epos}`.toLowerCase();
 
     row.appendChild(infoDiv);
     row.appendChild(rolesDiv);
@@ -283,21 +292,26 @@
 
   /** Filter user list by search text and role dropdown. */
   function applyUserFilter() {
-    if (!userList) return;
+  if (!userList) return;
 
-    const query = userSearch ? userSearch.value.trim().toLowerCase() : '';
-    const roleFilter = userRoleFilter ? userRoleFilter.value : '';
-    const rows = userList.querySelectorAll('.admin-user-row');
+  const query = userSearch ? userSearch.value.trim().toLowerCase() : '';
+  const roleFilter = userRoleFilter ? userRoleFilter.value : '';
 
-    rows.forEach(function (row) {
-      const name = (row.querySelector('.admin-user-name') || {}).textContent || '';
-      const email = (row.querySelector('.admin-user-email') || {}).textContent || '';
-      const text = (name + ' ' + email).toLowerCase();
-      const matchesSearch = query === '' || text.includes(query);
-      const matchesRole = roleFilter === '' || row.dataset.rolId === roleFilter;
-      row.hidden = !(matchesSearch && matchesRole);
-    });
-  }
+  const rows = userList.querySelectorAll('.admin-user-row');
+
+  rows.forEach(function (row) {
+    const searchable = row.dataset.search || '';
+    const rolId = row.dataset.rolId || '';
+
+    const matchesSearch =
+      query === '' || searchable.includes(query);
+
+    const matchesRole =
+      roleFilter === '' || rolId === roleFilter;
+
+    row.hidden = !(matchesSearch && matchesRole);
+  });
+}
 
   /** Show/hide the studentenommer field based on selected role. */
   function toggleStudentField() {
