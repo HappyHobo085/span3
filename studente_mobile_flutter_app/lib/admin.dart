@@ -12,12 +12,14 @@ class _AdminKlasRy {
   final String kampusNaam;
   final String klasNaam;
   final String beskrywing;
+  final String? nfcUid;
 
   _AdminKlasRy({
     required this.lokasieId,
     required this.kampusNaam,
     required this.klasNaam,
     required this.beskrywing,
+    this.nfcUid,
   });
 }
 
@@ -61,6 +63,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 beskrywing: l.beskrywing?.trim().isNotEmpty == true
                     ? l.beskrywing!.trim()
                     : '—',
+                nfcUid: l.nfcUid,
               )));
         _gekoseLokasieId = null;
         _laai = false;
@@ -73,98 +76,113 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   // NFC write logic — unchanged.
   Future<void> _skryfUid() async {
-    final id = _gekoseLokasieId;
-    if (id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Kies eers 'n klas in die lys.")),
-      );
-      return;
-    }
+  final id = _gekoseLokasieId;
 
-    final uidController = TextEditingController();
+  if (id == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Kies eers 'n klas in die lys.")),
+    );
+    return;
+  }
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: kBorderEm, width: 1),
+  final gekoseKlas = _rye.firstWhere(
+    (r) => r.lokasieId == id,
+  );
+
+  final uid = gekoseKlas.nfcUid;
+
+  if (uid == null || uid.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${gekoseKlas.klasNaam} het nog geen UID nie. Herlaai klasse of wag vir server rebuild.',
         ),
-        title: Text(
-          'Skryf UID na NFC tag',
-          style: GoogleFonts.inter(
-              color: kText1, fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        content: GlassInput(
-          controller: uidController,
-          hintText: 'UID vanaf databasis',
-        ),
-        actions: [
-          OutlineActionButton(
-            label: 'Kanselleer',
-            onTap: () => Navigator.pop(ctx, false),
-            height: 40,
-            width: 110,
-          ),
-          const SizedBox(width: 8),
-          GradientActionButton(
-            label: 'Skryf',
-            onTap: () => Navigator.pop(ctx, true),
-            height: 40,
-            width: 90,
-          ),
-        ],
-        actionsPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
-
-    if (ok != true) return;
-
-    final uid = uidController.text.trim();
-    if (uid.isEmpty) return;
-
-    // NFC write — unchanged from original.
-    try {
-      await NfcManager.instance.startSession(
-        onDiscovered: (tag) async {
-          final ndef = Ndef.from(tag);
-          if (ndef == null || !ndef.isWritable) {
-            await NfcManager.instance.stopSession(
-                errorMessage: 'Tag is nie skryfbaar nie.');
-            return;
-          }
-          final record = NdefRecord.createText(uid);
-          final message = NdefMessage([record]);
-          await ndef.write(message);
-          await NfcManager.instance.stopSession();
-          if (!mounted) return;
-
-          final url = '${MoonApi.baseUrl}/lokasies/$id/uid';
-          await http.patch(
-            Uri.parse(url),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ${MoonApi.bearerToken}',
-            },
-            body: jsonEncode({'uid': uid}),
-          );
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('UID suksesvol geskryf.')),
-          );
-          _herlaai();
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fout: $e')),
-      );
-    }
+    return;
   }
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: kBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: kBorderEm, width: 1),
+      ),
+      title: Text(
+        'Skryf NFC tag',
+        style: GoogleFonts.inter(
+          color: kText1,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: Text(
+        'Hou die NFC tag teen die toestel.\n\n'
+        'Klas: ${gekoseKlas.klasNaam}\n'
+        'UID: $uid',
+        style: GoogleFonts.inter(
+          color: kText2,
+          fontSize: 13,
+        ),
+      ),
+      actions: [
+        OutlineActionButton(
+          label: 'Kanselleer',
+          onTap: () => Navigator.pop(ctx, false),
+          height: 40,
+          width: 110,
+        ),
+        const SizedBox(width: 8),
+        GradientActionButton(
+          label: 'Skryf',
+          onTap: () => Navigator.pop(ctx, true),
+          height: 40,
+          width: 90,
+        ),
+      ],
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+  );
+
+  if (ok != true) return;
+
+  try {
+    await NfcManager.instance.startSession(
+      onDiscovered: (tag) async {
+        final ndef = Ndef.from(tag);
+
+        if (ndef == null || !ndef.isWritable) {
+          await NfcManager.instance.stopSession(
+            errorMessage: 'Tag is nie skryfbaar nie.',
+          );
+          return;
+        }
+
+        final record = NdefRecord.createText(uid);
+        final message = NdefMessage([record]);
+
+        await ndef.write(message);
+        await NfcManager.instance.stopSession();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${gekoseKlas.klasNaam} se UID is suksesvol geskryf.'),
+          ),
+        );
+      },
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Fout: $e')),
+    );
+  }
+}
 
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
@@ -442,7 +460,7 @@ class _KlasseTab extends StatelessWidget {
                                           ),
                                         ),
                                         Text(
-                                          '${r.kampusNaam} · ${r.beskrywing}',
+                                          '${r.kampusNaam} · UID: ${r.nfcUid ?? "-"}',
                                           style: GoogleFonts.inter(
                                               color: kTextMuted,
                                               fontSize: 10),
@@ -530,8 +548,8 @@ class _NfcTab extends StatelessWidget {
                     Expanded(
                       child: Text(
                         gekoseLokasieId == null
-                            ? 'Kies \'n klas in die Klasse-tab'
-                            : 'Klas #$gekoseLokasieId gekies',
+                          ? 'Kies \'n klas in die Klasse-tab'
+                          : 'Klas gekies — gaan terug na Klasse om UID te sien',
                         style: GoogleFonts.inter(
                           color: gekoseLokasieId == null ? kTextMuted : kText2,
                           fontSize: 13,
