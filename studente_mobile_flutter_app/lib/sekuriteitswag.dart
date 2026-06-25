@@ -179,11 +179,22 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
       if (!mounted) return;
 
       setState(() {
-        _studentResult = result;
-        _studentController.clear();
-        _pendingRigting = null;
-        _status = '${result['naam']} ${result['van']} ${result['rigting']}';
-      });
+          _studentResult = result;
+          _studentController.clear();
+          _pendingRigting = null;
+          _status = 'SUKSES';
+        });
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+
+          setState(() {
+            _studentResult = null;
+            _status = 'Klik IN of UIT en scan dan QR';
+          });
+
+          FocusScope.of(context).requestFocus(_scannerFocusNode);
+        });
     } catch (e) {
       if (!mounted) return;
       setState(() => _status = 'Fout: $e');
@@ -357,43 +368,97 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
                     const SizedBox(height: 20),
 
-                    if (_studentResult != null)
-                      GlassCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.person, color: kTextMuted, size: 70),
-                            const SizedBox(height: 12),
-                            Text(
-                              '${_studentResult!['naam']} ${_studentResult!['van']}',
-                              style: GoogleFonts.inter(
-                                color: kText1,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Student Nr: ${_studentResult!['student_nommer']}',
-                              style: GoogleFonts.inter(color: kText2, fontSize: 13),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${_studentResult!['rigting']} via ${_studentResult!['metode']}',
-                              style: GoogleFonts.inter(
-                                color: kSuccess,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Lokasie: ${_studentResult!['lokasie']}',
-                              style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
-                            ),
-                          ],
+                  if (_studentResult != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.green,
+                          width: 2,
                         ),
                       ),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 60,
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Text(
+                            'STUDENT INGESCAN',
+                            style: GoogleFonts.inter(
+                              color: Colors.green,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          if ((_studentResult!['foto_url'] ?? '')
+                              .toString()
+                              .isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(50),
+                              child: Image.network(
+                                '${MoonApi.baseUrl}${_studentResult!['foto_url']}',
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.person,
+                                  size: 90,
+                                  color: kTextMuted,
+                                ),
+                              ),
+                            )
+                          else
+                            const Icon(
+                              Icons.person,
+                              size: 90,
+                              color: kTextMuted,
+                            ),
+
+                          const SizedBox(height: 12),
+
+                          Text(
+                            '${_studentResult!['naam']} ${_studentResult!['van']}',
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            'Student Nr: ${_studentResult!['student_nommer']}',
+                            style: GoogleFonts.inter(
+                              color: kText2,
+                              fontSize: 15,
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            '${_studentResult!['rigting']} via ${_studentResult!['metode']}',
+                            style: GoogleFonts.inter(
+                              color: Colors.green,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
