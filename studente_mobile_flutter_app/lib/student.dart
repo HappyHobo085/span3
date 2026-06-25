@@ -4,6 +4,7 @@ import 'app_shared.dart';
 import 'moon_api.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'dart:convert';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // ─── Student Home — dashboard with bottom nav ────────────────────────────────
 class HomePage extends StatefulWidget {
@@ -531,12 +532,27 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                               const SizedBox(height: 24),
                               GlassCard(
                                 padding: const EdgeInsets.all(14),
-                                child: Text(
-                                  'QR Backup kom volgende',
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 12,
-                                  ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'QR Backup',
+                                      style: GoogleFonts.inter(
+                                        color: kTextMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      color: Colors.white,
+                                      padding: const EdgeInsets.all(10),
+                                      child: QrImageView(
+                                        data: nommer,
+                                        version: QrVersions.auto,
+                                        size: 170,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
