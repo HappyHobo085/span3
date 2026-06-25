@@ -185,7 +185,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           _status = 'SUKSES';
         });
 
-        Future.delayed(const Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 5), () {
           if (!mounted) return;
 
           setState(() {
