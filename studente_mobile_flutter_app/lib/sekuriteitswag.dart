@@ -9,6 +9,100 @@ import 'package:nfc_manager/nfc_manager.dart';
 import 'dart:convert';
 
 // VERVANG NET die hele _KampusSkandeerPageState class met hierdie:
+class SekuriteitswagHomePage extends StatefulWidget {
+  const SekuriteitswagHomePage({super.key});
+
+  @override
+  State<SekuriteitswagHomePage> createState() => _SekuriteitswagHomePageState();
+}
+
+class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
+  String? _gekoseKampus = 'Hoofkampus';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Wagte',
+              subtitle: _gekoseKampus ?? 'Kies kampus',
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: DropdownButton<String>(
+                  value: _gekoseKampus,
+                  dropdownColor: kBg,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: GoogleFonts.inter(color: kText1),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Hoofkampus',
+                      child: Text('Hoofkampus'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Koshuis',
+                      child: Text('Koshuis'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Sportkampus',
+                      child: Text('Sportkampus'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _gekoseKampus = value);
+                  },
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GlassTapPanel(
+                        label: 'Kampus Skandeer',
+                        subtitle: 'IN / UIT',
+                        icon: '🚪',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => KampusSkandeerPage(
+                                kampusNaam: _gekoseKampus ?? 'Hoofkampus',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: GlassTapPanel(
+                        label: 'Besoekers',
+                        subtitle: 'OTP / Lisensie Foto',
+                        icon: '👤',
+                        borderColor: const Color(0x3300C2FF),
+                        onTap: () {},
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class KampusSkandeerPage extends StatefulWidget {
   final String kampusNaam;
 
