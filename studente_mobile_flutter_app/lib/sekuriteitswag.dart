@@ -4,6 +4,8 @@ import 'app_shared.dart';
 import 'moon_api.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:nfc_manager/nfc_manager.dart';
+import 'dart:convert';
 class SekuriteitswagHomePage extends StatefulWidget {
   const SekuriteitswagHomePage({super.key});
 
@@ -107,7 +109,9 @@ class KampusSkandeerPage extends StatefulWidget {
 
 class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   final TextEditingController _studentController = TextEditingController();
+
   bool _loading = false;
+  String _status = 'Gereed om te skandeer';
   Map<String, dynamic>? _studentResult;
 
   @override
@@ -116,12 +120,42 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     super.dispose();
   }
 
-  Future<void> _scanStudent(String rigting, String metode) async {
-    final studentId = _studentController.text.trim();
+  String _readNdefText(NfcTag tag) {
+    String value = '';
 
-    if (studentId.isEmpty) {
+    final ndef = Ndef.from(tag);
+
+    if (ndef == null || ndef.cachedMessage == null) {
+      return value;
+    }
+
+    for (final record in ndef.cachedMessage!.records) {
+      if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
+          String.fromCharCodes(record.type) == 'T') {
+        final payload = record.payload;
+
+        if (payload.isNotEmpty) {
+          final languageCodeLength = payload.first & 0x3F;
+          value = utf8.decode(
+            payload.sublist(1 + languageCodeLength),
+          ).trim();
+        }
+      }
+    }
+
+    return value;
+  }
+
+  Future<void> _submitScan({
+    required String nommer,
+    required String rigting,
+    required String metode,
+  }) async {
+    final cleanNommer = nommer.trim();
+
+    if (cleanNommer.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Voer eers student nommer of ID in')),
+        const SnackBar(content: Text('Geen studentenommer gelees nie')),
       );
       return;
     }
@@ -129,26 +163,103 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     setState(() {
       _loading = true;
       _studentResult = null;
+      _status = 'Stuur na backend...';
     });
 
     try {
       final result = await MoonApi.wagteStudentScan(
-        studentNomOrId: studentId,
-        lokasieId: 1, // hardcode vir nou
+        studentNomOrId: cleanNommer,
+        lokasieId: 1, // hardcode hoofhek vir nou
         rigting: rigting,
         metode: metode,
       );
 
+      if (!mounted) return;
+
       setState(() {
         _studentResult = result;
+        _studentController.text = cleanNommer;
+        _status = '${result['naam']} ${result['van']} ${result['rigting']}';
       });
     } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _status = 'Fout';
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Fout: $e')),
       );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  Future<void> _scanStudentNfc(String rigting) async {
+    setState(() {
+      _loading = true;
+      _status = 'Hou student se foon teen MT90...';
+      _studentResult = null;
+    });
+
+    try {
+      await NfcManager.instance.startSession(
+        onDiscovered: (tag) async {
+          try {
+            final nommer = _readNdefText(tag);
+
+            debugPrint('STUDENT NOMMER GELEES VIA NFC = [$nommer]');
+
+            await NfcManager.instance.stopSession();
+
+            if (!mounted) return;
+
+            await _submitScan(
+              nommer: nommer,
+              rigting: rigting,
+              metode: 'NFC',
+            );
+          } catch (e) {
+            await NfcManager.instance.stopSession(
+              errorMessage: 'NFC leesfout',
+            );
+
+            if (!mounted) return;
+
+            setState(() {
+              _loading = false;
+              _status = 'NFC leesfout';
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('NFC fout: $e')),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _status = 'NFC kon nie begin nie';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('NFC fout: $e')),
+      );
+    }
+  }
+
+  Future<void> _manualScan(String rigting, String metode) async {
+    await _submitScan(
+      nommer: _studentController.text,
+      rigting: rigting,
+      metode: metode,
+    );
   }
 
   @override
@@ -169,35 +280,57 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.nfc, color: kAccent, size: 46),
+                          const SizedBox(height: 12),
+                          Text(
+                            _status,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
                     GlassInput(
                       controller: _studentController,
-                      hintText: 'Student nommer / ID',
+                      hintText: 'Studentenommer backup bv. 111',
                       prefixIcon: const Icon(
                         Icons.badge_outlined,
                         color: kTextMuted,
                         size: 18,
                       ),
                     ),
+
                     const SizedBox(height: 16),
 
                     Row(
                       children: [
                         Expanded(
                           child: GlassTapPanel(
-                            label: 'IN',
-                            subtitle: 'Student kom in kampus',
+                            label: _loading ? 'Besig...' : 'NFC IN',
+                            subtitle: 'Scan student se foon',
                             icon: '⬇️',
-                            onTap: () => _scanStudent('IN', 'NFC'),
+                            onTap: _loading ? () {} : () => _scanStudentNfc('IN'),
                           ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: GlassTapPanel(
-                            label: 'UIT',
-                            subtitle: 'Student verlaat kampus',
+                            label: _loading ? 'Besig...' : 'NFC UIT',
+                            subtitle: 'Scan student se foon',
                             icon: '⬆️',
                             borderColor: const Color(0x3300C2FF),
-                            onTap: () => _scanStudent('UIT', 'NFC'),
+                            onTap: _loading ? () {} : () => _scanStudentNfc('UIT'),
                           ),
                         ),
                       ],
@@ -205,10 +338,24 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
                     const SizedBox(height: 16),
 
-                    GradientActionButton(
-                      label: _loading ? 'Besig...' : 'Gebruik QR Backup',
-                      onTap: _loading ? () {} : () => _scanStudent('IN', 'QR'),
-                      height: 48,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GradientActionButton(
+                            label: 'Handmatig IN',
+                            onTap: _loading ? () {} : () => _manualScan('IN', 'HANDMATIG'),
+                            height: 46,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GradientActionButton(
+                            label: 'Handmatig UIT',
+                            onTap: _loading ? () {} : () => _manualScan('UIT', 'HANDMATIG'),
+                            height: 46,
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 20),
@@ -218,6 +365,26 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           children: [
+                            if ((_studentResult!['foto_url'] ?? '').toString().isNotEmpty)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(60),
+                                child: Image.network(
+                                  '${MoonApi.baseUrl}${_studentResult!['foto_url']}',
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.person,
+                                    color: kTextMuted,
+                                    size: 70,
+                                  ),
+                                ),
+                              )
+                            else
+                              const Icon(Icons.person, color: kTextMuted, size: 70),
+
+                            const SizedBox(height: 12),
+
                             Text(
                               '${_studentResult!['naam']} ${_studentResult!['van']}',
                               style: GoogleFonts.inter(
@@ -226,7 +393,9 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
+
                             const SizedBox(height: 6),
+
                             Text(
                               'Student Nr: ${_studentResult!['student_nommer']}',
                               style: GoogleFonts.inter(
@@ -234,13 +403,25 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                                 fontSize: 13,
                               ),
                             ),
+
                             const SizedBox(height: 6),
+
                             Text(
                               '${_studentResult!['rigting']} via ${_studentResult!['metode']}',
                               style: GoogleFonts.inter(
                                 color: kSuccess,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            Text(
+                              'Lokasie: ${_studentResult!['lokasie']}',
+                              style: GoogleFonts.inter(
+                                color: kTextMuted,
+                                fontSize: 12,
                               ),
                             ),
                           ],

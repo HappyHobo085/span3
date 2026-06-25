@@ -87,7 +87,11 @@ class MoonApi {
     );
 
   final decoded = jsonDecode(response.body);
-
+  print('========================');
+  print('LOGIN RESPONSE');
+  print(decoded);
+  print('========================');
+  
   if (response.statusCode != 200 || decoded['sukses'] != true) {
     throw Exception(
       decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
@@ -196,7 +200,7 @@ class MoonApi {
     }
 
     final decoded = jsonDecode(response.body);
-
+    
     if (decoded['sukses'] != true) {
       throw Exception(
         decoded['fout']?.toString() ?? 'Kon nie lokasies laai nie',
