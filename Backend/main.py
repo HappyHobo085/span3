@@ -951,13 +951,8 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Lokasie nie gevind nie")
 
     student = db.query(Student).filter(
-        Student.STU_Nommer == data.student_nom_or_id
+        Student.STU_Nommer == data.student_nom_or_id.strip()
     ).first()
-
-    if not student and data.student_nom_or_id.isdigit():
-        student = db.query(Student).filter(
-            Student.Gebruiker_ID == int(data.student_nom_or_id)
-        ).first()
 
     if not student:
         raise HTTPException(status_code=404, detail="Student nie gevind nie")
@@ -970,19 +965,10 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
     if not gebruiker:
         raise HTTPException(status_code=403, detail="Student is nie aktief nie")
 
-    nfc_tags_id = None
-    if data.metode == "NFC":
-        tag = db.query(models.NFC_Tags).filter(
-            models.NFC_Tags.Gebruiker_ID == student.Gebruiker_ID,
-            models.NFC_Tags.NFC_Is_Aktief == True
-        ).first()
-        if tag:
-            nfc_tags_id = tag.NFC_Tags_ID
-
     log = ToegangsLogs(
         Gebruiker_ID=student.Gebruiker_ID,
         Lokasie_ID=data.lokasie_id,
-        NFC_Tags_ID=nfc_tags_id,
+        NFC_Tags_ID=None,
         TOE_Rigting=data.rigting,
         TOE_Metode=data.metode,
         TOE_Auto_Uitgecheck=False,
@@ -1005,10 +991,10 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
             "lokasie": lokasie.LOK_Naam,
             "rigting": log.TOE_Rigting,
             "metode": log.TOE_Metode,
-            "tyd": log.TOE_Tydstempel,
+            "tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
         },
     }
-    
+
 @app.get("/lokasies/uid/{uid}")
 def kry_lokasie_deur_uid(
     uid: str,

@@ -413,5 +413,10 @@ class ToegangHandmatigResult(BaseModel):
     Toegang_Verleen: bool
     Boodskap: str
 
-    class Config:
-        from_attributes = True
+class Config:
+    from_attributes = True
+    
+
+class HekScanRequest(BaseModel):
+    nommer: str
+    rigting: str = "IN"
