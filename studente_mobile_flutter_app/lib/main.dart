@@ -124,10 +124,12 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => nextPage),
-      );
+        await MoonApi.getMyProfile();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => nextPage),
+        );
     } catch (e) {
       debugPrint('LOGIN ERROR: $e');
 

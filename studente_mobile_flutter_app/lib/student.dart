@@ -429,11 +429,51 @@ class ScanSelectionPage extends StatelessWidget {
 }
 
 // ─── Kampus scanning placeholder ─────────────────────────────────────────────
-class LeftEmptyPage extends StatelessWidget {
+class LeftEmptyPage extends StatefulWidget {
   const LeftEmptyPage({super.key});
 
   @override
+  State<LeftEmptyPage> createState() => _LeftEmptyPageState();
+}
+
+class _LeftEmptyPageState extends State<LeftEmptyPage> {
+  bool _loading = true;
+  String? _studentNommer;
+  String _status = 'Laai student profiel...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      if (MoonApi.myProfile == null) {
+        await MoonApi.getMyProfile();
+      }
+
+      setState(() {
+        _studentNommer = MoonApi.myStudentNommer;
+        _loading = false;
+        _status = 'Hou jou foon teen die MT90';
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _status = 'Kon nie studentenommer laai nie';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final nommer = _studentNommer ?? 'Onbekend';
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -448,11 +488,59 @@ class LeftEmptyPage extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: GlassCard(
+                  padding: const EdgeInsets.all(20),
                   child: Center(
-                    child: Text(
-                      'Skandeer area',
-                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
-                    ),
+                    child: _loading
+                        ? const CircularProgressIndicator()
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.nfc,
+                                color: kAccent,
+                                size: 72,
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                'Studentenommer',
+                                style: GoogleFonts.inter(
+                                  color: kTextMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                nommer,
+                                style: GoogleFonts.inter(
+                                  color: kText1,
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                _status,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  color: kText2,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              GlassCard(
+                                padding: const EdgeInsets.all(14),
+                                child: Text(
+                                  'QR Backup kom volgende',
+                                  style: GoogleFonts.inter(
+                                    color: kTextMuted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ),

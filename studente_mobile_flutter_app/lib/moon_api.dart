@@ -87,11 +87,7 @@ class MoonApi {
     );
 
   final decoded = jsonDecode(response.body);
-  print('========================');
-  print('LOGIN RESPONSE');
-  print(decoded);
-  print('========================');
-  
+
   if (response.statusCode != 200 || decoded['sukses'] != true) {
     throw Exception(
       decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
@@ -259,6 +255,34 @@ class MoonApi {
     }
 
     return Map<String, dynamic>.from(decoded['data']);
+  }
+
+  static Map<String, dynamic>? myProfile;
+
+  static Future<Map<String, dynamic>> getMyProfile() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/me'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie profiel laai nie',
+      );
+    }
+
+    myProfile = Map<String, dynamic>.from(decoded['data']);
+    return myProfile!;
+  }
+
+  static String? get myStudentNommer {
+    return myProfile?['student_nommer']?.toString();
   }
 }
 
