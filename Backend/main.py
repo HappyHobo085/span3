@@ -995,6 +995,29 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
         },
     }
 
+
+@app.get("/me")
+def kry_my_profiel(
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    student = db.query(Student).filter(
+        Student.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    return {
+        "sukses": True,
+        "data": {
+            "gebruiker_id": current_user.Gebruiker_ID,
+            "naam": current_user.GEB_Naam,
+            "van": current_user.GEB_Van,
+            "rol_id": current_user.Rol_ID,
+            "student_nommer": student.STU_Nommer if student else None,
+            "foto_url": current_user.GEB_Profiel_Foto,
+        }
+    }
+    
+    
 @app.get("/lokasies/uid/{uid}")
 def kry_lokasie_deur_uid(
     uid: str,
@@ -1025,6 +1048,8 @@ def kry_lokasie_deur_uid(
             "NFC_UID": tag.NFC_UID
         }
     )
+    
+    
     
     
     
