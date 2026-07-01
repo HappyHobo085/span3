@@ -420,3 +420,40 @@ class Config:
 class HekScanRequest(BaseModel):
     nommer: str
     rigting: str = "IN"
+
+
+# --- Kampus Status/Skandering Status Schemas ---
+class KampusGebruikerStatus(BaseModel):
+    Gebruiker_ID: int
+    GEB_Naam: str
+    GEB_Van: str
+    GEB_Epos: str
+    Rol_Naam: str
+    Tydstempel: datetime
+    Rigting: str  # "IN" | "UIT"
+    Metode: str
+
+    class Config:
+        from_attributes = True
+
+class KampusDetailStatus(BaseModel):
+    Kampus_ID: int
+    KAM_Naam: str
+    scanned_in_count: int
+    scanned_out_count: int
+    scanned_in: List[KampusGebruikerStatus]
+    scanned_out: List[KampusGebruikerStatus]
+
+    class Config:
+        from_attributes = True
+
+class KampusSummaryStatus(BaseModel):
+    Kampus_ID: int
+    KAM_Naam: str
+    KAM_Adres: Optional[str] = None
+    scanned_in_count: int
+    scanned_out_count: int
+
+    class Config:
+        from_attributes = True
+

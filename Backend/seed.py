@@ -1,5 +1,5 @@
 from database import SessionLocal
-from models import Rolle, Kampus, Lokasie, NFC_Tags, Gebruikers, Sekuriteit_Wag
+from models import Rolle, Kampus, Lokasie, NFC_Tags, Gebruikers, Sekuriteit_Wag, Student, ToegangsLogs
 import auth
 
 def seed():
@@ -129,13 +129,73 @@ def seed():
                 Is_Aktief=False
             )
 
-            db.add_all([admin_user, wag_user, student_jan, student_piet])
+            # Add more students to seed scanned in / scanned out status for each campus
+            # Leriba (scanned out): Sannie
+            student_sannie = Gebruikers(
+                GEB_Naam="Sannie",
+                GEB_Van="Smit",
+                GEB_ID_Nommer="0405065000085",
+                GEB_Epos="sannie.smit@student.com",
+                GEB_Wagwoord=auth.get_password_hash("sannie123"),
+                GEB_Selfoon_Nr="0835556666",
+                GEB_Profiel_Foto="https://placehold.co/150",
+                Rol_ID=stud_rol.Rol_ID,
+                Is_Aktief=True
+            )
+
+            # Paarl (scanned in): Fanie
+            student_fanie = Gebruikers(
+                GEB_Naam="Fanie",
+                GEB_Van="Botha",
+                GEB_ID_Nommer="0506075000086",
+                GEB_Epos="fanie.botha@student.com",
+                GEB_Wagwoord=auth.get_password_hash("fanie123"),
+                GEB_Selfoon_Nr="0837778888",
+                GEB_Profiel_Foto="https://placehold.co/150",
+                Rol_ID=stud_rol.Rol_ID,
+                Is_Aktief=True
+            )
+
+            # Paarl (scanned out): Koos
+            student_koos = Gebruikers(
+                GEB_Naam="Koos",
+                GEB_Van="van der Merwe",
+                GEB_ID_Nommer="0607085000087",
+                GEB_Epos="koos.vdm@student.com",
+                GEB_Wagwoord=auth.get_password_hash("koos123"),
+                GEB_Selfoon_Nr="0839990000",
+                GEB_Profiel_Foto="https://placehold.co/150",
+                Rol_ID=stud_rol.Rol_ID,
+                Is_Aktief=True
+            )
+
+            # Gerhard (scanned in): Miena
+            student_miena = Gebruikers(
+                GEB_Naam="Miena",
+                GEB_Van="Louw",
+                GEB_ID_Nommer="0708095000088",
+                GEB_Epos="miena.louw@student.com",
+                GEB_Wagwoord=auth.get_password_hash("miena123"),
+                GEB_Selfoon_Nr="0832223333",
+                GEB_Profiel_Foto="https://placehold.co/150",
+                Rol_ID=stud_rol.Rol_ID,
+                Is_Aktief=True
+            )
+
+            db.add_all([
+                admin_user, wag_user, student_jan, student_piet,
+                student_sannie, student_fanie, student_koos, student_miena
+            ])
             db.commit()
 
             db.refresh(admin_user)
             db.refresh(wag_user)
             db.refresh(student_jan)
             db.refresh(student_piet)
+            db.refresh(student_sannie)
+            db.refresh(student_fanie)
+            db.refresh(student_koos)
+            db.refresh(student_miena)
 
             # Saai sub-tabel vir Sekuriteit Wag
             wag_profiel = Sekuriteit_Wag(
@@ -143,6 +203,46 @@ def seed():
                 SEK_Nommer="SEK001"
             )
             db.add(wag_profiel)
+
+            # Saai sub-tabel vir Studente
+            db.add_all([
+                Student(Gebruiker_ID=student_jan.Gebruiker_ID, STU_Nommer="STU001"),
+                Student(Gebruiker_ID=student_piet.Gebruiker_ID, STU_Nommer="STU002"),
+                Student(Gebruiker_ID=student_sannie.Gebruiker_ID, STU_Nommer="STU003"),
+                Student(Gebruiker_ID=student_fanie.Gebruiker_ID, STU_Nommer="STU005"),
+                Student(Gebruiker_ID=student_koos.Gebruiker_ID, STU_Nommer="STU004"),
+                Student(Gebruiker_ID=student_miena.Gebruiker_ID, STU_Nommer="STU006"),
+            ])
+            db.commit()
+
+            # Nou saai ons ToegangsLogs vir ingeklokte/uitgeklokte statusse per kampus
+            # Leriba lokasies
+            l_koning = db.query(Lokasie).filter_by(LOK_Naam="Koning Protea").first()
+            l_studie = db.query(Lokasie).filter_by(LOK_Naam="Studiesaal").first()
+            # Paarl lokasies
+            l_l1 = db.query(Lokasie).filter_by(LOK_Naam="L1").first()
+            l_l2 = db.query(Lokasie).filter_by(LOK_Naam="L2").first()
+            # Gerhard lokasies
+            l_a = db.query(Lokasie).filter_by(LOK_Naam="Lokaal A").first()
+            l_b = db.query(Lokasie).filter_by(LOK_Naam="Lokaal B").first()
+
+            # Saai ToegangsLogs
+            db.add_all([
+                # Leriba: Jan is IN, Sannie is UIT
+                ToegangsLogs(Gebruiker_ID=student_jan.Gebruiker_ID, Lokasie_ID=l_koning.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_sannie.Gebruiker_ID, Lokasie_ID=l_studie.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_sannie.Gebruiker_ID, Lokasie_ID=l_studie.Lokasie_ID, TOE_Rigting="UIT", TOE_Metode="NFC"),
+
+                # Paarl: Fanie is IN, Koos is UIT
+                ToegangsLogs(Gebruiker_ID=student_fanie.Gebruiker_ID, Lokasie_ID=l_l1.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_koos.Gebruiker_ID, Lokasie_ID=l_l2.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_koos.Gebruiker_ID, Lokasie_ID=l_l2.Lokasie_ID, TOE_Rigting="UIT", TOE_Metode="NFC"),
+
+                # Gerhard: Miena is IN, Piet is UIT
+                ToegangsLogs(Gebruiker_ID=student_miena.Gebruiker_ID, Lokasie_ID=l_a.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_piet.Gebruiker_ID, Lokasie_ID=l_b.Lokasie_ID, TOE_Rigting="IN", TOE_Metode="NFC"),
+                ToegangsLogs(Gebruiker_ID=student_piet.Gebruiker_ID, Lokasie_ID=l_b.Lokasie_ID, TOE_Rigting="UIT", TOE_Metode="NFC")
+            ])
             db.commit()
             print("✅ Gebruikers en sub-rolle gesaai")
 

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 import uuid
 from typing import List, Optional, Any
 
@@ -479,6 +479,107 @@ def lees_kampusse(db: Session = Depends(get_db)):
     """
     kampusse = db.query(models.Kampus).all()
     return schemas.APIResponse(sukses=True, data=kampusse)
+
+
+@app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
+def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
+    """
+    Kry die status-opsomming (scanned in en scanned out tellings) vir alle kampusse.
+    """
+    kampusse = db.query(models.Kampus).all()
+    resultate = []
+    for k in kampusse:
+        # Latest log per gebruiker vir hierdie kampus
+        subquery = db.query(
+            models.ToegangsLogs.Gebruiker_ID,
+            func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
+        ).join(models.Lokasie).filter(
+            models.Lokasie.Kampus_ID == k.Kampus_ID
+        ).group_by(
+            models.ToegangsLogs.Gebruiker_ID
+        ).subquery()
+
+        latest_logs = db.query(models.ToegangsLogs).join(
+            subquery,
+            models.ToegangsLogs.Log_ID == subquery.c.max_log_id
+        ).all()
+
+        scanned_in_count = sum(1 for log in latest_logs if log.TOE_Rigting == "IN")
+        scanned_out_count = sum(1 for log in latest_logs if log.TOE_Rigting == "UIT")
+
+        resultate.append(schemas.KampusSummaryStatus(
+            Kampus_ID=k.Kampus_ID,
+            KAM_Naam=k.KAM_Naam,
+            KAM_Adres=k.KAM_Adres,
+            scanned_in_count=scanned_in_count,
+            scanned_out_count=scanned_out_count
+        ))
+
+    return schemas.APIResponse(sukses=True, data=resultate)
+
+
+@app.get("/kampusse/{kampus_id}/status", response_model=schemas.APIResponse[schemas.KampusDetailStatus])
+def kry_kampus_status_detail(kampus_id: int, db: Session = Depends(get_db)):
+    """
+    Kry gedetailleerde inligting van gebruikers wat tans in- of uitgeklok is op 'n spesifieke kampus.
+    """
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    # Latest log per gebruiker vir hierdie kampus
+    subquery = db.query(
+        models.ToegangsLogs.Gebruiker_ID,
+        func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
+    ).join(models.Lokasie).filter(
+        models.Lokasie.Kampus_ID == kampus_id
+    ).group_by(
+        models.ToegangsLogs.Gebruiker_ID
+    ).subquery()
+
+    latest_logs = db.query(models.ToegangsLogs).join(
+        subquery,
+        models.ToegangsLogs.Log_ID == subquery.c.max_log_id
+    ).all()
+
+    scanned_in = []
+    scanned_out = []
+
+    for log in latest_logs:
+        gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == log.Gebruiker_ID).first()
+        if not gebruiker:
+            continue
+        rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == gebruiker.Rol_ID).first()
+        rol_naam = rol.ROL_Naam if rol else "Onbekend"
+
+        status_obj = schemas.KampusGebruikerStatus(
+            Gebruiker_ID=gebruiker.Gebruiker_ID,
+            GEB_Naam=gebruiker.GEB_Naam,
+            GEB_Van=gebruiker.GEB_Van,
+            GEB_Epos=gebruiker.GEB_Epos,
+            Rol_Naam=rol_naam,
+            Tydstempel=log.TOE_Tydstempel,
+            Rigting=log.TOE_Rigting,
+            Metode=log.TOE_Metode
+        )
+
+        if log.TOE_Rigting == "IN":
+            scanned_in.append(status_obj)
+        else:
+            scanned_out.append(status_obj)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=schemas.KampusDetailStatus(
+            Kampus_ID=kampus.Kampus_ID,
+            KAM_Naam=kampus.KAM_Naam,
+            scanned_in_count=len(scanned_in),
+            scanned_out_count=len(scanned_out),
+            scanned_in=scanned_in,
+            scanned_out=scanned_out
+        )
+    )
+
 
 @app.get("/rolle", response_model=schemas.APIResponse[List[schemas.Rol]])
 def lees_rolle(
