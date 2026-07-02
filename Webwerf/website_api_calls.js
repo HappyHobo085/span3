@@ -133,6 +133,28 @@ const API_BASE_URL =
       return r.body;
     },
 
+    /**
+     * GET /kampusse/status
+     * Returns summary scan counts for all campuses. No auth required.
+     */
+    fetchKampusseStatus: async function () {
+      const r = await apiRequest('/kampusse/status', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /kampusse/{kampusId}/status
+     * Returns detailed scanned-in/out lists for a specific campus. No auth required.
+     */
+    fetchKampusStatus: async function (kampusId) {
+      const r = await apiRequest('/kampusse/' + kampusId + '/status', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
   };
 
 })();
