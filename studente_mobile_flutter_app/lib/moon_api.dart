@@ -68,37 +68,37 @@ class MoonApi {
     required String email,
     required String password,
     }) async {
-    final uri = Uri.parse('$baseUrl/token');
+      final uri = Uri.parse('$baseUrl/token');
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      body: {
-        'grant_type': 'password',
-        'username': email,
-        'password': password,
-        'scope': '',
-        'client_id': '',
-        'client_secret': '',
-      },
-    );
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: {
+          'grant_type': 'password',
+          'username': email,
+          'password': password,
+          'scope': '',
+          'client_id': '',
+          'client_secret': '',
+        },
+      );
 
-  final decoded = jsonDecode(response.body);
+    final decoded = jsonDecode(response.body);
 
-  if (response.statusCode != 200 || decoded['sukses'] != true) {
-    throw Exception(
-      decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
-    );
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
+      );
+    }
+
+    final token = decoded['data']['access_token'] as String;
+    bearerToken = token;
+
+    return Map<String, dynamic>.from(decoded['data']);
   }
-
-  final token = decoded['data']['access_token'] as String;
-  bearerToken = token;
-
-  return Map<String, dynamic>.from(decoded['data']);
-}
   /// -------------------------
   /// Kampusse
   /// -------------------------
@@ -284,6 +284,8 @@ class MoonApi {
   static String? get myStudentNommer {
     return myProfile?['student_nommer']?.toString();
   }
+
+
 }
 
 

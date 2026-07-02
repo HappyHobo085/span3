@@ -122,14 +122,14 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Onbekende rol: $rolNaam');
       }
 
+      await MoonApi.getMyProfile();
+
       if (!mounted) return;
 
-        await MoonApi.getMyProfile();
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => nextPage),
-        );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => nextPage),
+      );
     } catch (e) {
       debugPrint('LOGIN ERROR: $e');
 

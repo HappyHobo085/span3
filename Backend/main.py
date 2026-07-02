@@ -1102,8 +1102,24 @@ def kry_my_profiel(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    student = db.query(Student).filter(
-        Student.Gebruiker_ID == current_user.Gebruiker_ID
+    rol = db.query(models.Rolle).filter(
+        models.Rolle.Rol_ID == current_user.Rol_ID
+    ).first()
+
+    student = db.query(models.Student).filter(
+        models.Student.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    personeel = db.query(models.Personeel).filter(
+        models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    opsigter = db.query(models.Kampus_Opsigter).filter(
+        models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    wag = db.query(models.Sekuriteit_Wag).filter(
+        models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID
     ).first()
 
     return {
@@ -1113,9 +1129,20 @@ def kry_my_profiel(
             "naam": current_user.GEB_Naam,
             "van": current_user.GEB_Van,
             "rol_id": current_user.Rol_ID,
-            "student_nommer": student.STU_Nommer if student else None,
+            "rol": rol.ROL_Naam if rol else "Onbekend",
+            "epos": current_user.GEB_Epos,
+            "selfoon": current_user.GEB_Selfoon_Nr,
             "foto_url": current_user.GEB_Profiel_Foto,
-        }
+            "status": "Aktief" if current_user.Is_Aktief else "Onaktief",
+
+            "student_nommer": student.STU_Nommer if student else None,
+            "personeel_nommer": personeel.PER_Nommer if personeel else None,
+            "departement": personeel.PER_Departement if personeel else None,
+            "opsigter_nommer": opsigter.KAMO_Nommer if opsigter else None,
+            "wag_nommer": wag.SEK_Nommer if wag else None,
+
+            "kampus": None,
+        },
     }
     
     
