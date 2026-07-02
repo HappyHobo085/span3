@@ -219,6 +219,19 @@
     });
   }
 
+  /** Hide personeel rows that do not contain the search text. */
+  function applyPersoneelFilter() {
+    var bottomSearch = document.getElementById('bottom-search');
+    var personeelList = document.getElementById('personeel-list');
+    if (!bottomSearch || !personeelList) return;
+    var query = bottomSearch.value.trim().toLowerCase();
+    var items = personeelList.querySelectorAll('li');
+    items.forEach(function (li) {
+      var text = (li.textContent || '').trim().toLowerCase();
+      li.hidden = query !== '' && !text.includes(query);
+    });
+  }
+
   /** Show modal: CSS class .open + accessibility flag. */
   function openClassModal() {
     if (!classModalOverlay) return;
@@ -290,6 +303,11 @@
     listSearch.addEventListener('input', applyListFilter);
   }
 
+  var bottomSearch = document.getElementById('bottom-search');
+  if (bottomSearch) {
+    bottomSearch.addEventListener('input', applyPersoneelFilter);
+  }
+
   // ----- Wire campus dropdown -----
   if (dataSelect) {
     dataSelect.addEventListener('change', function () {
@@ -324,8 +342,10 @@
     });
   }
 
-  // After full DOM (and MoonApi script) are ready, refresh campus dropdown
+  // After full DOM (and MoonApi script) are ready, bootstrap the page
   document.addEventListener('DOMContentLoaded', function () {
-    loadKampusDropdown();
+    loadKampusDropdown();       // populate modal class-kampus dropdown (existing)
+    loadPageKampusDropdown();   // populate #data-select + trigger first dashboard refresh
+    loadGebruikersLys();        // populate constant student + personeel right-panel lists
   });
 })();
