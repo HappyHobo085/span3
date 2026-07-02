@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 /// =========================
 /// Kampus DTO
@@ -295,12 +296,23 @@ class MoonApi {
       request.headers['Authorization'] = 'Bearer ${bearerToken!.trim()}';
     }
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',
-        file.path,
-      ),
-    );
+    final ext = file.path.split('.').last.toLowerCase();
+
+  String contentType = 'image/jpeg';
+
+  if (ext == 'png') {
+    contentType = 'image/png';
+  } else if (ext == 'webp') {
+    contentType = 'image/webp';
+  }
+
+  request.files.add(
+    await http.MultipartFile.fromPath(
+      'file',
+      file.path,
+      contentType: MediaType.parse(contentType),
+    ),
+  );
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
