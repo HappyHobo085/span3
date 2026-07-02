@@ -43,12 +43,38 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _changePhoto() async {
+ Future<void> _changePhoto() async {
+  final source = await showModalBottomSheet<ImageSource>(
+    context: context,
+    backgroundColor: kBg,
+    builder: (context) {
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: kAccent),
+              title: Text('Neem foto', style: GoogleFonts.inter(color: kText1)),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: kAccent),
+              title: Text('Kies uit gallery', style: GoogleFonts.inter(color: kText1)),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+
+  if (source == null) return;
+
   try {
     final picker = ImagePicker();
 
     final picked = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 75,
     );
 
@@ -72,7 +98,13 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _loading = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Foto fout: $e')),
+      SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(
+          'Foto fout: $e',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 }

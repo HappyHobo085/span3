@@ -304,6 +304,8 @@ class MoonApi {
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
+    print('UPLOAD STATUS = ${response.statusCode}');
+    print('UPLOAD BODY = ${response.body}');
 
     final decoded = jsonDecode(response.body);
 
