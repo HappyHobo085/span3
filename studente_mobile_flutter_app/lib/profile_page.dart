@@ -176,7 +176,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(60),
                     child: Image.network(
-                      '${MoonApi.baseUrl}$fotoUrl',
+                      '${MoonApi.baseUrl}$fotoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
                       width: 110,
                       height: 110,
                       fit: BoxFit.cover,
