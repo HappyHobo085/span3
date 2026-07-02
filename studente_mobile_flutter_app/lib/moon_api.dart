@@ -340,6 +340,28 @@ class MoonApi {
     bearerToken = null;
     myProfile = null;
   }
+
+
+  static Future<Map<String, dynamic>> fetchDashboard() async {
+  final response = await http.get(
+    Uri.parse('$baseUrl/dashboard'),
+    headers: {
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    },
+  );
+
+  final decoded = jsonDecode(response.body);
+
+  if (response.statusCode != 200 || decoded['sukses'] != true) {
+    throw Exception(
+      decoded['fout'] ?? decoded['detail'] ?? 'Kon nie dashboard laai nie',
+    );
+  }
+
+  return Map<String, dynamic>.from(decoded['data']);
+  }
   
 }
 

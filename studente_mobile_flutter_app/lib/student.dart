@@ -66,88 +66,269 @@ class _HomePageState extends State<HomePage> {
 }
 
 // ─── Tuis (Home) tab ─────────────────────────────────────────────────────────
-class _TuisTab extends StatelessWidget {
+class _TuisTab extends StatefulWidget {
   const _TuisTab();
 
   @override
+  State<_TuisTab> createState() => _TuisTabState();
+}
+
+class _TuisTabState extends State<_TuisTab> {
+  bool _loading = true;
+  Map<String, dynamic>? _dashboard;
+  Map<String, dynamic>? _profile;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    try {
+      final profile = MoonApi.myProfile ?? await MoonApi.getMyProfile();
+      final dashboard = await MoonApi.fetchDashboard();
+
+      if (!mounted) return;
+
+      setState(() {
+        _profile = profile;
+        _dashboard = dashboard;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  String _formatTime(dynamic value) {
+    if (value == null) return 'Geen scan';
+
+    try {
+      final dt = DateTime.parse(value.toString());
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '$h:$m';
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Row(
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
+        ),
+      );
+    }
+
+    final naam = _profile?['naam']?.toString() ?? 'Student';
+    final kampusStatus = _dashboard?['kampus_status']?.toString() ?? 'ONBEKEND';
+
+    final opKampus = kampusStatus == 'OP_KAMPUS';
+
+    final laasteKampus = _dashboard?['laaste_kampus'];
+    final laasteKlas = _dashboard?['laaste_klas'];
+
+    return RefreshIndicator(
+      onRefresh: _loadDashboard,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  const Icon(Icons.waving_hand_rounded, color: kAccent, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Welkom, $naam',
+                      style: GoogleFonts.inter(
+                        color: kText1,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: opKampus
+                    ? Colors.green.withOpacity(0.16)
+                    : Colors.red.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: opKampus ? Colors.green : Colors.red,
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    opKampus ? Icons.check_circle : Icons.cancel,
+                    color: opKampus ? Colors.green : Colors.red,
+                    size: 46,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    opKampus ? 'OP KAMPUS' : 'NIE OP KAMPUS',
+                    style: GoogleFonts.inter(
+                      color: opKampus ? Colors.green : Colors.red,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            _DashboardInfoCard(
+              title: 'LAASTE KAMPUS SCAN',
+              icon: Icons.location_on_outlined,
+              mainText: laasteKampus == null
+                  ? 'Geen kampus scan'
+                  : laasteKampus['lokasie']?.toString() ?? 'Onbekend',
+              subText: laasteKampus == null
+                  ? 'Nog geen IN/UIT scan nie'
+                  : '${laasteKampus['rigting']} · ${_formatTime(laasteKampus['tyd'])}',
+            ),
+
+            const SizedBox(height: 12),
+
+            _DashboardInfoCard(
+              title: 'LAASTE KLAS SCAN',
+              icon: Icons.school_outlined,
+              mainText: laasteKlas == null
+                  ? 'Geen klas scan'
+                  : laasteKlas['lokasie']?.toString() ?? 'Onbekend',
+              subText: laasteKlas == null
+                  ? 'Nog geen klas NFC scan nie'
+                  : '${_formatTime(laasteKlas['tyd'])}',
+            ),
+
+            const SizedBox(height: 16),
+
+            Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tuis',
-                        style: GoogleFonts.inter(
-                          color: kText1,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
+                  child: GradientActionButton(
+                  label: 'Wys QR',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LeftEmptyPage(),
+                      ),
+                    );
+                  },
+                  height: 50,
+                ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GradientActionButton(
+                  label: 'Scan Klas',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RightEmptyPage(
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Student',
-                        style: GoogleFonts.inter(
-                          color: kTextMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                    );
+                  },
+                  height: 50,
+                ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardInfoCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String mainText;
+  final String subText;
+
+  const _DashboardInfoCard({
+    required this.title,
+    required this.icon,
+    required this.mainText,
+    required this.subText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(icon, color: kAccent, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
                   ),
                 ),
-                // Notification icon
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: kSurface1,
-                    border: Border.all(color: kBorder, width: 1.5),
-                    borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 6),
+                Text(
+                  mainText,
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: kTextMuted,
-                    size: 18,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subText,
+                  style: GoogleFonts.inter(
+                    color: kText2,
+                    fontSize: 12,
                   ),
                 ),
               ],
             ),
           ),
-
-          // ── Stat cards row ────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(child: _StatCard(
-                label: 'KAMPUSSE',
-                value: '3',
-                valueColor: kText1,
-                badge: '♦ Aktief',
-                badgeColor: kSuccess,
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: _StatCard(
-                label: 'AANWESIG',
-                value: '94%',
-                valueColor: kAccent2,
-                badge: '♦ Hierdie week',
-                badgeColor: kAccent2,
-              )),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Volgende Klas card ────────────────────────────────────────
-          _NextClassCard(),
         ],
       ),
     );
