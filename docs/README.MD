@@ -1,1 +1,0 @@
-Vouer waarin weeklikse spanvergaderings se agendas en notules gestoor gaan word.
