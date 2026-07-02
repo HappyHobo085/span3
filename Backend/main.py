@@ -1184,9 +1184,16 @@ async def upload_my_profile_photo(
 
     foto_url = f"/uploads/profile_photos/{filename}"
 
-    current_user.GEB_Profiel_Foto = foto_url
+    gebruiker = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    if not gebruiker:
+        raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
+
+    gebruiker.GEB_Profiel_Foto = foto_url
     db.commit()
-    db.refresh(current_user)
+    db.refresh(gebruiker)
 
     return {
         "sukses": True,
