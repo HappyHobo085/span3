@@ -1,12 +1,15 @@
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, status, Request, UploadFile, File
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 import uuid
+import os
+
 from typing import List, Optional, Any
 
 from models import Gebruikers, Student, Lokasie, ToegangsLogs
@@ -20,6 +23,15 @@ app = FastAPI(
     title="MOON Admin API",
     description="Louis se Admin API vir die MOON projek.",
     version="1.0.0"
+)
+
+UPLOAD_DIR = "uploads/profile_photos"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory="uploads"),
+    name="uploads",
 )
 
 # --- STANDAARD RESPONSE MIDDLEWARE & EXCEPTION HANDLERS ---
@@ -1095,6 +1107,9 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
             "tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
         },
     }
+    
+    
+    
 
 
 @app.get("/me")
@@ -1144,6 +1159,42 @@ def kry_my_profiel(
             "kampus": None,
         },
     }
+    
+@app.post("/me/foto")
+async def upload_my_profile_photo(
+    file: UploadFile = File(...),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Slegs beeldlêers word toegelaat")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="Ongeldige foto formaat")
+
+    filename = f"user_{current_user.Gebruiker_ID}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    contents = await file.read()
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    foto_url = f"/uploads/profile_photos/{filename}"
+
+    current_user.GEB_Profiel_Foto = foto_url
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "sukses": True,
+        "data": {
+            "foto_url": foto_url,
+        },
+}
+    
     
     
 @app.get("/lokasies/uid/{uid}")

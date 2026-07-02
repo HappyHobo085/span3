@@ -175,14 +175,23 @@ class _ProfilePageState extends State<ProfilePage> {
 
           const SizedBox(height: 16),
 
-          GradientActionButton(
-            label: 'Verander Foto',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Foto upload kom volgende')),
-              );
-            },
-            height: 48,
+          GlassCard(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.camera_alt_outlined, color: kTextMuted, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Foto upload kom later',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 12),
