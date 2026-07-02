@@ -54,6 +54,34 @@ class LokasieDto {
   }
 }
 
+class StudentSearchDto {
+  final int gebruikerId;
+  final String studentNommer;
+  final String naam;
+  final String van;
+  final String? fotoUrl;
+
+  StudentSearchDto({
+    required this.gebruikerId,
+    required this.studentNommer,
+    required this.naam,
+    required this.van,
+    this.fotoUrl,
+  });
+
+  factory StudentSearchDto.fromJson(Map<String, dynamic> json) {
+    return StudentSearchDto(
+      gebruikerId: json['gebruiker_id'] as int,
+      studentNommer: json['student_nommer']?.toString() ?? '',
+      naam: json['naam']?.toString() ?? '',
+      van: json['van']?.toString() ?? '',
+      fotoUrl: json['foto_url']?.toString(),
+    );
+  }
+
+  String get fullName => '$naam $van';
+}
+
 /// =========================
 /// Moon API
 /// =========================
@@ -213,6 +241,38 @@ class MoonApi {
         .map((e) => LokasieDto.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
+
+
+  static Future<List<StudentSearchDto>> searchStudents(String query) async {
+  final clean = query.trim();
+
+  if (clean.length < 2) return [];
+
+  final response = await http.get(
+    Uri.parse('$baseUrl/studente/search?q=${Uri.encodeQueryComponent(clean)}'),
+    headers: {
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    },
+  );
+
+  final decoded = jsonDecode(response.body);
+
+  if (response.statusCode != 200 || decoded['sukses'] != true) {
+    throw Exception(
+      decoded['fout'] ?? decoded['detail'] ?? 'Kon nie studente soek nie',
+    );
+  }
+
+  final raw = decoded['data'];
+
+  if (raw == null) return [];
+
+  return (raw as List)
+      .map((e) => StudentSearchDto.fromJson(Map<String, dynamic>.from(e)))
+      .toList();
+}
 
   /// -------------------------
   /// Wagte Student Scan

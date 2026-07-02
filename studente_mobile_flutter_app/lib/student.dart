@@ -482,7 +482,9 @@ class _SaamryTabState extends State<_SaamryTab> {
     if (result == null) return;
 
     setState(() {
-      _pendingRequests.add(result);
+      if (!_pendingRequests.contains(result)) {
+        _pendingRequests.add(result);
+      }
     });
 
     _placeholder('Friend request gestuur na $result');
@@ -618,6 +620,52 @@ class _SaamryTabState extends State<_SaamryTab> {
                     value: _passengers.length.toString(),
                   ),
 
+                  if (_passengers.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'PASSENGERS',
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Column(
+                      children: _passengers
+                          .map(
+                            (name) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person, color: kAccent, size: 22),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: GoogleFonts.inter(
+                                        color: kText1,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Genooi',
+                                    style: GoogleFonts.inter(
+                                      color: kTextMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+
                   const SizedBox(height: 18),
 
                   GradientActionButton(
@@ -654,13 +702,99 @@ class _SaamryTabState extends State<_SaamryTab> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Geen friends nog nie',
-                  style: GoogleFonts.inter(
-                    color: kText2,
-                    fontSize: 13,
+
+                if (_friends.isEmpty)
+                  Text(
+                    'Geen friends nog nie',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 13,
+                    ),
+                  )
+                else
+                  Column(
+                    children: _friends
+                        .map(
+                          (friend) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.person, color: kAccent, size: 24),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    friend,
+                                    style: GoogleFonts.inter(
+                                      color: kText1,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
-                ),
+
+                  if (_pendingRequests.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'PENDING REQUESTS',
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Column(
+                      children: _pendingRequests
+                          .map(
+                            (friend) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule, color: kTextMuted, size: 22),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      friend,
+                                      style: GoogleFonts.inter(
+                                        color: kText2,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _pendingRequests.remove(friend);
+                                        if (!_friends.contains(friend)) {
+                                          _friends.add(friend);
+                                        }
+                                      });
+                                    },
+                                    child: const Text('Demo Accept'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  OutlineActionButton(
+                    label: 'Add Friend',
+                    onTap: _openAddFriendPage,
+                    height: 46,
+                  ),
                 const SizedBox(height: 16),
                 OutlineActionButton(
                   label: 'Add Friend',
@@ -1194,15 +1328,64 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
 }
 
 
-class AddFriendPage extends StatelessWidget {
+class AddFriendPage extends StatefulWidget {
   const AddFriendPage({super.key});
 
-  static const List<String> demoStudents = [
-    'Louis van Wyk',
-    'Stefan Nel',
-    'Jacques Smith',
-    'Anke Botha',
-  ];
+  @override
+  State<AddFriendPage> createState() => _AddFriendPageState();
+}
+
+class _AddFriendPageState extends State<AddFriendPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  bool _loading = false;
+  String? _error;
+  List<StudentSearchDto> _results = [];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _searchController.text.trim();
+
+    if (query.length < 2) {
+      setState(() {
+        _results = [];
+        _error = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await MoonApi.searchStudents(query);
+
+      if (!mounted) return;
+
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  void _sendRequest(StudentSearchDto student) {
+    Navigator.pop(context, student.fullName);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1216,39 +1399,127 @@ class AddFriendPage extends StatelessWidget {
               subtitle: 'Soek student',
               showBack: true,
             ),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: demoStudents.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final name = demoStudents[index];
 
-                  return GlassCard(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person, color: kAccent, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GlassInput(
+                controller: _searchController,
+                hintText: 'Soek naam, van of studentenommer',
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: kTextMuted,
+                  size: 18,
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GradientActionButton(
+                label: 'Soek',
+                onTap: _search,
+                height: 46,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
                           child: Text(
-                            name,
+                            _error!,
                             style: GoogleFonts.inter(
-                              color: kText1,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                              color: Colors.red,
+                              fontSize: 13,
                             ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, name),
-                          child: const Text('Add'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                        )
+                      : _results.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Geen studente gevind nie',
+                                style: GoogleFonts.inter(
+                                  color: kTextMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _results.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final student = _results[index];
+
+                                return GlassCard(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      if ((student.fotoUrl ?? '').isNotEmpty)
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          child: Image.network(
+                                            '${MoonApi.baseUrl}${student.fotoUrl}?v=${DateTime.now().millisecondsSinceEpoch}',
+                                            width: 44,
+                                            height: 44,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.person,
+                                              color: kTextMuted,
+                                              size: 34,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        const Icon(
+                                          Icons.person,
+                                          color: kTextMuted,
+                                          size: 40,
+                                        ),
+
+                                      const SizedBox(width: 12),
+
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              student.fullName,
+                                              style: GoogleFonts.inter(
+                                                color: kText1,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              student.studentNommer,
+                                              style: GoogleFonts.inter(
+                                                color: kTextMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      TextButton(
+                                        onPressed: () =>
+                                            _sendRequest(student),
+                                        child: const Text('Add'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
             ),
           ],
         ),
@@ -1256,7 +1527,6 @@ class AddFriendPage extends StatelessWidget {
     );
   }
 }
-
 class InviteFriendPage extends StatelessWidget {
   final List<String> friends;
 
