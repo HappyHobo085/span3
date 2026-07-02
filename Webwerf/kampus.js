@@ -169,6 +169,43 @@
     renderUserList(document.getElementById('dash-personeel-out-list'), personeelOut);
   }
 
+  /**
+   * Load campuses from GET /kampusse into the page-level #data-select dropdown.
+   * After loading, auto-selects the first campus and triggers the first dashboard refresh.
+   */
+  async function loadPageKampusDropdown() {
+    if (!dataSelect || !window.MoonApi) return;
+
+    var json = await window.MoonApi.fetchKampusse();
+
+    if (!json || !json.sukses || !Array.isArray(json.data)) return;
+
+    dataSelect.innerHTML = '';
+    json.data.forEach(function (k) {
+      var opt = document.createElement('option');
+      opt.value = String(k.Kampus_ID);
+      opt.textContent = k.KAM_Naam;
+      dataSelect.appendChild(opt);
+    });
+
+    if (json.data.length > 0) {
+      currentKampusId = json.data[0].Kampus_ID;
+      refreshDashboard(currentKampusId);
+      startPolling(currentKampusId);
+    }
+  }
+
+  /**
+   * Start a 30-second polling interval for the given campus ID.
+   * Clears any existing interval first so only one is active at a time.
+   */
+  function startPolling(kampusId) {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(function () {
+      refreshDashboard(currentKampusId);
+    }, 30000);
+  }
+
   /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
@@ -251,6 +288,15 @@
   // ----- Wire list filter -----
   if (listSearch) {
     listSearch.addEventListener('input', applyListFilter);
+  }
+
+  // ----- Wire campus dropdown -----
+  if (dataSelect) {
+    dataSelect.addEventListener('change', function () {
+      currentKampusId = Number(dataSelect.value);
+      refreshDashboard(currentKampusId);
+      startPolling(currentKampusId);
+    });
   }
 
   // ----- Modal open / close -----
