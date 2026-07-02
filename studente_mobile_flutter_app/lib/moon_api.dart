@@ -335,6 +335,11 @@ class MoonApi {
 
     return fotoUrl;
   }
+
+  static void logout() {
+    bearerToken = null;
+    myProfile = null;
+  }
   
 }
 

@@ -4,6 +4,7 @@ import 'app_shared.dart';
 import 'moon_api.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'main.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -254,9 +255,14 @@ class _ProfilePageState extends State<ProfilePage> {
           OutlineActionButton(
             label: 'Logout',
             onTap: () {
-              MoonApi.bearerToken = null;
-              MoonApi.myProfile = null;
-              Navigator.popUntil(context, (route) => route.isFirst);
+              MoonApi.logout();
+
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => const LoginPage(),
+                ),
+                (route) => false,
+              );
             },
             height: 48,
           ),
