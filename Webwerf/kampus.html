@@ -36,21 +36,26 @@
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
-          <div class="card">Totale gebruikers</div>
-          <div class="card">Aktiewe sessies</div>
-          <div class="card mock-circle-card">
-            <div class="mock-circle" aria-label="Mock circle diagram"></div>
+          <div class="card" id="dash-student-in-count">Studente ingeklokt: --</div>
+          <div class="card" id="dash-personeel-in-count">Personeel ingeklokt: --</div>
+          <div class="card" id="dash-student-out-count">Studente uitgeklokt: --</div>
+          <div class="card" id="dash-personeel-out-count">Personeel uitgeklokt: --</div>
+          <div class="card wide" id="dash-student-in-card">
+            <strong>Studente tans op kampus</strong>
+            <ul id="dash-student-in-list" style="margin:6px 0 0;padding-left:16px;font-weight:normal"></ul>
           </div>
-          <div class="card mock-graph-card" aria-label="Mock graph">
-            <div class="mock-graph">
-              <span class="bar bar-1"></span>
-              <span class="bar bar-2"></span>
-              <span class="bar bar-3"></span>
-              <span class="bar bar-4"></span>
-              <span class="bar bar-5"></span>
-            </div>
+          <div class="card wide" id="dash-student-out-card">
+            <strong>Studente nie op kampus</strong>
+            <ul id="dash-student-out-list" style="margin:6px 0 0;padding-left:16px;font-weight:normal"></ul>
           </div>
-          <div class="card wide">Toegang oorsig</div>
+          <div class="card wide" id="dash-personeel-in-card">
+            <strong>Personeel tans op kampus</strong>
+            <ul id="dash-personeel-in-list" style="margin:6px 0 0;padding-left:16px;font-weight:normal"></ul>
+          </div>
+          <div class="card wide" id="dash-personeel-out-card">
+            <strong>Personeel nie op kampus</strong>
+            <ul id="dash-personeel-out-list" style="margin:6px 0 0;padding-left:16px;font-weight:normal"></ul>
+          </div>
         </div>
       </article>
 
