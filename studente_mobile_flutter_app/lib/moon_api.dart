@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 /// =========================
@@ -285,7 +286,42 @@ class MoonApi {
     return myProfile?['student_nommer']?.toString();
   }
 
+  static Future<String> uploadMyProfilePhoto(File file) async {
+    final uri = Uri.parse('$baseUrl/me/foto');
 
+    final request = http.MultipartRequest('POST', uri);
+
+    if (bearerToken != null && bearerToken!.trim().isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer ${bearerToken!.trim()}';
+    }
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+      ),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Foto upload het misluk',
+      );
+    }
+
+    final fotoUrl = decoded['data']['foto_url'].toString();
+
+    if (myProfile != null) {
+      myProfile!['foto_url'] = fotoUrl;
+    }
+
+    return fotoUrl;
+  }
+  
 }
 
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -40,6 +42,40 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     }
   }
+
+  Future<void> _changePhoto() async {
+  try {
+    final picker = ImagePicker();
+
+    final picked = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 75,
+    );
+
+    if (picked == null) return;
+
+    setState(() => _loading = true);
+
+    await MoonApi.uploadMyProfilePhoto(File(picked.path));
+
+    final refreshed = await MoonApi.getMyProfile();
+
+    if (!mounted) return;
+
+    setState(() {
+      _profile = refreshed;
+      _loading = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() => _loading = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Foto fout: $e')),
+    );
+  }
+}
 
   String _displayNumber(Map<String, dynamic> p) {
     return p['student_nommer']?.toString() ??
@@ -175,23 +211,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
           const SizedBox(height: 16),
 
-          GlassCard(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.camera_alt_outlined, color: kTextMuted, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Foto upload kom later',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+          GradientActionButton(
+            label: 'Verander Foto',
+            onTap: _changePhoto,
+            height: 48,
           ),
 
           const SizedBox(height: 12),
