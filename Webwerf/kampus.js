@@ -51,6 +51,67 @@
     });
   }
 
+  /**
+   * Fetch all gebruikers once and populate the constant right-panel lists.
+   * Students → #data-list. Personeel → #personeel-list.
+   * Never called again after initial page load.
+   */
+  async function loadGebruikersLys() {
+    if (!window.MoonApi) return;
+
+    var json = await window.MoonApi.fetchGebruikers();
+
+    if (!json || !json.sukses || !Array.isArray(json.data)) {
+      if (dataList) {
+        dataList.innerHTML = '<li>Kon nie gebruikers laai nie.</li>';
+      }
+      return;
+    }
+
+    var students = json.data.filter(function (g) {
+      return g.Rol_Naam === 'Student';
+    });
+
+    var personeel = json.data.filter(function (g) {
+      return g.Rol_Naam === 'Personeel';
+    });
+
+    // Render student list
+    if (dataList) {
+      dataList.innerHTML = '';
+      dataList.classList.remove('empty-list');
+      if (students.length === 0) {
+        dataList.innerHTML = '<li>Geen studente nie</li>';
+      } else {
+        students.forEach(function (g) {
+          var li = document.createElement('li');
+          var label = (g.GEB_Naam || '') + ' ' + (g.GEB_Van || '');
+          if (g.STU_Nommer) label += ' (' + g.STU_Nommer + ')';
+          li.textContent = label;
+          dataList.appendChild(li);
+        });
+      }
+    }
+
+    // Render personeel list
+    var personeelList = document.getElementById('personeel-list');
+    if (personeelList) {
+      personeelList.innerHTML = '';
+      personeelList.classList.remove('empty-list');
+      if (personeel.length === 0) {
+        personeelList.innerHTML = '<li>Geen personeel nie</li>';
+      } else {
+        personeel.forEach(function (g) {
+          var li = document.createElement('li');
+          var label = (g.GEB_Naam || '') + ' ' + (g.GEB_Van || '');
+          if (g.PER_Nommer) label += ' (' + g.PER_Nommer + ')';
+          li.textContent = label;
+          personeelList.appendChild(li);
+        });
+      }
+    }
+  }
+
   /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
