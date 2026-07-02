@@ -1202,6 +1202,66 @@ async def upload_my_profile_photo(
         },
     }
     
+@app.get("/dashboard")
+def kry_my_dashboard(
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    rol = db.query(models.Rolle).filter(
+        models.Rolle.Rol_ID == current_user.Rol_ID
+    ).first()
+
+    laaste_kampus_log = db.query(models.ToegangsLogs).filter(
+        models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
+        models.ToegangsLogs.TOE_Metode == "QR",
+    ).order_by(
+        models.ToegangsLogs.TOE_Tydstempel.desc()
+    ).first()
+
+    laaste_klas_log = db.query(models.ToegangsLogs).filter(
+        models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
+        models.ToegangsLogs.TOE_Metode == "NFC",
+    ).order_by(
+        models.ToegangsLogs.TOE_Tydstempel.desc()
+    ).first()
+
+    def log_to_dict(log):
+        if not log:
+            return None
+
+        lokasie = db.query(models.Lokasie).filter(
+            models.Lokasie.Lokasie_ID == log.Lokasie_ID
+        ).first()
+
+        return {
+            "log_id": log.Log_ID,
+            "lokasie_id": log.Lokasie_ID,
+            "lokasie": lokasie.LOK_Naam if lokasie else "Onbekend",
+            "rigting": log.TOE_Rigting,
+            "metode": log.TOE_Metode,
+            "tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
+        }
+
+    kampus_status = "ONBEKEND"
+
+    if laaste_kampus_log:
+        if laaste_kampus_log.TOE_Rigting == "IN":
+            kampus_status = "OP_KAMPUS"
+        elif laaste_kampus_log.TOE_Rigting == "UIT":
+            kampus_status = "NIE_OP_KAMPUS"
+
+    return {
+        "sukses": True,
+        "data": {
+            "gebruiker_id": current_user.Gebruiker_ID,
+            "naam": current_user.GEB_Naam,
+            "van": current_user.GEB_Van,
+            "rol": rol.ROL_Naam if rol else "Onbekend",
+            "kampus_status": kampus_status,
+            "laaste_kampus": log_to_dict(laaste_kampus_log),
+            "laaste_klas": log_to_dict(laaste_klas_log),
+        },
+    }
     
     
 @app.get("/lokasies/uid/{uid}")
