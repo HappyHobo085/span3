@@ -1166,13 +1166,13 @@ async def upload_my_profile_photo(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Slegs beeldlêers word toegelaat")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Slegs foto lêers word toegelaat")
 
     ext = os.path.splitext(file.filename)[1].lower()
 
     if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
-        raise HTTPException(status_code=400, detail="Ongeldige foto formaat")
+        raise HTTPException(status_code=400, detail="Gebruik JPG, PNG of WEBP")
 
     filename = f"user_{current_user.Gebruiker_ID}{ext}"
     file_path = os.path.join(UPLOAD_DIR, filename)
@@ -1193,7 +1193,7 @@ async def upload_my_profile_photo(
         "data": {
             "foto_url": foto_url,
         },
-}
+    }
     
     
     
