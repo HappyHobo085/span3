@@ -50,7 +50,7 @@ class _HomePageState extends State<HomePage> {
               child: _selectedIndex == 0
                   ? const _TuisTab()
                   : _selectedIndex == 2
-                      ? const _RoosterTab()
+                      ? const _SaamryTab()
                       : const _ProfielTab(),
             ),
           ],
@@ -439,16 +439,292 @@ class _NextClassCard extends StatelessWidget {
 }
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
-class _RoosterTab extends StatelessWidget {
-  const _RoosterTab();
+class _SaamryTab extends StatefulWidget {
+  const _SaamryTab();
+
+  @override
+  State<_SaamryTab> createState() => _SaamryTabState();
+}
+
+class _SaamryTabState extends State<_SaamryTab> {
+  bool _groepAktief = false;
+
+  final List<String> _friends = [];
+  final List<String> _pendingRequests = [];
+  final List<String> _passengers = [];
+
+  void _createGroep() {
+    setState(() {
+      _groepAktief = true;
+    });
+  }
+
+  void _sluitGroep() {
+    setState(() {
+      _groepAktief = false;
+    });
+  }
+
+  void _placeholder(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _openAddFriendPage() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AddFriendPage(),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      _pendingRequests.add(result);
+    });
+
+    _placeholder('Friend request gestuur na $result');
+  }
+
+  void _openInviteFriendPage() async {
+    if (_friends.isEmpty) {
+      _placeholder('Jy het nog geen friends om te invite nie');
+      return;
+    }
+
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InviteFriendPage(friends: _friends),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      if (!_passengers.contains(result)) {
+        _passengers.add(result);
+      }
+    });
+
+    _placeholder('$result is genooi');
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Rooster',
-        style: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Saamry',
+            style: GoogleFonts.inter(
+              color: kText1,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Skep ’n groep en nooi friends om saam te ry.',
+            style: GoogleFonts.inter(
+              color: kTextMuted,
+              fontSize: 12,
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          if (!_groepAktief)
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.directions_car_rounded,
+                    color: kAccent,
+                    size: 44,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Geen aktiewe saamry groep nie',
+                    style: GoogleFonts.inter(
+                      color: kText1,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Klik Create Groep as jy die driver is.',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GradientActionButton(
+                    label: 'Create Groep',
+                    onTap: _createGroep,
+                    height: 50,
+                  ),
+                ],
+              ),
+            )
+          else
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle,
+                        color: kSuccess,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'My Saamry Groep',
+                        style: GoogleFonts.inter(
+                          color: kText1,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _SaamryInfoRow(
+                    label: 'Status',
+                    value: 'Aktief',
+                    valueColor: kSuccess,
+                  ),
+                  const _SaamryDivider(),
+                  const _SaamryInfoRow(
+                    label: 'Driver',
+                    value: 'Jy',
+                  ),
+                  const _SaamryDivider(),
+                  _SaamryInfoRow(
+                    label: 'Lede',
+                    value: _passengers.length.toString(),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  GradientActionButton(
+                    label: 'Invite Friend',
+                    onTap: _openInviteFriendPage,
+                    height: 48,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  OutlineActionButton(
+                    label: 'Sluit Groep',
+                    onTap: _sluitGroep,
+                    height: 48,
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 16),
+
+          GlassCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'FRIENDS',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Geen friends nog nie',
+                  style: GoogleFonts.inter(
+                    color: kText2,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                OutlineActionButton(
+                  label: 'Add Friend',
+                  onTap: _openAddFriendPage,
+                  height: 46,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _SaamryInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _SaamryInfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: valueColor ?? kText1,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SaamryDivider extends StatelessWidget {
+  const _SaamryDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      color: Color(0x0AFFFFFF),
+      height: 1,
     );
   }
 }
@@ -477,7 +753,7 @@ class _StudentNavBar extends StatelessWidget {
     const items = [
       _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
       _NavItem(icon: Icons.nfc_rounded, label: 'Skandeer'),
-      _NavItem(icon: Icons.calendar_today_rounded, label: 'Rooster'),
+      _NavItem(icon: Icons.directions_car_rounded, label: 'Saamry'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
@@ -908,6 +1184,131 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class AddFriendPage extends StatelessWidget {
+  const AddFriendPage({super.key});
+
+  static const List<String> demoStudents = [
+    'Louis van Wyk',
+    'Stefan Nel',
+    'Jacques Smith',
+    'Anke Botha',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Add Friend',
+              subtitle: 'Soek student',
+              showBack: true,
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: demoStudents.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final name = demoStudents[index];
+
+                  return GlassCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person, color: kAccent, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, name),
+                          child: const Text('Add'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class InviteFriendPage extends StatelessWidget {
+  final List<String> friends;
+
+  const InviteFriendPage({
+    super.key,
+    required this.friends,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Invite Friend',
+              subtitle: 'Kies friend',
+              showBack: true,
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: friends.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final name = friends[index];
+
+                  return GlassCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_add_alt_1, color: kAccent, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, name),
+                          child: const Text('Invite'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],
