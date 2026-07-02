@@ -1263,6 +1263,53 @@ def kry_my_dashboard(
         },
     }
     
+@app.get("/studente/search")
+def soek_studente(
+    q: str = "",
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    search = q.strip()
+
+    if len(search) < 2:
+        return {
+            "sukses": True,
+            "data": [],
+        }
+
+    resultate = (
+        db.query(models.Student, models.Gebruikers)
+        .join(
+            models.Gebruikers,
+            models.Gebruikers.Gebruiker_ID == models.Student.Gebruiker_ID,
+        )
+        .filter(
+            models.Gebruikers.Is_Aktief == True,
+            or_(
+                models.Gebruikers.GEB_Naam.ilike(f"%{search}%"),
+                models.Gebruikers.GEB_Van.ilike(f"%{search}%"),
+                models.Student.STU_Nommer.ilike(f"%{search}%"),
+            ),
+        )
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "sukses": True,
+        "data": [
+            {
+                "gebruiker_id": gebruiker.Gebruiker_ID,
+                "student_nommer": student.STU_Nommer,
+                "naam": gebruiker.GEB_Naam,
+                "van": gebruiker.GEB_Van,
+                "foto_url": gebruiker.GEB_Profiel_Foto,
+            }
+            for student, gebruiker in resultate
+            if gebruiker.Gebruiker_ID != current_user.Gebruiker_ID
+        ],
+    }
+    
     
 @app.get("/lokasies/uid/{uid}")
 def kry_lokasie_deur_uid(
