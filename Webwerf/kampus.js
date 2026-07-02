@@ -112,6 +112,63 @@
     }
   }
 
+  /**
+   * Fetch live scan status for a specific campus and update dashboard cards.
+   * Does NOT touch the right-panel lists.
+   * Splits scanned_in / scanned_out by Rol_Naam to separate students from personeel.
+   */
+  async function refreshDashboard(kampusId) {
+    if (!kampusId || !window.MoonApi) return;
+
+    var json = await window.MoonApi.fetchKampusStatus(kampusId);
+
+    // Helper to reset counts to '--' on error
+    function resetCounts() {
+      ['dash-student-in-count', 'dash-student-out-count',
+       'dash-personeel-in-count', 'dash-personeel-out-count'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = el.textContent.replace(/: .*$/, ': --');
+      });
+    }
+
+    if (!json || !json.sukses || !json.data) {
+      resetCounts();
+      return;
+    }
+
+    var data = json.data;
+
+    var studentIn = (data.scanned_in || []).filter(function (u) {
+      return u.Rol_Naam === 'Student';
+    });
+    var studentOut = (data.scanned_out || []).filter(function (u) {
+      return u.Rol_Naam === 'Student';
+    });
+    var personeelIn = (data.scanned_in || []).filter(function (u) {
+      return u.Rol_Naam === 'Personeel';
+    });
+    var personeelOut = (data.scanned_out || []).filter(function (u) {
+      return u.Rol_Naam === 'Personeel';
+    });
+
+    // Update count cards
+    var stuInCount = document.getElementById('dash-student-in-count');
+    var stuOutCount = document.getElementById('dash-student-out-count');
+    var perInCount = document.getElementById('dash-personeel-in-count');
+    var perOutCount = document.getElementById('dash-personeel-out-count');
+
+    if (stuInCount) stuInCount.textContent = 'Studente ingeklokt: ' + studentIn.length;
+    if (stuOutCount) stuOutCount.textContent = 'Studente uitgeklokt: ' + studentOut.length;
+    if (perInCount) perInCount.textContent = 'Personeel ingeklokt: ' + personeelIn.length;
+    if (perOutCount) perOutCount.textContent = 'Personeel uitgeklokt: ' + personeelOut.length;
+
+    // Update lists
+    renderUserList(document.getElementById('dash-student-in-list'), studentIn);
+    renderUserList(document.getElementById('dash-student-out-list'), studentOut);
+    renderUserList(document.getElementById('dash-personeel-in-list'), personeelIn);
+    renderUserList(document.getElementById('dash-personeel-out-list'), personeelOut);
+  }
+
   /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
