@@ -257,10 +257,8 @@ class _ProfilePageState extends State<ProfilePage> {
             onTap: () {
               MoonApi.logout();
 
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const LoginPage(),
-                ),
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginPage()),
                 (route) => false,
               );
             },
