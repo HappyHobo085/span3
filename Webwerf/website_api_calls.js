@@ -136,6 +136,7 @@ const API_BASE_URL =
     /**
      * GET /kampusse/status
      * Returns summary scan counts for all campuses. No auth required.
+     * Reserved for future use (e.g. a multi-campus overview dashboard).
      */
     fetchKampusseStatus: async function () {
       const r = await apiRequest('/kampusse/status', {

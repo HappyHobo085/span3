@@ -65,6 +65,10 @@
       if (dataList) {
         dataList.innerHTML = '<li>Kon nie gebruikers laai nie.</li>';
       }
+      var personeelListErr = document.getElementById('personeel-list');
+      if (personeelListErr) {
+        personeelListErr.innerHTML = '<li>Kon nie personeel laai nie.</li>';
+      }
       return;
     }
 
@@ -191,7 +195,7 @@
     if (json.data.length > 0) {
       currentKampusId = json.data[0].Kampus_ID;
       refreshDashboard(currentKampusId);
-      startPolling(currentKampusId);
+      startPolling();
     }
   }
 
@@ -199,7 +203,7 @@
    * Start a 30-second polling interval for the given campus ID.
    * Clears any existing interval first so only one is active at a time.
    */
-  function startPolling(kampusId) {
+  function startPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(function () {
       refreshDashboard(currentKampusId);
@@ -313,7 +317,7 @@
     dataSelect.addEventListener('change', function () {
       currentKampusId = Number(dataSelect.value);
       refreshDashboard(currentKampusId);
-      startPolling(currentKampusId);
+      startPolling();
     });
   }
 
