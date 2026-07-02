@@ -238,7 +238,7 @@ class _TuisTabState extends State<_TuisTab> {
               children: [
                 Expanded(
                   child: GradientActionButton(
-                  label: 'Wys QR',
+                    label: 'Wys QR',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -247,13 +247,13 @@ class _TuisTabState extends State<_TuisTab> {
                       ),
                     );
                   },
-                  height: 50,
-                ),
+                    height: 50,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: GradientActionButton(
-                  label: 'Scan Klas',
+                    label: 'Scan Klas',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -263,8 +263,8 @@ class _TuisTabState extends State<_TuisTab> {
                       ),
                     );
                   },
-                  height: 50,
-                ),
+                    height: 50,
+                  ),
                 ),
               ],
             ),
@@ -335,110 +335,7 @@ class _DashboardInfoCard extends StatelessWidget {
   }
 }
 
-// ─── Stat card ───────────────────────────────────────────────────────────────
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  final String badge;
-  final Color badgeColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-    required this.badge,
-    required this.badgeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: kGlassDecoration(radius: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: kTextMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              color: valueColor,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            badge,
-            style: GoogleFonts.inter(
-              color: badgeColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Next class card ─────────────────────────────────────────────────────────
-class _NextClassCard extends StatelessWidget {
-  const _NextClassCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      decoration: kGlassDecoration(radius: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'VOLGENDE KLAS',
-            style: GoogleFonts.inter(
-              color: kTextMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Wiskunde 301',
-            style: GoogleFonts.inter(
-              color: kText1,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Lokaal B204 · 10:30',
-            style: GoogleFonts.inter(
-              color: kText2,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Placeholder tabs ─────────────────────────────────────────────────────────
+// ─── Saamry tab ─────────────────────────────────────────────────────────────────
 class _SaamryTab extends StatefulWidget {
   const _SaamryTab();
 
@@ -795,12 +692,6 @@ class _SaamryTabState extends State<_SaamryTab> {
                     onTap: _openAddFriendPage,
                     height: 46,
                   ),
-                const SizedBox(height: 16),
-                OutlineActionButton(
-                  label: 'Add Friend',
-                  onTap: _openAddFriendPage,
-                  height: 46,
-                ),
               ],
             ),
           ),
