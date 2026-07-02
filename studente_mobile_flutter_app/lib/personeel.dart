@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
+import 'profile_page.dart';
 
 class PersoneelHomePage extends StatefulWidget {
   const PersoneelHomePage({super.key});
@@ -240,10 +241,7 @@ class _ProfielTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text('Profiel',
-          style: GoogleFonts.inter(color: kTextMuted, fontSize: 14)),
-    );
+    return const ProfilePage();
   }
 }
 

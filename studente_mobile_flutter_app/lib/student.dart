@@ -5,6 +5,7 @@ import 'moon_api.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'profile_page.dart';
 
 // ─── Student Home — dashboard with bottom nav ────────────────────────────────
 class HomePage extends StatefulWidget {
@@ -276,12 +277,7 @@ class _ProfielTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Profiel',
-        style: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
-      ),
-    );
+    return const ProfilePage();
   }
 }
 
