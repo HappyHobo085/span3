@@ -25,6 +25,32 @@
   const classNfcTag = document.getElementById('class-nfc-tag');
   const dataSelect = document.getElementById('data-select');
 
+  // ----- Module state -----
+  var currentKampusId = null;
+  var pollingInterval = null;
+
+  /**
+   * Renders an array of user objects into a <ul> element.
+   * Each item shows "Naam Van" text.
+   * Shows a placeholder if the array is empty.
+   */
+  function renderUserList(ulElement, users) {
+    if (!ulElement) return;
+    ulElement.innerHTML = '';
+    if (!users || users.length === 0) {
+      var empty = document.createElement('li');
+      empty.textContent = 'Geen gebruikers nie';
+      empty.style.color = 'var(--text-2)';
+      ulElement.appendChild(empty);
+      return;
+    }
+    users.forEach(function (u) {
+      var li = document.createElement('li');
+      li.textContent = (u.GEB_Naam || '') + ' ' + (u.GEB_Van || '');
+      ulElement.appendChild(li);
+    });
+  }
+
   /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
