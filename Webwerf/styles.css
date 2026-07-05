@@ -88,6 +88,28 @@ body{
   box-shadow:0 0 32px rgba(123,97,255,0.18);
 }
 
+/* ─── User card (individual per-user card on kampus page) ───────────────── */
+.user-card{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px;
+  background:var(--surface-1);
+  border:1px solid var(--border);
+  border-radius:var(--r-md);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  box-shadow:0 0 24px rgba(123,97,255,0.08);
+  transition:border-color .2s,box-shadow .2s,transform .2s;
+}
+.user-card:hover{
+  border-color:var(--border-em);
+  box-shadow:0 0 32px rgba(123,97,255,0.18);
+  transform:translateY(-2px);
+}
+.user-card + .user-card{margin-top:10px}
+
+.user-card .admin-user-info{flex:1;min-width:0}
+.user-card .admin-user-name{font-size:14px;font-weight:600;color:var(--text-1)}
+.user-card .admin-user-email{font-size:11px;color:var(--text-muted);margin-top:3px}
+
 /* ─── Buttons ────────────────────────────────────────────────────────────── */
 .btn-primary{
   background:var(--gradient);border:none;border-radius:var(--r-sm);
@@ -312,11 +334,11 @@ body{
   text-transform:uppercase;letter-spacing:1px;
   padding:2px 8px;border-radius:4px;white-space:nowrap;
 }
-.role-badge--studente{background:rgba(0,194,255,0.15);color:#00c2ff}
-.role-badge--dosente{background:rgba(123,97,255,0.15);color:#7b61ff}
-.role-badge--hekwagter{background:rgba(245,158,11,0.15);color:#f59e0b}
-.role-badge--opsigter{background:rgba(16,185,129,0.15);color:#10b981}
-.role-badge--admin{background:rgba(239,68,68,0.15);color:#ef4444}
+.role-badge--studente,.role-badge--student{background:rgba(0,194,255,0.15);color:#00c2ff}
+.role-badge--dosente,.role-badge--personeel{background:rgba(123,97,255,0.15);color:#7b61ff}
+.role-badge--hekwagter,.role-badge--sekuriteitwag{background:rgba(245,158,11,0.15);color:#f59e0b}
+.role-badge--opsigter,.role-badge--kampusopsigter{background:rgba(16,185,129,0.15);color:#10b981}
+.role-badge--admin,.role-badge--administrateur{background:rgba(239,68,68,0.15);color:#ef4444}
 
 /* ─── Admin rows ────────────────────────────────────────────────────────── */
 .admin-user-row,.admin-venue-row{

@@ -11,7 +11,7 @@
 
   // Backend URL
 const API_BASE_URL =
-  localStorage.getItem('apiBaseUrl') || 'http://happyhobo-pc.tail251156.ts.net:8000';
+  localStorage.getItem('apiBaseUrl') || 'http://localhost:8000';
 
   /**
    * Generic API request helper

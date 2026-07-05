@@ -11,7 +11,7 @@
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');
 
-  const API_BASE_URL = 'http://happyhobo-pc.tail251156.ts.net:8000';
+  const API_BASE_URL = 'http://localhost:8000';
 
   const loginForm = document.getElementById('login-form');
 

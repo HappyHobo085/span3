@@ -30,24 +30,66 @@
   var pollingInterval = null;
 
   /**
-   * Renders an array of user objects into a <ul> element.
-   * Each item shows "Naam Van" text.
-   * Shows a placeholder if the array is empty.
+   * Creates an individual glass-card for a user.
+   * subtitle is shown under the name (e.g. student number or email).
+   * rolNaam is displayed as a role-badge.
    */
-  function renderUserList(ulElement, users) {
-    if (!ulElement) return;
-    ulElement.innerHTML = '';
+  function createUserCard(user, subtitle, rolNaam) {
+    var card = document.createElement('div');
+    card.className = 'user-card';
+    card.dataset.search = ((user.GEB_Naam || '') + ' ' + (user.GEB_Van || '') + ' ' + (subtitle || '')).toLowerCase();
+
+    var infoDiv = document.createElement('div');
+    infoDiv.className = 'admin-user-info';
+
+    var nameDiv = document.createElement('div');
+    nameDiv.className = 'admin-user-name';
+    nameDiv.textContent = (user.GEB_Naam || '') + ' ' + (user.GEB_Van || '');
+    infoDiv.appendChild(nameDiv);
+
+    var subDiv = document.createElement('div');
+    subDiv.className = 'admin-user-email';
+    subDiv.textContent = subtitle || '';
+    infoDiv.appendChild(subDiv);
+
+    card.appendChild(infoDiv);
+
+    if (rolNaam) {
+      var rolesDiv = document.createElement('div');
+      rolesDiv.className = 'admin-user-roles';
+      var badge = document.createElement('span');
+      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/[\s_]+/g, '');
+      badge.textContent = rolNaam;
+      rolesDiv.appendChild(badge);
+      card.appendChild(rolesDiv);
+    }
+
+    return card;
+  }
+
+  /**
+   * Renders an array of user objects into a container div as individual cards.
+   * Shows a placeholder card if the array is empty.
+   */
+  function renderUserList(container, users) {
+    if (!container) return;
+    container.innerHTML = '';
     if (!users || users.length === 0) {
-      var empty = document.createElement('li');
-      empty.textContent = 'Geen gebruikers nie';
-      empty.style.color = 'var(--text-2)';
-      ulElement.appendChild(empty);
+      var empty = document.createElement('div');
+      empty.className = 'user-card';
+      var info = document.createElement('div');
+      info.className = 'admin-user-info';
+      var msg = document.createElement('div');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen gebruikers nie';
+      info.appendChild(msg);
+      empty.appendChild(info);
+      container.appendChild(empty);
       return;
     }
     users.forEach(function (u) {
-      var li = document.createElement('li');
-      li.textContent = (u.GEB_Naam || '') + ' ' + (u.GEB_Van || '');
-      ulElement.appendChild(li);
+      var rolNaam = u.Rol_Naam || '';
+      container.appendChild(createUserCard(u, u.GEB_Epos || rolNaam, rolNaam));
     });
   }
 
@@ -63,11 +105,11 @@
 
     if (!json || !json.sukses || !Array.isArray(json.data)) {
       if (dataList) {
-        dataList.innerHTML = '<li>Kon nie gebruikers laai nie.</li>';
+        dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie gebruikers laai nie.</div></div></div>';
       }
       var personeelListErr = document.getElementById('personeel-list');
       if (personeelListErr) {
-        personeelListErr.innerHTML = '<li>Kon nie personeel laai nie.</li>';
+        personeelListErr.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie personeel laai nie.</div></div></div>';
       }
       return;
     }
@@ -83,16 +125,12 @@
     // Render student list
     if (dataList) {
       dataList.innerHTML = '';
-      dataList.classList.remove('empty-list');
       if (students.length === 0) {
-        dataList.innerHTML = '<li>Geen studente nie</li>';
+        dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Geen studente nie</div></div></div>';
       } else {
         students.forEach(function (g) {
-          var li = document.createElement('li');
-          var label = (g.GEB_Naam || '') + ' ' + (g.GEB_Van || '');
-          if (g.STU_Nommer) label += ' (' + g.STU_Nommer + ')';
-          li.textContent = label;
-          dataList.appendChild(li);
+          var subtitle = g.STU_Nommer || g.GEB_Epos || '';
+          dataList.appendChild(createUserCard(g, subtitle, 'Student'));
         });
       }
     }
@@ -101,16 +139,12 @@
     var personeelList = document.getElementById('personeel-list');
     if (personeelList) {
       personeelList.innerHTML = '';
-      personeelList.classList.remove('empty-list');
       if (personeel.length === 0) {
-        personeelList.innerHTML = '<li>Geen personeel nie</li>';
+        personeelList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Geen personeel nie</div></div></div>';
       } else {
         personeel.forEach(function (g) {
-          var li = document.createElement('li');
-          var label = (g.GEB_Naam || '') + ' ' + (g.GEB_Van || '');
-          if (g.PER_Nommer) label += ' (' + g.PER_Nommer + ')';
-          li.textContent = label;
-          personeelList.appendChild(li);
+          var subtitle = g.PER_Nommer || g.GEB_Epos || '';
+          personeelList.appendChild(createUserCard(g, subtitle, 'Personeel'));
         });
       }
     }
@@ -213,13 +247,12 @@
   /** Hide list rows that do not contain the search text. */
   function applyListFilter() {
     if (!listSearch || !dataList) return;
-    const query = listSearch.value.trim().toLowerCase();
-    const items = dataList.querySelectorAll('li');
+    var query = listSearch.value.trim().toLowerCase();
+    var rows = dataList.querySelectorAll('.user-card');
 
-    items.forEach(function (li) {
-      const text = (li.textContent || '').trim().toLowerCase();
-      const matches = query === '' || text.includes(query);
-      li.hidden = !matches;
+    rows.forEach(function (row) {
+      var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
+      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
     });
   }
 
@@ -229,10 +262,11 @@
     var personeelList = document.getElementById('personeel-list');
     if (!bottomSearch || !personeelList) return;
     var query = bottomSearch.value.trim().toLowerCase();
-    var items = personeelList.querySelectorAll('li');
-    items.forEach(function (li) {
-      var text = (li.textContent || '').trim().toLowerCase();
-      li.hidden = query !== '' && !text.includes(query);
+    var rows = personeelList.querySelectorAll('.user-card');
+
+    rows.forEach(function (row) {
+      var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
+      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
     });
   }
 
