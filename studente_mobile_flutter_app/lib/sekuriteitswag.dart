@@ -89,7 +89,14 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                         subtitle: 'OTP / Lisensie Foto',
                         icon: '👤',
                         borderColor: const Color(0x3300C2FF),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const VisitorVerifyPage(),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -466,6 +473,279 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class VisitorVerifyPage extends StatefulWidget {
+  const VisitorVerifyPage({super.key});
+
+  @override
+  State<VisitorVerifyPage> createState() => _VisitorVerifyPageState();
+}
+
+class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
+  final TextEditingController _otpController = TextEditingController();
+
+  bool _verified = false;
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _verifyOtp() {
+    if (_otpController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tik eers die OTP in')),
+      );
+      return;
+    }
+
+    setState(() {
+      _verified = true;
+    });
+  }
+
+  void _allowEntry() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.green,
+        content: Text(
+          'Visitor entry allowed',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  void _denyEntry() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.red,
+        content: Text(
+          'Visitor entry denied',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Visitor OTP',
+              subtitle: 'Verifieer besoeker',
+              showBack: true,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassCard(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'VERIFY OTP',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          GlassInput(
+                            controller: _otpController,
+                            hintText: 'Tik visitor OTP',
+                            keyboardType: TextInputType.number,
+                            prefixIcon: const Icon(
+                              Icons.password_rounded,
+                              color: kTextMuted,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          GradientActionButton(
+                            label: 'Verify OTP',
+                            onTap: _verifyOtp,
+                            height: 50,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (_verified) ...[
+                      const SizedBox(height: 18),
+
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.green,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.verified_rounded,
+                              color: Colors.green,
+                              size: 60,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Text(
+                              'VALID VISITOR',
+                              style: GoogleFonts.inter(
+                                color: Colors.green,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            Text(
+                              'John Smith',
+                              style: GoogleFonts.inter(
+                                color: kText1,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            Text(
+                              'Invited by Stef Nel',
+                              style: GoogleFonts.inter(
+                                color: kTextMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            GlassCard(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                children: [
+                                  _VisitorInfoRow(
+                                    label: 'Reason',
+                                    value: 'Meeting',
+                                  ),
+                                  const _VisitorDivider(),
+                                  _VisitorInfoRow(
+                                    label: 'OTP',
+                                    value: _otpController.text.trim(),
+                                  ),
+                                  const _VisitorDivider(),
+                                  const _VisitorInfoRow(
+                                    label: 'Status',
+                                    value: 'Waiting',
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GradientActionButton(
+                                    label: 'Allow Entry',
+                                    onTap: _allowEntry,
+                                    height: 48,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlineActionButton(
+                                    label: 'Deny',
+                                    onTap: _denyEntry,
+                                    height: 48,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VisitorInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _VisitorInfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: kText1,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisitorDivider extends StatelessWidget {
+  const _VisitorDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      color: Color(0x0AFFFFFF),
+      height: 1,
     );
   }
 }
