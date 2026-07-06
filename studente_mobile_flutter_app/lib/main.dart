@@ -200,7 +200,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   GlassInput(
                     controller: _usernameController,
-                    hintText: 'Gebruikersnaam / Studentenommer',
+                    hintText: 'Gebruikers e-pos / Studentenommer',
                     keyboardType: TextInputType.text,
                   ),
                   const SizedBox(height: 12),
