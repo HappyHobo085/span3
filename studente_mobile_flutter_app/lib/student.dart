@@ -51,7 +51,9 @@ class _HomePageState extends State<HomePage> {
                   ? const _TuisTab()
                   : _selectedIndex == 2
                       ? const _SaamryTab()
-                      : const _ProfielTab(),
+                      : _selectedIndex == 3
+                          ? const _VisitorsTab()
+                          : const _ProfielTab(),
             ),
           ],
         ),
@@ -754,6 +756,282 @@ class _SaamryDivider extends StatelessWidget {
   }
 }
 
+class _VisitorsTab extends StatefulWidget {
+  const _VisitorsTab();
+
+  @override
+  State<_VisitorsTab> createState() => _VisitorsTabState();
+}
+
+class _VisitorsTabState extends State<_VisitorsTab> {
+  final TextEditingController _naamController = TextEditingController();
+  final TextEditingController _vanController = TextEditingController();
+  final TextEditingController _selfoonController = TextEditingController();
+  final TextEditingController _redeController = TextEditingController();
+
+  String? _otp;
+  final List<Map<String, String>> _invites = [];
+
+  @override
+  void dispose() {
+    _naamController.dispose();
+    _vanController.dispose();
+    _selfoonController.dispose();
+    _redeController.dispose();
+    super.dispose();
+  }
+
+  void _generateOtp() {
+    final naam = _naamController.text.trim();
+    final van = _vanController.text.trim();
+    final selfoon = _selfoonController.text.trim();
+    final rede = _redeController.text.trim();
+
+    if (naam.isEmpty || van.isEmpty || selfoon.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vul naam, van en selfoon in')),
+      );
+      return;
+    }
+
+    final generated = DateTime.now()
+        .millisecondsSinceEpoch
+        .toString()
+        .substring(7, 13);
+
+    setState(() {
+      _otp = generated;
+      _invites.insert(0, {
+        'naam': '$naam $van',
+        'selfoon': selfoon,
+        'rede': rede.isEmpty ? 'Besoek' : rede,
+        'otp': generated,
+        'status': 'Waiting',
+      });
+
+      _naamController.clear();
+      _vanController.clear();
+      _selfoonController.clear();
+      _redeController.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Visitors',
+            style: GoogleFonts.inter(
+              color: kText1,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Nooi ’n besoeker kampus toe en genereer ’n OTP.',
+            style: GoogleFonts.inter(
+              color: kTextMuted,
+              fontSize: 12,
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          GlassCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'INVITE VISITOR',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                GlassInput(
+                  controller: _naamController,
+                  hintText: 'Naam',
+                  prefixIcon: const Icon(Icons.person, color: kTextMuted, size: 18),
+                ),
+
+                const SizedBox(height: 10),
+
+                GlassInput(
+                  controller: _vanController,
+                  hintText: 'Van',
+                  prefixIcon: const Icon(Icons.person_outline, color: kTextMuted, size: 18),
+                ),
+
+                const SizedBox(height: 10),
+
+                GlassInput(
+                  controller: _selfoonController,
+                  hintText: 'Selfoonnommer',
+                  keyboardType: TextInputType.phone,
+                  prefixIcon: const Icon(Icons.phone, color: kTextMuted, size: 18),
+                ),
+
+                const SizedBox(height: 10),
+
+                GlassInput(
+                  controller: _redeController,
+                  hintText: 'Rede vir besoek',
+                  prefixIcon: const Icon(Icons.description_outlined, color: kTextMuted, size: 18),
+                ),
+
+                const SizedBox(height: 16),
+
+                GradientActionButton(
+                  label: 'Generate OTP',
+                  onTap: _generateOtp,
+                  height: 50,
+                ),
+              ],
+            ),
+          ),
+
+          if (_otp != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green, width: 1.5),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 44),
+                  const SizedBox(height: 8),
+                  Text(
+                    'INVITE CREATED',
+                    style: GoogleFonts.inter(
+                      color: Colors.green,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _otp!,
+                    style: GoogleFonts.inter(
+                      color: kText1,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Share OTP with visitor',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'MY INVITES',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                if (_invites.isEmpty)
+                  Text(
+                    'Geen visitor invites nog nie',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 13,
+                    ),
+                  )
+                else
+                  Column(
+                    children: _invites.map((invite) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.person_add_alt_1_rounded,
+                              color: kAccent,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    invite['naam']!,
+                                    style: GoogleFonts.inter(
+                                      color: kText1,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${invite['rede']} · OTP ${invite['otp']}',
+                                    style: GoogleFonts.inter(
+                                      color: kTextMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              invite['status']!,
+                              style: GoogleFonts.inter(
+                                color: Colors.orange,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProfielTab extends StatelessWidget {
   const _ProfielTab();
 
@@ -779,6 +1057,7 @@ class _StudentNavBar extends StatelessWidget {
       _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
       _NavItem(icon: Icons.nfc_rounded, label: 'Skandeer'),
       _NavItem(icon: Icons.directions_car_rounded, label: 'Saamry'),
+      _NavItem(icon: Icons.person_add_alt_1_rounded, label: 'Visitors'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
