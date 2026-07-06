@@ -9,9 +9,19 @@
 
 (function () {
 
+  function getApiBaseUrl() {
+    const stored = localStorage.getItem('apiBaseUrl');
+    if (stored) {
+      return stored;
+    }
+
+    const protocol = window.location.protocol || 'http:';
+    const host = window.location.hostname || 'localhost';
+    return `${protocol}//${host}:8000`;
+  }
+
   // Backend URL
-const API_BASE_URL =
-  localStorage.getItem('apiBaseUrl') || 'http://localhost:8000';
+  const API_BASE_URL = getApiBaseUrl();
 
   /**
    * Generic API request helper

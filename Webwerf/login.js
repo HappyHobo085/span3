@@ -11,7 +11,18 @@
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');
 
-  const API_BASE_URL = 'http://localhost:8000';
+  function getApiBaseUrl() {
+    const stored = localStorage.getItem('apiBaseUrl');
+    if (stored) {
+      return stored;
+    }
+
+    const protocol = window.location.protocol || 'http:';
+    const host = window.location.hostname || 'localhost';
+    return `${protocol}//${host}:8000`;
+  }
+
+  const API_BASE_URL = getApiBaseUrl();
 
   const loginForm = document.getElementById('login-form');
 
