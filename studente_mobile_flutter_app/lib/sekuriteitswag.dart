@@ -621,7 +621,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             const SizedBox(height: 16),
 
                             Text(
-                              'John Smith',
+                              'Connor Smith',
                               style: GoogleFonts.inter(
                                 color: kText1,
                                 fontSize: 22,
@@ -632,7 +632,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             const SizedBox(height: 4),
 
                             Text(
-                              'Invited by Stef Nel',
+                              'Invited by Steven Nel',
                               style: GoogleFonts.inter(
                                 color: kTextMuted,
                                 fontSize: 13,
