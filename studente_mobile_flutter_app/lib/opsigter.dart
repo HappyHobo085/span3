@@ -15,17 +15,11 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
 
   void _onNavTap(int index) {
     if (index == 1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const _PlaceholderPage(title: 'Noodgevalle')),
-      );
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const _KampusPage()));
       return;
     }
     if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const _OorsigPage()),
-      );
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const _KoshuisPage()));
       return;
     }
     setState(() => _selectedIndex = index);
@@ -40,9 +34,7 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
           children: [
             const SizedBox(height: 10),
             Expanded(
-              child: _selectedIndex == 0
-                  ? const _TuisTab()
-                  : const _ProfielTab(),
+              child: _selectedIndex == 0 ? const _TuisTab() : const _ProfielTab(),
             ),
           ],
         ),
@@ -55,7 +47,6 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
   }
 }
 
-// ─── Tuis tab ─────────────────────────────────────────────────────────────────
 class _TuisTab extends StatelessWidget {
   const _TuisTab();
 
@@ -66,134 +57,66 @@ class _TuisTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20),
+          Text('Dashboard', style: GoogleFonts.inter(color: kText1, fontSize: 24, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('Kampusbeheer en oorsig', style: GoogleFonts.inter(color: kTextMuted, fontSize: 12)),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.green, width: 1.4),
+            ),
             child: Row(
               children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 38),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Tuis',
-                        style: GoogleFonts.inter(
-                          color: kText1,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      Text('KAMPUS STATUS', style: GoogleFonts.inter(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+                      const SizedBox(height: 4),
+                      Text('Alles normaal', style: GoogleFonts.inter(color: kText1, fontSize: 18, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text(
-                        'Opsigter',
-                        style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
-                      ),
+                      Text('Geen aktiewe noodgevalle nie', style: GoogleFonts.inter(color: kText2, fontSize: 12)),
                     ],
                   ),
                 ),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: kSurface1,
-                    border: Border.all(color: kBorder, width: 1.5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.notifications_outlined,
-                      color: kTextMuted, size: 18),
-                ),
               ],
             ),
           ),
-
-          // Stat cards
+          const SizedBox(height: 14),
           Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'KAMPUSSE',
-                  value: '3',
-                  valueColor: kText1,
-                  badge: '♦ Aktief',
-                  badgeColor: kSuccess,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'NOODGEVALLE',
-                  value: '0',
-                  valueColor: kAccent2,
-                  badge: '♦ Vandag',
-                  badgeColor: kSuccess,
-                ),
-              ),
+            children: const [
+              Expanded(child: _OpsigterMetricCard(label: 'STUDENTE', value: '0', subtitle: 'Op kampus', icon: Icons.school_rounded)),
+              SizedBox(width: 12),
+              Expanded(child: _OpsigterMetricCard(label: 'PERSONEEL', value: '0', subtitle: 'Op kampus', icon: Icons.badge_rounded)),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // Quick actions
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-            decoration: kGlassDecoration(radius: 14),
+          Row(
+            children: const [
+              Expanded(child: _OpsigterMetricCard(label: 'BESOEKERS', value: '0', subtitle: 'Vandag', icon: Icons.person_add_alt_1_rounded)),
+              SizedBox(width: 12),
+              Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          GlassCard(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'VINNIGE TOEGANG',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                const _SectionTitle('VINNIGE TOEGANG'),
                 const SizedBox(height: 12),
-                _QuickActionRow(
-                  label: 'Koshuis Oorsig',
-                  icon: Icons.apartment_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const _PlaceholderPage(title: 'Koshuis Oorsig')),
-                  ),
-                ),
-                const _Divider(),
-                _QuickActionRow(
-                  label: 'Kampus Oorsig',
-                  icon: Icons.location_city_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const _PlaceholderPage(title: 'Kampus Oorsig')),
-                  ),
-                ),
-                const _Divider(),
-                _QuickActionRow(
-                  label: 'Funksies Oorsig',
-                  icon: Icons.event_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const _PlaceholderPage(title: 'Funksies Oorsig')),
-                  ),
-                ),
-                const _Divider(),
-                _QuickActionRow(
-                  label: 'Parkeer Spasie',
-                  icon: Icons.local_parking_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const _PlaceholderPage(title: 'Parkeer Spasie')),
-                  ),
-                ),
+                _QuickActionRow(label: 'Kampus', icon: Icons.location_city_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _KampusPage()))),
+                const _ThinDivider(),
+                _QuickActionRow(label: 'Koshuis', icon: Icons.apartment_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _KoshuisPage()))),
+                const _ThinDivider(),
+                _QuickActionRow(label: 'Events', icon: Icons.event_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _EventsPage()))),
               ],
             ),
           ),
@@ -203,123 +126,8 @@ class _TuisTab extends StatelessWidget {
   }
 }
 
-class _QuickActionRow extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _QuickActionRow({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Icon(icon, color: kAccent, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: kText2,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: kTextMuted, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(color: Color(0x0AFFFFFF), height: 1);
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  final String badge;
-  final Color badgeColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-    required this.badge,
-    required this.badgeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: kGlassDecoration(radius: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: kTextMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              color: valueColor,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            badge,
-            style: GoogleFonts.inter(
-              color: badgeColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfielTab extends StatelessWidget {
-  const _ProfielTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const ProfilePage();
-  }
-}
-
-// ─── Oorsig page ──────────────────────────────────────────────────────────────
-class _OorsigPage extends StatelessWidget {
-  const _OorsigPage();
+class _KampusPage extends StatelessWidget {
+  const _KampusPage();
 
   @override
   Widget build(BuildContext context) {
@@ -328,75 +136,34 @@ class _OorsigPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
-              title: 'Oorsig',
-              subtitle: 'Opsigter',
-              showBack: true,
-            ),
+            const AppScreenHeader(title: 'Kampus', subtitle: 'Live kampus oorsig', showBack: true),
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: GlassTapPanel(
-                              label: 'Koshuis Oorsig',
-                              borderColor: const Color(0x3300C2FF),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const _PlaceholderPage(
-                                        title: 'Koshuis Oorsig')),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: GlassTapPanel(
-                              label: 'Kampus Oorsig',
-                              borderColor: const Color(0x3300C2FF),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const _PlaceholderPage(
-                                        title: 'Kampus Oorsig')),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    Row(
+                      children: const [
+                        Expanded(child: _OpsigterMetricCard(label: 'STUDENTE', value: '0', subtitle: 'Op kampus', icon: Icons.school_rounded)),
+                        SizedBox(width: 12),
+                        Expanded(child: _OpsigterMetricCard(label: 'PERSONEEL', value: '0', subtitle: 'Op kampus', icon: Icons.badge_rounded)),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: Row(
+                    const SizedBox(height: 14),
+                    const _InfoGlassCard(title: 'AKTIEWE BEWEGING', name: 'Geen aktiewe beweging', detail: 'Kampus beweging sal hier verskyn.', icon: Icons.timeline_rounded),
+                    const SizedBox(height: 14),
+                    const _InfoGlassCard(title: 'LAASTE TOEGANGSLOGS', name: 'Geen logs', detail: 'Kampus logs kom later vanaf backend.', icon: Icons.info_outline),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: GlassTapPanel(
-                              label: 'Funksies Oorsig',
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const _PlaceholderPage(
-                                        title: 'Funksies Oorsig')),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: GlassTapPanel(
-                              label: 'Parkeer Spasie',
-                              borderColor: const Color(0x3310B981),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const _PlaceholderPage(
-                                        title: 'Parkeer Spasie')),
-                              ),
-                            ),
-                          ),
+                          const _SectionTitle('AKSIES'),
+                          const SizedBox(height: 12),
+                          _QuickActionRow(label: 'Soek persoon op kampus', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                          const _ThinDivider(),
+                          _QuickActionRow(label: 'Verfris kampusdata', icon: Icons.refresh_rounded, onTap: () => _showComingSoon(context)),
                         ],
                       ),
                     ),
@@ -411,10 +178,8 @@ class _OorsigPage extends StatelessWidget {
   }
 }
 
-// ─── Placeholder page ─────────────────────────────────────────────────────────
-class _PlaceholderPage extends StatelessWidget {
-  final String title;
-  const _PlaceholderPage({required this.title});
+class _KoshuisPage extends StatelessWidget {
+  const _KoshuisPage();
 
   @override
   Widget build(BuildContext context) {
@@ -423,13 +188,38 @@ class _PlaceholderPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(title: title, subtitle: 'Opsigter', showBack: true),
+            const AppScreenHeader(title: 'Koshuis', subtitle: 'Koshuis oorsig', showBack: true),
             Expanded(
-              child: Center(
-                child: Text(
-                  '$title\nBladsy is tans onder konstruksie',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: const [
+                        Expanded(child: _OpsigterMetricCard(label: 'INWONERS', value: '0', subtitle: 'In koshuis', icon: Icons.bed_rounded)),
+                        SizedBox(width: 12),
+                        Expanded(child: _OpsigterMetricCard(label: 'BESOEKERS', value: '0', subtitle: 'Aktief', icon: Icons.person_add_alt_1_rounded)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const _InfoGlassCard(title: 'KOSHUIS STATUS', name: 'Geen waarskuwings', detail: 'Alles funksioneer normaal.', icon: Icons.check_circle),
+                    const SizedBox(height: 14),
+                    const _InfoGlassCard(title: 'LAASTE AKTIWITEIT', name: 'Geen aktiwiteit', detail: 'Koshuis logs sal hier verskyn.', icon: Icons.history),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _SectionTitle('AKSIES'),
+                          const SizedBox(height: 12),
+                          _QuickActionRow(label: 'Soek inwoner', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                          const _ThinDivider(),
+                          _QuickActionRow(label: 'Besoeker oorsig', icon: Icons.groups_rounded, onTap: () => _showComingSoon(context)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -440,7 +230,195 @@ class _PlaceholderPage extends StatelessWidget {
   }
 }
 
-// ─── Bottom nav ────────────────────────────────────────────────────────────────
+class _EventsPage extends StatelessWidget {
+  const _EventsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(title: 'Events', subtitle: 'Funksies en kampusgeleenthede', showBack: true),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: const [
+                        Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
+                        SizedBox(width: 12),
+                        Expanded(child: _OpsigterMetricCard(label: 'CHECK-INS', value: '0', subtitle: 'Vandag', icon: Icons.qr_code_scanner_rounded)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const _InfoGlassCard(title: 'AKTIEWE EVENTS', name: 'Geen aktiewe events', detail: 'Events sal hier verskyn wanneer dit geskep word.', icon: Icons.event_busy_rounded),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _SectionTitle('AKSIES'),
+                          const SizedBox(height: 12),
+                          _QuickActionRow(label: 'Skep event', icon: Icons.add_circle_outline_rounded, onTap: () => _showComingSoon(context)),
+                          const _ThinDivider(),
+                          _QuickActionRow(label: 'Event check-in', icon: Icons.qr_code_2_rounded, onTap: () => _showComingSoon(context)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfielTab extends StatelessWidget {
+  const _ProfielTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ProfilePage();
+  }
+}
+
+class _InfoGlassCard extends StatelessWidget {
+  final String title;
+  final String name;
+  final String detail;
+  final IconData icon;
+
+  const _InfoGlassCard({required this.title, required this.name, required this.detail, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(title),
+          const SizedBox(height: 12),
+          _MiniLogRow(name: name, detail: detail, icon: icon),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsigterMetricCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _OpsigterMetricCard({required this.label, required this.value, required this.subtitle, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: kAccent, size: 24),
+          const SizedBox(height: 10),
+          Text(label, style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+          const SizedBox(height: 6),
+          Text(value, style: GoogleFonts.inter(color: kText1, fontSize: 30, fontWeight: FontWeight.w900, height: 1)),
+          const SizedBox(height: 6),
+          Text(subtitle, style: GoogleFonts.inter(color: kText2, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionRow extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _QuickActionRow({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: kAccent, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label, style: GoogleFonts.inter(color: kText2, fontSize: 13, fontWeight: FontWeight.w600))),
+            const Icon(Icons.chevron_right_rounded, color: kTextMuted, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniLogRow extends StatelessWidget {
+  final String name;
+  final String detail;
+  final IconData icon;
+
+  const _MiniLogRow({required this.name, required this.detail, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: kAccent, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: GoogleFonts.inter(color: kText1, fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(detail, style: GoogleFonts.inter(color: kTextMuted, fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.1));
+  }
+}
+
+class _ThinDivider extends StatelessWidget {
+  const _ThinDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(color: Color(0x0AFFFFFF), height: 1);
+  }
+}
+
+void _showComingSoon(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Funksie kom later')));
+}
+
 class _OpsigterNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
@@ -450,9 +428,9 @@ class _OpsigterNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
-      _NavItem(icon: Icons.warning_amber_rounded, label: 'Noodgevalle'),
-      _NavItem(icon: Icons.dashboard_rounded, label: 'Oorsig'),
+      _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+      _NavItem(icon: Icons.location_city_rounded, label: 'Kampus'),
+      _NavItem(icon: Icons.apartment_rounded, label: 'Koshuis'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
@@ -460,17 +438,9 @@ class _OpsigterNavBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0D1120),
         border: const Border(top: BorderSide(color: Color(0x1AFFFFFF), width: 1)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, -4)),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, -4))],
       ),
-      padding: EdgeInsets.only(
-        top: 10,
-        bottom: MediaQuery.of(context).padding.bottom + 10,
-      ),
+      padding: EdgeInsets.only(top: 10, bottom: MediaQuery.of(context).padding.bottom + 10),
       child: Row(
         children: List.generate(items.length, (i) {
           final active = i == selectedIndex;
@@ -485,22 +455,11 @@ class _OpsigterNavBar extends StatelessWidget {
                     width: active ? 28 : 0,
                     height: 2,
                     margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: active ? kAccent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(1),
-                    ),
+                    decoration: BoxDecoration(color: active ? kAccent : Colors.transparent, borderRadius: BorderRadius.circular(1)),
                   ),
-                  Icon(items[i].icon,
-                      size: 22, color: active ? kAccent : kTextMuted),
+                  Icon(items[i].icon, size: 22, color: active ? kAccent : kTextMuted),
                   const SizedBox(height: 4),
-                  Text(
-                    items[i].label,
-                    style: GoogleFonts.inter(
-                      color: active ? kText1 : kTextMuted,
-                      fontSize: 10,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                  ),
+                  Text(items[i].label, style: GoogleFonts.inter(color: active ? kText1 : kTextMuted, fontSize: 10, fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
                 ],
               ),
             ),
