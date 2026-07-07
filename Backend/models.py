@@ -79,7 +79,9 @@ class Kampus(Base):
     KAM_Naam   = Column(String(100), nullable=False)
     KAM_Adres  = Column(String(255))
 
-    lokasies = relationship("Lokasie", back_populates="kampus")
+    lokasies  = relationship("Lokasie",  back_populates="kampus")
+    koshuise  = relationship("Koshuis",  back_populates="kampus")
+    funksies  = relationship("Funksie",  back_populates="kampus")
 
 
 class Lokasie(Base):
@@ -120,6 +122,7 @@ class Besoekers_Groep(Base):
 
     besoekers           = relationship("Besoeker",           back_populates="besoekers_groep")
     onverwagte_besoekers = relationship("Onverwagte_Besoeker", back_populates="besoekers_groep")
+    funskie_besoekers    = relationship("Funksie_Besoekers",  back_populates="besoekers_groep")
 
 class Besoeker(Base):
     __tablename__ = 'besoeker'
@@ -165,3 +168,38 @@ class Sekuriteit_Wag(Base):
     SEK_Nommer   = Column(String(20), nullable=False, unique=True)
 
     gebruiker = relationship("Gebruikers", back_populates="sekuriteit_wag")
+
+class Koshuis(Base):
+    __tablename__ = 'koshuis'
+
+    Koshuis_ID    = Column(Integer, primary_key=True, index=True)
+    KOS_Naam      = Column(String(100), nullable=False)
+    KOS_Adres     = Column(String(255))
+    KOS_Kapasiteit = Column(Integer, nullable=False)
+    Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+
+    kampus = relationship("Kampus", back_populates="koshuise")
+
+class Funksie(Base):
+    __tablename__ = 'funskie'
+
+    Funksie_ID    = Column(Integer, primary_key=True, index=True)
+    Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+    FUN_Naam      = Column(String(100), nullable=False)
+    FUN_Begin_Tyd = Column(DateTime, nullable=False)
+    FUN_Eind_Tyd  = Column(DateTime, nullable=False)
+    FUN_Beskrywing = Column(Text)
+    FUN_Is_Aktief = Column(Boolean, nullable=False, default=True)
+
+    kampus          = relationship("Kampus",         back_populates="funksies")
+    funskie_besoekers = relationship("Funksie_Besoekers", back_populates="funskie")
+
+class Funksie_Besoekers(Base):
+    __tablename__ = 'funskie_besoekers'
+
+    Besoekers_Groep_ID = Column(Integer, ForeignKey('besoekers_groep.Besoekers_Groep_ID'), primary_key=True)
+    Funksie_ID         = Column(Integer, ForeignKey('funskie.Funksie_ID'),                 primary_key=True)
+    FUNB_Status        = Column(String(32), nullable=False)
+
+    besoekers_groep = relationship("Besoekers_Groep", back_populates="funskie_besoekers")
+    funskie         = relationship("Funksie",         back_populates="funskie_besoekers")
