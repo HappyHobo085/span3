@@ -837,64 +837,14 @@ def kry_lokasie_deur_nfc_uid(
     )
 
 
-@app.post("/toegang/handmatig", response_model=schemas.APIResponse[List[schemas.ToegangHandmatigResult]])
-def handmatige_toegangsvalidering(
-    req: schemas.ToegangHandmatigRequest,
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-    is_authorized: bool = Depends(auth.check_sekuriteit)
-):
-    """
-    POST /toegang/handmatig
-    Naam/ID soek vir wagte. Stuur profielfoto, naam, rol en toegangstatus terug.
-    """
-    soek_term = req.soek_term.strip()
-    if not soek_term:
-        raise HTTPException(status_code=400, detail="Soekterm mag nie leeg wees nie")
-
-    filters = [
-        models.Gebruikers.GEB_Naam.ilike(f"%{soek_term}%"),
-        models.Gebruikers.GEB_Van.ilike(f"%{soek_term}%"),
-        models.Gebruikers.GEB_ID_Nommer.ilike(f"%{soek_term}%")
-    ]
-
-    # As die soekterm 'n getal is, soek ook op Gebruiker_ID
-    if soek_term.isdigit():
-        filters.append(models.Gebruikers.Gebruiker_ID == int(soek_term))
-
-    gebruikers = db.query(models.Gebruikers).filter(or_(*filters)).limit(50).all()
-
-    resultate = []
-    for g in gebruikers:
-        rol_naam = g.rol.ROL_Naam if g.rol else "Onbekend"
-        toegang_verleen = g.Is_Aktief
-        boodskap = "Toegang Verleen" if toegang_verleen else "Toegang Geweier: Gebruiker is deaktiveer"
-        
-        resultate.append(
-            schemas.ToegangHandmatigResult(
-                Gebruiker_ID=g.Gebruiker_ID,
-                GEB_Naam=g.GEB_Naam,
-                GEB_Van=g.GEB_Van,
-                GEB_ID_Nommer=g.GEB_ID_Nommer,
-                GEB_Profiel_Foto=g.GEB_Profiel_Foto,
-                Rol_Naam=rol_naam,
-                Is_Aktief=g.Is_Aktief,
-                Toegang_Verleen=toegang_verleen,
-                Boodskap=boodskap
-            )
-        )
-
-    return schemas.APIResponse(sukses=True, data=resultate)
-
-
 # --- WAGTE ROETES (F20) ---
-@app.get("/wagte/kampusse")
+@app.get("/wagte/kampusse", response_model=schemas.APIResponse[List[dict]])
 def wagte_kampusse(db: Session = Depends(get_db)):
     kampusse = db.query(models.Kampus).all()
 
-    return {
-        "sukses": True,
-        "data": [
+    return schemas.APIResponse(
+        sukses=True,
+        data=[
             {
                 "kampus_id": k.Kampus_ID,
                 "naam": k.KAM_Naam,
@@ -902,7 +852,7 @@ def wagte_kampusse(db: Session = Depends(get_db)):
             }
             for k in kampusse
         ],
-    }
+    )
 
 
 class StudentKlasScanRequest(BaseModel):
@@ -994,6 +944,8 @@ def lys_toegangslogs(
         ]
     )
 
+
+
 # --- WAGTE STUDENT SCAN ROETE (F20) ---
 class WagteStudentScanRequest(BaseModel):
     student_nom_or_id: str
@@ -1048,39 +1000,42 @@ def genereer_missing_lokasie_uids(
         }
     )
 
-@app.post("/wagte/student/scan")
-def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_db)):
+class WagteProfileVerifyRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    rigting: str
+    metode: str
+
+
+@app.post("/wagte/profile/verify")
+def wagte_profile_verify(
+    data: WagteProfileVerifyRequest,
+    db: Session = Depends(get_db),
+):
     if data.rigting not in ["IN", "UIT"]:
         raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
 
     if data.metode not in ["NFC", "QR", "HANDMATIG"]:
         raise HTTPException(status_code=400, detail="Metode moet NFC, QR of HANDMATIG wees")
 
-    lokasie = db.query(Lokasie).filter(
-        Lokasie.Lokasie_ID == data.lokasie_id
-    ).first()
-
-    if not lokasie:
-        raise HTTPException(status_code=404, detail="Lokasie nie gevind nie")
-
-    student = db.query(Student).filter(
-        Student.STU_Nommer == data.student_nom_or_id.strip()
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="Student nie gevind nie")
-
-    gebruiker = db.query(Gebruikers).filter(
-        Gebruikers.Gebruiker_ID == student.Gebruiker_ID,
-        Gebruikers.Is_Aktief == True
+    gebruiker = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == data.gebruiker_id,
+        models.Gebruikers.Is_Aktief == True
     ).first()
 
     if not gebruiker:
-        raise HTTPException(status_code=403, detail="Student is nie aktief nie")
+        raise HTTPException(status_code=404, detail="Gebruiker nie gevind of nie aktief nie")
 
-    log = ToegangsLogs(
-        Gebruiker_ID=student.Gebruiker_ID,
-        Lokasie_ID=data.lokasie_id,
+    kampus = db.query(models.Kampus).filter(
+        models.Kampus.Kampus_ID == data.kampus_id
+    ).first()
+
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    log = models.ToegangsLogs(
+        Gebruiker_ID=data.gebruiker_id,
+        Lokasie_ID=None,
         NFC_Tags_ID=None,
         TOE_Rigting=data.rigting,
         TOE_Metode=data.metode,
@@ -1091,26 +1046,95 @@ def wagte_student_scan(data: WagteStudentScanRequest, db: Session = Depends(get_
     db.commit()
     db.refresh(log)
 
-    return {
-        "sukses": True,
-        "message": "Student skandering suksesvol",
-        "data": {
+    return schemas.APIResponse(
+        sukses=True,
+        data={
             "log_id": log.Log_ID,
-            "student_id": student.Gebruiker_ID,
-            "student_nommer": student.STU_Nommer,
+            "gebruiker_id": gebruiker.Gebruiker_ID,
             "naam": gebruiker.GEB_Naam,
             "van": gebruiker.GEB_Van,
-            "foto_url": gebruiker.GEB_Profiel_Foto,
-            "lokasie": lokasie.LOK_Naam,
             "rigting": log.TOE_Rigting,
             "metode": log.TOE_Metode,
-            "tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
-        },
-    }
-    
-    
-    
+            "kampus_id": kampus.Kampus_ID,
+            "kampus": kampus.KAM_Naam,
+            "tyd": log.TOE_Tydstempel.isoformat(),
+        }
+    )
 
+class WagteProfileVerifyRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    rigting: str
+    metode: str
+
+
+@app.post("/wagte/profile/verify")
+def wagte_profile_verify(
+    data: WagteProfileVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    if data.rigting not in ["IN", "UIT"]:
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+
+    if data.metode not in ["NFC", "QR", "HANDMATIG"]:
+        raise HTTPException(status_code=400, detail="Metode moet NFC, QR of HANDMATIG wees")
+
+    gebruiker = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == data.gebruiker_id,
+        models.Gebruikers.Is_Aktief == True,
+    ).first()
+
+    if not gebruiker:
+        raise HTTPException(status_code=404, detail="Gebruiker nie gevind of nie aktief nie")
+
+    kampus = db.query(models.Kampus).filter(
+        models.Kampus.Kampus_ID == data.kampus_id
+    ).first()
+
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Kampus_ID == data.kampus_id,
+        models.Lokasie.LOK_Tipe == "Kampus",
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(
+            status_code=404,
+            detail="Geen kampus-lokasie vir hierdie kampus gevind nie",
+        )
+
+    log = models.ToegangsLogs(
+        Gebruiker_ID=data.gebruiker_id,
+        Lokasie_ID=lokasie.Lokasie_ID,
+        NFC_Tags_ID=None,
+        TOE_Rigting=data.rigting,
+        TOE_Metode=data.metode,
+        TOE_Auto_Uitgecheck=False,
+    )
+
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "log_id": log.Log_ID,
+            "gebruiker_id": gebruiker.Gebruiker_ID,
+            "naam": gebruiker.GEB_Naam,
+            "van": gebruiker.GEB_Van,
+            "rigting": log.TOE_Rigting,
+            "metode": log.TOE_Metode,
+            "kampus_id": kampus.Kampus_ID,
+            "kampus": kampus.KAM_Naam,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "lokasie": lokasie.LOK_Naam,
+            "tyd": log.TOE_Tydstempel.isoformat(),
+        },
+    )
+    
 
 @app.get("/me")
 def kry_my_profiel(
