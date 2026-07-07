@@ -1043,17 +1043,35 @@ def wagte_profile_scan(
             status_code=404,
             detail="Gebruiker nie gevind nie",
         )
-
-    return schemas.APIResponse(
-        sukses=True,
-        data={
-            "gebruiker_id": gebruiker.Gebruiker_ID,
-            "naam": gebruiker.GEB_Naam,
-            "van": gebruiker.GEB_Van,
-            "id_nommer": gebruiker.GEB_ID_Nommer,
-            "foto_url": gebruiker.GEB_Profiel_Foto,
-        },
+        
+    laaste_log = (
+        db.query(models.ToegangsLogs)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID
+        )
+        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+        .first()
     )
+
+    if laaste_log is None:
+        voorgestelde_rigting = "IN"
+    elif laaste_log.TOE_Rigting == "IN":
+        voorgestelde_rigting = "UIT"
+    else:
+        voorgestelde_rigting = "IN"
+        
+    return schemas.APIResponse(
+    sukses=True,
+    data={
+        "gebruiker_id": gebruiker.Gebruiker_ID,
+        "naam": gebruiker.GEB_Naam,
+        "van": gebruiker.GEB_Van,
+        "id_nommer": gebruiker.GEB_ID_Nommer,
+        "foto_url": gebruiker.GEB_Profiel_Foto,
+        "voorgestelde_rigting": voorgestelde_rigting,
+    },
+)
+
 
 class WagteProfileVerifyRequest(BaseModel):
     gebruiker_id: int
