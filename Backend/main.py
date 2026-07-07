@@ -1055,6 +1055,12 @@ def wagte_profile_scan(
         },
     )
 
+class WagteProfileVerifyRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    rigting: str
+    metode: str
+    
 @app.post("/wagte/profile/verify")
 def wagte_profile_verify(
     data: WagteProfileVerifyRequest,
