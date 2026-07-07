@@ -17,7 +17,58 @@ class SekuriteitswagHomePage extends StatefulWidget {
 }
 
 class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
-  String? _gekoseKampus = 'Hoofkampus';
+  KampusDto? _gekoseKampus;
+  List<KampusDto> _kampusse = [];
+  bool _kampusseLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadKampusse();
+  }
+
+  Future<void> _loadKampusse() async {
+    try {
+      final kampusse = await MoonApi.fetchWagteKampusse();
+
+      if (!mounted) return;
+
+      setState(() {
+        _kampusse = kampusse;
+        _gekoseKampus = kampusse.isNotEmpty ? kampusse.first : null;
+        _kampusseLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _kampusseLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kon nie kampusse laai nie: $e')),
+      );
+    }
+  }
+
+  void _openKampusScan() {
+    if (_gekoseKampus == null || _gekoseKampus!.kampusId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kies eers ’n kampus')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => KampusSkandeerPage(
+          kampusId: _gekoseKampus!.kampusId!,
+          kampusNaam: _gekoseKampus!.naam,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,38 +79,39 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
           children: [
             AppScreenHeader(
               title: 'Wagte',
-              subtitle: _gekoseKampus ?? 'Kies kampus',
+              subtitle: _gekoseKampus?.naam ?? 'Kies kampus',
             ),
+
             Padding(
               padding: const EdgeInsets.all(16),
               child: GlassCard(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: DropdownButton<String>(
-                  value: _gekoseKampus,
-                  dropdownColor: kBg,
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  style: GoogleFonts.inter(color: kText1),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Hoofkampus',
-                      child: Text('Hoofkampus'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Koshuis',
-                      child: Text('Koshuis'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Sportkampus',
-                      child: Text('Sportkampus'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _gekoseKampus = value);
-                  },
-                ),
+                child: _kampusseLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : DropdownButton<KampusDto>(
+                        value: _gekoseKampus,
+                        dropdownColor: kBg,
+                        isExpanded: true,
+                        underline: const SizedBox(),
+                        style: GoogleFonts.inter(color: kText1),
+                        items: _kampusse.map((kampus) {
+                          return DropdownMenuItem<KampusDto>(
+                            value: kampus,
+                            child: Text(kampus.naam),
+                          );
+                        }).toList(),
+                        onChanged: (KampusDto? value) {
+                          setState(() {
+                            _gekoseKampus = value;
+                          });
+                        },
+                      ),
               ),
             ),
+
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -70,16 +122,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                         label: 'Kampus Skandeer',
                         subtitle: 'IN / UIT',
                         icon: '🚪',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => KampusSkandeerPage(
-                                kampusNaam: _gekoseKampus ?? 'Hoofkampus',
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: _openKampusScan,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -111,10 +154,12 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
 }
 
 class KampusSkandeerPage extends StatefulWidget {
+  final int kampusId;
   final String kampusNaam;
 
   const KampusSkandeerPage({
     super.key,
+    required this.kampusId,
     required this.kampusNaam,
   });
 
