@@ -91,24 +91,27 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                         padding: EdgeInsets.all(14),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    : DropdownButton<KampusDto>(
-                        value: _gekoseKampus,
-                        dropdownColor: kBg,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        style: GoogleFonts.inter(color: kText1),
-                        items: _kampusse.map((kampus) {
-                          return DropdownMenuItem<KampusDto>(
-                            value: kampus,
-                            child: Text(kampus.naam),
-                          );
-                        }).toList(),
-                        onChanged: (KampusDto? value) {
-                          setState(() {
-                            _gekoseKampus = value;
-                          });
-                        },
+                    : DropdownButtonFormField<KampusDto>(
+                      value: _gekoseKampus,
+                      isExpanded: true,
+                      dropdownColor: kBg,
+                      style: GoogleFonts.inter(color: kText1),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                       ),
+                      items: _kampusse.map((kampus) {
+                        return DropdownMenuItem<KampusDto>(
+                          value: kampus,
+                          child: Text(kampus.naam),
+                        );
+                      }).toList(),
+                      onChanged: (KampusDto? value) {
+                        setState(() {
+                          _gekoseKampus = value;
+                        });
+                      },
+                    ),
               ),
             ),
 
