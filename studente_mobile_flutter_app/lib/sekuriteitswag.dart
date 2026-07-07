@@ -91,42 +91,48 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                         padding: EdgeInsets.all(14),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    : DropdownButtonFormField<KampusDto>(
-                      value: _gekoseKampus,
-                      isExpanded: true,
-                      menuMaxHeight: 220,
-                      dropdownColor: kBg,
-                      style: GoogleFonts.inter(color: kText1),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-                      ),
-                      selectedItemBuilder: (context) {
-                        return _kampusse.map((kampus) {
-                          return Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              kampus.naam,
-                              style: GoogleFonts.inter(color: kText1),
-                            ),
+                    : InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () async {
+                          final selected = await showMenu<KampusDto>(
+                            context: context,
+                            position: const RelativeRect.fromLTRB(16, 160, 16, 0),
+                            color: kBg,
+                            items: _kampusse.map((kampus) {
+                              return PopupMenuItem<KampusDto>(
+                                value: kampus,
+                                child: Text(
+                                  kampus.naam,
+                                  style: GoogleFonts.inter(color: kText1),
+                                ),
+                              );
+                            }).toList(),
                           );
-                        }).toList();
-                      },
-                      items: _kampusse.map((kampus) {
-                        return DropdownMenuItem<KampusDto>(
-                          value: kampus,
-                          child: Text(
-                            kampus.naam,
-                            style: GoogleFonts.inter(color: kText1),
+
+                          if (selected != null) {
+                            setState(() {
+                              _gekoseKampus = selected;
+                            });
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _gekoseKampus?.naam ?? 'Kies kampus',
+                                  style: GoogleFonts.inter(color: kText1),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: kTextMuted,
+                              ),
+                            ],
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (KampusDto? value) {
-                        setState(() {
-                          _gekoseKampus = value;
-                        });
-                      },
-                    ),
+                        ),
+                      ),
               ),
             ),
 
