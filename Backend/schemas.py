@@ -413,9 +413,9 @@ class ToegangHandmatigResult(BaseModel):
     Toegang_Verleen: bool
     Boodskap: str
 
-class Config:
-    from_attributes = True
-    
+    class Config:
+        from_attributes = True
+
 
 class HekScanRequest(BaseModel):
     nommer: str
@@ -454,6 +454,56 @@ class KampusSummaryStatus(BaseModel):
     scanned_in_count: int
     scanned_out_count: int
 
+    class Config:
+        from_attributes = True
+
+
+# --- Koshuis Schemas ---
+class KoshuisBase(BaseModel):
+    KOS_Naam: str
+    KOS_Adres: Optional[str] = None
+    KOS_Kapasiteit: int
+    Kampus_ID: int
+
+class KoshuisCreate(KoshuisBase):
+    pass
+
+class Koshuis(KoshuisBase):
+    Koshuis_ID: int
+
+    class Config:
+        from_attributes = True
+
+
+# --- Funksie Schemas ---
+class FunksieBase(BaseModel):
+    Kampus_ID: int
+    FUN_Naam: str
+    FUN_Begin_Tyd: datetime
+    FUN_Eind_Tyd: datetime
+    FUN_Beskrywing: Optional[str] = None
+    FUN_Is_Aktief: bool = True
+
+class FunksieCreate(FunksieBase):
+    pass
+
+class Funksie(FunksieBase):
+    Funksie_ID: int
+
+    class Config:
+        from_attributes = True
+
+
+# --- Funksie_Besoekers Schemas ---
+class FunksieBesoekerBase(BaseModel):
+    Besoekers_Groep_ID: int
+    Funksie_ID: int
+    FUNB_Status: str
+
+class FunksieBesoekerCreate(FunksieBesoekerBase):
+    pass
+
+class FunksieBesoeker(FunksieBesoekerBase):
     class Config:
         from_attributes = True
 
