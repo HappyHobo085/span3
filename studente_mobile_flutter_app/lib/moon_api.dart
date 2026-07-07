@@ -82,6 +82,26 @@ class StudentSearchDto {
   String get fullName => '$naam $van';
 }
 
+
+class WagteProfileScanDto {
+  final int gebruikerId;
+  final String naam;
+  final String van;
+  final String idNommer;
+  final String? fotoUrl;
+  final String voorgesteldeRigting;
+
+  WagteProfileScanDto({
+    required this.gebruikerId,
+    required this.naam,
+    required this.van,
+    required this.idNommer,
+    this.fotoUrl,
+    required this.voorgesteldeRigting,
+  });
+}
+
+
 /// =========================
 /// Moon API
 /// =========================
@@ -454,6 +474,39 @@ class MoonApi {
 
   return Map<String, dynamic>.from(decoded['data']);
   }
+
+static Future<WagteProfileScanDto> wagteProfileScan(
+  String scanKode,
+) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/wagte/profile/scan'),
+    headers: {
+      "Content-Type": "application/json",
+      if (bearerToken != null)
+        "Authorization": "Bearer $bearerToken",
+    },
+    body: jsonEncode({
+      "scan_kode": scanKode,
+    }),
+  );
+
+  final decoded = jsonDecode(response.body);
+
+  if (response.statusCode != 200 || decoded["sukses"] != true) {
+    throw Exception(decoded["fout"] ?? "Kon nie profiel kry nie");
+  }
+
+  final d = decoded["data"];
+
+  return WagteProfileScanDto(
+    gebruikerId: d["gebruiker_id"],
+    naam: d["naam"],
+    van: d["van"],
+    idNommer: d["id_nommer"],
+    fotoUrl: d["foto_url"],
+    voorgesteldeRigting: d["voorgestelde_rigting"] ?? "IN",
+  );
+}
   
 }
 
