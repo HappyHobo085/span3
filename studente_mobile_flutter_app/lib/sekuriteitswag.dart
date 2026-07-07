@@ -94,16 +94,31 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                     : DropdownButtonFormField<KampusDto>(
                       value: _gekoseKampus,
                       isExpanded: true,
+                      menuMaxHeight: 220,
                       dropdownColor: kBg,
                       style: GoogleFonts.inter(color: kText1),
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                       ),
+                      selectedItemBuilder: (context) {
+                        return _kampusse.map((kampus) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              kampus.naam,
+                              style: GoogleFonts.inter(color: kText1),
+                            ),
+                          );
+                        }).toList();
+                      },
                       items: _kampusse.map((kampus) {
                         return DropdownMenuItem<KampusDto>(
                           value: kampus,
-                          child: Text(kampus.naam),
+                          child: Text(
+                            kampus.naam,
+                            style: GoogleFonts.inter(color: kText1),
+                          ),
                         );
                       }).toList(),
                       onChanged: (KampusDto? value) {
