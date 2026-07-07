@@ -1000,73 +1000,60 @@ def genereer_missing_lokasie_uids(
         }
     )
 
-class WagteProfileVerifyRequest(BaseModel):
-    gebruiker_id: int
-    kampus_id: int
-    rigting: str
-    metode: str
+
+class WagteProfileScanRequest(BaseModel):
+    scan_kode: str
 
 
-@app.post("/wagte/profile/verify")
-def wagte_profile_verify(
-    data: WagteProfileVerifyRequest,
+@app.post("/wagte/profile/scan")
+def wagte_profile_scan(
+    data: WagteProfileScanRequest,
     db: Session = Depends(get_db),
 ):
-    if data.rigting not in ["IN", "UIT"]:
-        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+    scan = data.scan_kode.strip()
 
-    if data.metode not in ["NFC", "QR", "HANDMATIG"]:
-        raise HTTPException(status_code=400, detail="Metode moet NFC, QR of HANDMATIG wees")
+    gebruiker = None
 
-    gebruiker = db.query(models.Gebruikers).filter(
-        models.Gebruikers.Gebruiker_ID == data.gebruiker_id,
-        models.Gebruikers.Is_Aktief == True
+    student = db.query(models.Student).filter(
+        models.Student.STU_Nommer == scan
     ).first()
+
+    if student:
+        gebruiker = db.query(models.Gebruikers).filter(
+            models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
+        ).first()
 
     if not gebruiker:
-        raise HTTPException(status_code=404, detail="Gebruiker nie gevind of nie aktief nie")
+        personeel = db.query(models.Personeel).filter(
+            models.Personeel.PER_Nommer == scan
+        ).first()
 
-    kampus = db.query(models.Kampus).filter(
-        models.Kampus.Kampus_ID == data.kampus_id
-    ).first()
+        if personeel:
+            gebruiker = db.query(models.Gebruikers).filter(
+                models.Gebruikers.Gebruiker_ID == personeel.Gebruiker_ID
+            ).first()
 
-    if not kampus:
-        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+    if not gebruiker:
+        gebruiker = db.query(models.Gebruikers).filter(
+            models.Gebruikers.GEB_ID_Nommer == scan
+        ).first()
 
-    log = models.ToegangsLogs(
-        Gebruiker_ID=data.gebruiker_id,
-        Lokasie_ID=None,
-        NFC_Tags_ID=None,
-        TOE_Rigting=data.rigting,
-        TOE_Metode=data.metode,
-        TOE_Auto_Uitgecheck=False,
-    )
-
-    db.add(log)
-    db.commit()
-    db.refresh(log)
+    if not gebruiker:
+        raise HTTPException(
+            status_code=404,
+            detail="Gebruiker nie gevind nie",
+        )
 
     return schemas.APIResponse(
         sukses=True,
         data={
-            "log_id": log.Log_ID,
             "gebruiker_id": gebruiker.Gebruiker_ID,
             "naam": gebruiker.GEB_Naam,
             "van": gebruiker.GEB_Van,
-            "rigting": log.TOE_Rigting,
-            "metode": log.TOE_Metode,
-            "kampus_id": kampus.Kampus_ID,
-            "kampus": kampus.KAM_Naam,
-            "tyd": log.TOE_Tydstempel.isoformat(),
-        }
+            "id_nommer": gebruiker.GEB_ID_Nommer,
+            "foto_url": gebruiker.GEB_Profiel_Foto,
+        },
     )
-
-class WagteProfileVerifyRequest(BaseModel):
-    gebruiker_id: int
-    kampus_id: int
-    rigting: str
-    metode: str
-
 
 @app.post("/wagte/profile/verify")
 def wagte_profile_verify(
