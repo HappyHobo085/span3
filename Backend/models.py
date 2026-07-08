@@ -31,6 +31,7 @@ class Gebruikers(Base):
     personeel        = relationship("Personeel",       back_populates="gebruiker", uselist=False)
     kampus_opsigter  = relationship("Kampus_Opsigter", back_populates="gebruiker", uselist=False)
     sekuriteit_wag   = relationship("Sekuriteit_Wag",  back_populates="gebruiker", uselist=False)
+    nfc_tags         = relationship("NFC_Tags", back_populates="gebruiker")
     toegangs_logs    = relationship("ToegangsLogs",    back_populates="gebruiker")
     waarskuwings     = relationship("Waarskuwings",    back_populates="gebruiker")
 
@@ -48,6 +49,7 @@ class Student(Base):
 
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     STU_Nommer   = Column(String(20), nullable=False, unique=True)
+    STU_Is_Koshuis = Column(Boolean, nullable=False, default=False)
 
     gebruiker = relationship("Gebruikers", back_populates="student")
 
@@ -68,6 +70,7 @@ class NFC_Tags(Base):
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
                            
+    gebruiker = relationship("Gebruikers", back_populates="nfc_tags")
     lokasie   = relationship("Lokasie", back_populates="nfc_tags")
     toegangs_logs = relationship("ToegangsLogs", back_populates="nfc_tag")
 class Kampus(Base):
@@ -152,6 +155,7 @@ class Kampus_Opsigter(Base):
     __tablename__ = 'kampus_opsigter'
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     KAMO_Nommer  = Column(String(20), nullable=False, unique=True)
+    Kampus_ID    = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
 
     gebruiker = relationship("Gebruikers", back_populates="kampus_opsigter")
 
