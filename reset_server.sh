@@ -20,9 +20,6 @@ echo "Stopping and removing existing containers..."
 "${COMPOSE[@]}" down --remove-orphans
 
 echo "Rebuilding and starting containers..."
-"${COMPOSE[@]}" up -d --build
-
-echo "Current container status:"
-"${COMPOSE[@]}" ps
+"${COMPOSE[@]}" up --build
 
 echo "Server reset complete."
