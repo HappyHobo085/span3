@@ -1322,12 +1322,12 @@ def wagte_profile_scan(
         )
         
     laaste_log = (
-        db.query(models.ToegangsLogs)
-        .filter(
-            models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID
-        )
-        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
-        .first()
+    db.query(models.ToegangsLogs)
+    .filter(
+        models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID
+    )
+    .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+    .first()
     )
 
     if laaste_log is None:
