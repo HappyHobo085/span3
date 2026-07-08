@@ -25,6 +25,14 @@
   const classRoomName = document.getElementById('class-room-name');
   const classKampus = document.getElementById('class-kampus');
 
+  // ===== KAMPUS DOM NODES =====
+  const kampusList = document.getElementById('kampus-list');
+  const openKampusModalBtn = document.getElementById('open-create-kampus-modal');
+  const kampusModalOverlay = document.getElementById('createKampusModal');
+  const closeKampusModalBtn = document.getElementById('close-create-kampus-modal');
+  const createKampusBtn = document.getElementById('create-kampus-btn');
+  const newKampusName = document.getElementById('new-kampus-name');
+
   // ===== USER DOM NODES =====
   const userList = document.getElementById('user-list');
   const userSearch = document.getElementById('user-search');
@@ -103,6 +111,76 @@
     json.data.forEach(function (k) {
       kampusMap[String(k.Kampus_ID)] = k.KAM_Naam;
     });
+
+    renderKampusList(json.data);
+  }
+
+  // =====================================================================
+  //  KAMPUS SECTION
+  // =====================================================================
+
+  /** Render all kampusse as simple name rows in the Kampusse panel. */
+  function renderKampusList(kampusse) {
+    if (!kampusList) return;
+
+    kampusList.innerHTML = '';
+
+    if (!kampusse || kampusse.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'admin-venue-row';
+      const msg = document.createElement('span');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen kampusse nie';
+      empty.appendChild(msg);
+      kampusList.appendChild(empty);
+      return;
+    }
+
+    kampusse.forEach(function (k) {
+      const row = document.createElement('div');
+      row.className = 'admin-venue-row';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'admin-venue-name';
+      nameSpan.textContent = k.KAM_Naam;
+
+      row.appendChild(nameSpan);
+      kampusList.appendChild(row);
+    });
+  }
+
+  function openKampusModal() {
+    if (!kampusModalOverlay) return;
+    kampusModalOverlay.classList.add('open');
+    kampusModalOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeKampusModal() {
+    if (!kampusModalOverlay) return;
+    kampusModalOverlay.classList.remove('open');
+    kampusModalOverlay.setAttribute('aria-hidden', 'true');
+    if (newKampusName) newKampusName.value = '';
+  }
+
+  /** Submit new kampus to the backend (POST /kampusse). */
+  async function submitNewKampus() {
+    const naam = newKampusName ? newKampusName.value.trim() : '';
+
+    if (!naam) {
+      alert('Voer asseblief die kampusnaam in.');
+      return;
+    }
+
+    const json = await window.MoonApi.createKampus({ KAM_Naam: naam });
+
+    if (json && json.sukses) {
+      alert('Kampus suksesvol geskep.');
+      closeKampusModal();
+      // Herlaai sodat die lys én die kampus-dropdowns die nuwe kampus wys.
+      await loadKampusDropdown();
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie kampus skep nie.');
+    }
   }
 
   async function loadLokale() {
@@ -316,12 +394,27 @@
 
     userList.innerHTML = '';
     json.data.forEach(function (user) {
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID);
+      // 'n Gebruiker is "Aktief" sodra daar 'n NFC-tag aan sy profiel gekoppel is.
+      const hetNfc = Boolean(user.NFC_UID);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, hetNfc);
     });
   }
 
+  /** Build the Aktief/Nie-Aktief status badge (aktief = NFC-tag gekoppel). */
+  function buildStatusBadge(hetNfc) {
+    const badge = document.createElement('span');
+    badge.className = 'status-badge ' + (hetNfc ? 'status-badge--active' : 'status-badge--inactive');
+
+    const dot = document.createElement('span');
+    dot.className = 'status-dot';
+    badge.appendChild(dot);
+    badge.appendChild(document.createTextNode(hetNfc ? 'Aktief' : 'Nie-Aktief'));
+
+    return badge;
+  }
+
   /** Create a user row in the list. */
-  function addUserRow(userId, naam, van, epos, rolId) {
+  function addUserRow(userId, naam, van, epos, rolId, hetNfc) {
     if (!userList) return;
 
     const row = document.createElement('div');
@@ -332,7 +425,13 @@
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'admin-user-name';
-    nameDiv.textContent = naam + ' ' + van;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'admin-user-name-text';
+    nameSpan.textContent = naam + ' ' + van;
+
+    nameDiv.appendChild(nameSpan);
+    nameDiv.appendChild(buildStatusBadge(hetNfc));
 
     const emailDiv = document.createElement('div');
     emailDiv.className = 'admin-user-email';
@@ -499,8 +598,8 @@ const json = await window.MoonApi.createGebruiker(payload);
       const nuweId = json.data ? json.data.Gebruiker_ID : null;
       closeUserModal(); // also resets the form back to create mode
 
-      // Add new user to the list immediately
-      addUserRow(nuweId, naam, van, epos, rolId);
+      // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
+      addUserRow(nuweId, naam, van, epos, rolId, false);
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
     }
@@ -559,11 +658,11 @@ const json = await window.MoonApi.createGebruiker(payload);
     const row = userList.querySelector('.admin-user-row[data-user-id="' + userId + '"]');
     if (!row) return;
 
-    const nameDiv = row.querySelector('.admin-user-name');
+    const nameSpan = row.querySelector('.admin-user-name-text');
     const emailDiv = row.querySelector('.admin-user-email');
     const badge = row.querySelector('.role-badge');
 
-    if (nameDiv) nameDiv.textContent = info.naam + ' ' + info.van;
+    if (nameSpan) nameSpan.textContent = info.naam + ' ' + info.van;
     if (emailDiv) emailDiv.textContent = info.epos;
 
     const rolNaam = rolleMap[String(info.rolId)] || 'Onbekend';
@@ -606,6 +705,22 @@ const json = await window.MoonApi.createGebruiker(payload);
       console.log('VENUE CAMPUS FILTER FIRED');
       applyVenueFilter();
     });
+  }
+
+  // --- Kampus events ---
+  if (openKampusModalBtn) {
+    openKampusModalBtn.addEventListener('click', openKampusModal);
+  }
+  if (closeKampusModalBtn) {
+    closeKampusModalBtn.addEventListener('click', closeKampusModal);
+  }
+  if (kampusModalOverlay) {
+    kampusModalOverlay.addEventListener('click', function (event) {
+      if (event.target === kampusModalOverlay) closeKampusModal();
+    });
+  }
+  if (createKampusBtn) {
+    createKampusBtn.addEventListener('click', function () { submitNewKampus(); });
   }
 
   // --- User events ---
