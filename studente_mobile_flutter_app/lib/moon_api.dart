@@ -475,38 +475,71 @@ class MoonApi {
   return Map<String, dynamic>.from(decoded['data']);
   }
 
-static Future<WagteProfileScanDto> wagteProfileScan(
-  String scanKode,
-) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/wagte/profile/scan'),
-    headers: {
-      "Content-Type": "application/json",
-      if (bearerToken != null)
-        "Authorization": "Bearer $bearerToken",
-    },
-    body: jsonEncode({
-      "scan_kode": scanKode,
-    }),
-  );
+  static Future<WagteProfileScanDto> wagteProfileScan(
+    String scanKode,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/wagte/profile/scan'),
+      headers: {
+        "Content-Type": "application/json",
+        if (bearerToken != null)
+          "Authorization": "Bearer $bearerToken",
+      },
+      body: jsonEncode({
+        "scan_kode": scanKode,
+      }),
+    );
 
-  final decoded = jsonDecode(response.body);
+    final decoded = jsonDecode(response.body);
 
-  if (response.statusCode != 200 || decoded["sukses"] != true) {
-    throw Exception(decoded["fout"] ?? "Kon nie profiel kry nie");
+    if (response.statusCode != 200 || decoded["sukses"] != true) {
+      throw Exception(decoded["fout"] ?? "Kon nie profiel kry nie");
+    }
+
+    final d = decoded["data"];
+
+    return WagteProfileScanDto(
+      gebruikerId: d["gebruiker_id"],
+      naam: d["naam"],
+      van: d["van"],
+      idNommer: d["id_nommer"],
+      fotoUrl: d["foto_url"],
+      voorgesteldeRigting: d["voorgestelde_rigting"] ?? "IN",
+    );
   }
 
-  final d = decoded["data"];
+  static Future<Map<String, dynamic>> wagteProfileVerify({
+    required int gebruikerId,
+    required int kampusId,
+    required String rigting,
+    required String metode,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/wagte/profile/verify'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+      body: jsonEncode({
+        'gebruiker_id': gebruikerId,
+        'kampus_id': kampusId,
+        'rigting': rigting,
+        'metode': metode,
+      }),
+    );
 
-  return WagteProfileScanDto(
-    gebruikerId: d["gebruiker_id"],
-    naam: d["naam"],
-    van: d["van"],
-    idNommer: d["id_nommer"],
-    fotoUrl: d["foto_url"],
-    voorgesteldeRigting: d["voorgestelde_rigting"] ?? "IN",
-  );
-}
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Verify het misluk',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data']);
+  }
   
 }
 
