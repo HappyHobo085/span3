@@ -50,8 +50,10 @@ class Student(Base):
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     STU_Nommer   = Column(String(20), nullable=False, unique=True)
     STU_Is_Koshuis = Column(Boolean, nullable=False, default=False)
+    Koshuis_ID = Column(Integer, ForeignKey('koshuis.Koshuis_ID'), nullable=True)
 
     gebruiker = relationship("Gebruikers", back_populates="student")
+    koshuis = relationship("Koshuis")
 
 class Personeel(Base):
     __tablename__ = 'personeel'
@@ -73,6 +75,7 @@ class NFC_Tags(Base):
     gebruiker = relationship("Gebruikers", back_populates="nfc_tags")
     lokasie   = relationship("Lokasie", back_populates="nfc_tags")
     toegangs_logs = relationship("ToegangsLogs", back_populates="nfc_tag")
+    
 class Kampus(Base):
     __tablename__ = 'kampus'
     Kampus_ID  = Column(Integer, primary_key=True, index=True)
