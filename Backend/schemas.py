@@ -41,16 +41,36 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     GEB_Wagwoord: str
     STU_Nommer: Optional[str] = None
+    STU_Is_Koshuis: bool = False
     PER_Nommer: Optional[str] = None
+    PER_Departement: Optional[str] = None
     KAMO_Nommer: Optional[str] = None
+    Kampus_ID: Optional[int] = None
     SEK_Nommer: Optional[str] = None
+    NFC_UID: Optional[str] = None
+    NFC_Tipe: str = "Gebruiker"
+    NFC_Is_Aktief: bool = True
 
 class UserUpdate(BaseModel):
     GEB_Naam: Optional[str] = None
     GEB_Van: Optional[str] = None
+    GEB_ID_Nommer: Optional[str] = None
+    GEB_Epos: Optional[EmailStr] = None
+    GEB_Wagwoord: Optional[str] = None
     GEB_Selfoon_Nr: Optional[str] = None
     GEB_Profiel_Foto: Optional[str] = None
+    Rol_ID: Optional[int] = None
     Is_Aktief: Optional[bool] = None
+    STU_Nommer: Optional[str] = None
+    STU_Is_Koshuis: Optional[bool] = None
+    PER_Nommer: Optional[str] = None
+    PER_Departement: Optional[str] = None
+    KAMO_Nommer: Optional[str] = None
+    Kampus_ID: Optional[int] = None
+    SEK_Nommer: Optional[str] = None
+    NFC_UID: Optional[str] = None
+    NFC_Tipe: Optional[str] = None
+    NFC_Is_Aktief: Optional[bool] = None
 
 class User(UserBase):
     Gebruiker_ID: int
@@ -92,12 +112,14 @@ class GebruikersRol(GebruikersRolBase):
 class StudentBase(BaseModel):
     Gebruiker_ID: int
     STU_Nommer: str
+    STU_Is_Koshuis: bool = False
 
 class StudentCreate(StudentBase):
     pass
 
 class StudentUpdate(BaseModel):
     STU_Nommer: Optional[str] = None
+    STU_Is_Koshuis: Optional[bool] = None
 
 class Student(StudentBase):
     class Config:
@@ -111,6 +133,7 @@ class StudentRead(BaseModel):
     GEB_Epos: EmailStr
     GEB_Profiel_Foto: Optional[str] = None
     STU_Nommer: str
+    STU_Is_Koshuis: bool = False
     Is_Aktief: bool
 
     class Config:
@@ -181,6 +204,10 @@ class Kampus(KampusBase):
 
     class Config:
         from_attributes = True
+
+class KampusUpdate(BaseModel):
+    KAM_Naam: Optional[str] = None
+    KAM_Adres: Optional[str] = None
 
 # --- Lokasie Schemas ---
 # Model: Lokasie_ID, LOK_Naam, LOK_Tipe, Kampus_ID
@@ -364,6 +391,7 @@ class Waarskuwing(WaarskuwingBase):
 class KampusOpsigterBase(BaseModel):
     Gebruiker_ID: int
     KAMO_Nommer: str
+    Kampus_ID: Optional[int] = None
 
 class KampusOpsigterCreate(KampusOpsigterBase):
     pass

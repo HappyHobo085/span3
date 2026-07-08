@@ -98,6 +98,210 @@ def _generate_unique_nfc_uid(db: Session, length: int = 8) -> str:
         if not exists:
             return uid
 
+def _kry_rol(db: Session, rol_id: int) -> models.Rolle:
+    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == rol_id).first()
+    if not rol:
+        raise HTTPException(status_code=400, detail="Rol bestaan nie")
+    return rol
+
+def _kontroleer_unieke_gebruiker_velde(
+    db: Session,
+    *,
+    epos: Optional[str] = None,
+    id_nommer: Optional[str] = None,
+    exclude_user_id: Optional[int] = None,
+):
+    if epos:
+        query = db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == epos)
+        if exclude_user_id is not None:
+            query = query.filter(models.Gebruikers.Gebruiker_ID != exclude_user_id)
+        if query.first():
+            raise HTTPException(status_code=400, detail="E-pos reeds geregistreer")
+
+    if id_nommer:
+        query = db.query(models.Gebruikers).filter(models.Gebruikers.GEB_ID_Nommer == id_nommer)
+        if exclude_user_id is not None:
+            query = query.filter(models.Gebruikers.Gebruiker_ID != exclude_user_id)
+        if query.first():
+            raise HTTPException(status_code=400, detail="ID Nommer reeds in gebruik")
+
+def _kontroleer_unieke_subnommer(
+    db: Session,
+    model,
+    field_name: str,
+    value: Optional[str],
+    exclude_user_id: Optional[int] = None,
+    detail: str = "Nommer reeds in gebruik",
+):
+    if not value:
+        return
+
+    query = db.query(model).filter(getattr(model, field_name) == value)
+    if exclude_user_id is not None:
+        query = query.filter(model.Gebruiker_ID != exclude_user_id)
+    if query.first():
+        raise HTTPException(status_code=400, detail=detail)
+
+def _kontroleer_kampus(db: Session, kampus_id: Optional[int]):
+    if kampus_id is None:
+        return
+    if not db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+
+def _sync_gebruiker_subrekords(
+    db: Session,
+    gebruiker: models.Gebruikers,
+    rol_naam: str,
+    data: dict,
+    *,
+    creating: bool = False,
+):
+    if rol_naam == "Student" or "STU_Nommer" in data or "STU_Is_Koshuis" in data:
+        student = db.query(models.Student).filter(
+            models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID
+        ).first()
+
+        stu_nommer = data.get("STU_Nommer")
+        if not student and not stu_nommer:
+            if creating or rol_naam == "Student":
+                raise HTTPException(status_code=400, detail="Studentenommer is verpligtend")
+        if stu_nommer:
+            _kontroleer_unieke_subnommer(
+                db, models.Student, "STU_Nommer", stu_nommer,
+                exclude_user_id=gebruiker.Gebruiker_ID,
+                detail="Studentenommer reeds in gebruik",
+            )
+            if not student:
+                student = models.Student(
+                    Gebruiker_ID=gebruiker.Gebruiker_ID,
+                    STU_Nommer=stu_nommer,
+                )
+                db.add(student)
+            else:
+                student.STU_Nommer = stu_nommer
+
+        if student and "STU_Is_Koshuis" in data:
+            student.STU_Is_Koshuis = bool(data["STU_Is_Koshuis"])
+
+    if rol_naam == "Personeel" or "PER_Nommer" in data or "PER_Departement" in data:
+        personeel = db.query(models.Personeel).filter(
+            models.Personeel.Gebruiker_ID == gebruiker.Gebruiker_ID
+        ).first()
+
+        per_nommer = data.get("PER_Nommer")
+        if not personeel and not per_nommer:
+            if creating or rol_naam == "Personeel":
+                raise HTTPException(status_code=400, detail="Personeelnommer is verpligtend")
+        if per_nommer:
+            _kontroleer_unieke_subnommer(
+                db, models.Personeel, "PER_Nommer", per_nommer,
+                exclude_user_id=gebruiker.Gebruiker_ID,
+                detail="Personeelnommer reeds in gebruik",
+            )
+            if not personeel:
+                personeel = models.Personeel(
+                    Gebruiker_ID=gebruiker.Gebruiker_ID,
+                    PER_Nommer=per_nommer,
+                )
+                db.add(personeel)
+            else:
+                personeel.PER_Nommer = per_nommer
+
+        if personeel and "PER_Departement" in data:
+            personeel.PER_Departement = data["PER_Departement"]
+
+    if rol_naam == "Kampus_Opsigter" or "KAMO_Nommer" in data or "Kampus_ID" in data:
+        _kontroleer_kampus(db, data.get("Kampus_ID"))
+        opsigter = db.query(models.Kampus_Opsigter).filter(
+            models.Kampus_Opsigter.Gebruiker_ID == gebruiker.Gebruiker_ID
+        ).first()
+
+        kamo_nommer = data.get("KAMO_Nommer")
+        if not opsigter and not kamo_nommer:
+            if creating or rol_naam == "Kampus_Opsigter":
+                raise HTTPException(status_code=400, detail="Opsigternommer is verpligtend")
+        if kamo_nommer:
+            _kontroleer_unieke_subnommer(
+                db, models.Kampus_Opsigter, "KAMO_Nommer", kamo_nommer,
+                exclude_user_id=gebruiker.Gebruiker_ID,
+                detail="Opsigternommer reeds in gebruik",
+            )
+            if not opsigter:
+                opsigter = models.Kampus_Opsigter(
+                    Gebruiker_ID=gebruiker.Gebruiker_ID,
+                    KAMO_Nommer=kamo_nommer,
+                )
+                db.add(opsigter)
+            else:
+                opsigter.KAMO_Nommer = kamo_nommer
+
+        if opsigter and "Kampus_ID" in data:
+            opsigter.Kampus_ID = data["Kampus_ID"]
+
+    if rol_naam == "Sekuriteit_Wag" or "SEK_Nommer" in data:
+        wag = db.query(models.Sekuriteit_Wag).filter(
+            models.Sekuriteit_Wag.Gebruiker_ID == gebruiker.Gebruiker_ID
+        ).first()
+
+        sek_nommer = data.get("SEK_Nommer")
+        if not wag and not sek_nommer:
+            if creating or rol_naam == "Sekuriteit_Wag":
+                raise HTTPException(status_code=400, detail="Wagnommer is verpligtend")
+        if sek_nommer:
+            _kontroleer_unieke_subnommer(
+                db, models.Sekuriteit_Wag, "SEK_Nommer", sek_nommer,
+                exclude_user_id=gebruiker.Gebruiker_ID,
+                detail="Wagnommer reeds in gebruik",
+            )
+            if not wag:
+                db.add(models.Sekuriteit_Wag(
+                    Gebruiker_ID=gebruiker.Gebruiker_ID,
+                    SEK_Nommer=sek_nommer,
+                ))
+            else:
+                wag.SEK_Nommer = sek_nommer
+
+def _sync_gebruiker_nfc_tag(db: Session, gebruiker_id: int, data: dict):
+    nfc_fields = {"NFC_UID", "NFC_Tipe", "NFC_Is_Aktief"}
+    if not any(field in data for field in nfc_fields):
+        return
+
+    uid = data.get("NFC_UID")
+    nfc_tipe = data.get("NFC_Tipe") or "Gebruiker"
+    nfc_is_aktief = data.get("NFC_Is_Aktief", True)
+
+    if uid:
+        bestaande_uid = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.NFC_UID == uid,
+            models.NFC_Tags.Gebruiker_ID != gebruiker_id,
+        ).first()
+        if bestaande_uid:
+            raise HTTPException(status_code=400, detail="NFC tag reeds aan 'n ander gebruiker gekoppel")
+
+    tag = db.query(models.NFC_Tags).filter(
+        models.NFC_Tags.Gebruiker_ID == gebruiker_id
+    ).order_by(models.NFC_Tags.NFC_Is_Aktief.desc(), models.NFC_Tags.NFC_Tags_ID.desc()).first()
+
+    if not tag and not uid:
+        raise HTTPException(status_code=400, detail="NFC_UID is verpligtend wanneer 'n nuwe NFC tag geskep word")
+
+    if not tag:
+        tag = models.NFC_Tags(
+            NFC_UID=uid,
+            Gebruiker_ID=gebruiker_id,
+            NFC_Tipe=nfc_tipe,
+            NFC_Is_Aktief=bool(nfc_is_aktief),
+        )
+        db.add(tag)
+        return
+
+    if uid:
+        tag.NFC_UID = uid
+    if "NFC_Tipe" in data:
+        tag.NFC_Tipe = nfc_tipe
+    if "NFC_Is_Aktief" in data:
+        tag.NFC_Is_Aktief = bool(nfc_is_aktief)
+
 def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
     """Veilige JSON-serialisering vir Gebruikers + rol/subrol data."""
     rol_naam = g.rol.ROL_Naam if getattr(g, "rol", None) else None
@@ -119,6 +323,7 @@ def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
 
     if getattr(g, "student", None):
         data["STU_Nommer"] = g.student.STU_Nommer
+        data["STU_Is_Koshuis"] = g.student.STU_Is_Koshuis
 
     if getattr(g, "personeel", None):
         data["PER_Nommer"] = g.personeel.PER_Nommer
@@ -126,9 +331,20 @@ def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
 
     if getattr(g, "kampus_opsigter", None):
         data["KAMO_Nommer"] = g.kampus_opsigter.KAMO_Nommer
+        data["Kampus_ID"] = g.kampus_opsigter.Kampus_ID
 
     if getattr(g, "sekuriteit_wag", None):
         data["SEK_Nommer"] = g.sekuriteit_wag.SEK_Nommer
+
+    aktiewe_nfc = None
+    nfc_tags = getattr(g, "nfc_tags", None)
+    if nfc_tags:
+        aktiewe_nfc = next((tag for tag in nfc_tags if tag.NFC_Is_Aktief), nfc_tags[-1])
+    if aktiewe_nfc:
+        data["NFC_Tags_ID"] = aktiewe_nfc.NFC_Tags_ID
+        data["NFC_UID"] = aktiewe_nfc.NFC_UID
+        data["NFC_Tipe"] = aktiewe_nfc.NFC_Tipe
+        data["NFC_Is_Aktief"] = aktiewe_nfc.NFC_Is_Aktief
 
     return data
 
@@ -220,36 +436,21 @@ def skep_gebruiker(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
-    if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_Epos == user_in.GEB_Epos).first():
-        raise HTTPException(status_code=400, detail="E-pos reeds geregistreer")
-
-    if db.query(models.Gebruikers).filter(models.Gebruikers.GEB_ID_Nommer == user_in.GEB_ID_Nommer).first():
-        raise HTTPException(status_code=400, detail="ID Nommer reeds in gebruik")
-
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user_in.Rol_ID).first()
-    if not rol:
-        raise HTTPException(status_code=400, detail="Rol bestaan nie")
-
+    _kontroleer_unieke_gebruiker_velde(
+        db,
+        epos=str(user_in.GEB_Epos),
+        id_nommer=user_in.GEB_ID_Nommer,
+    )
+    rol = _kry_rol(db, user_in.Rol_ID)
     rol_naam = rol.ROL_Naam
-
-    if rol_naam == "Student" and not user_in.STU_Nommer:
-        raise HTTPException(status_code=400, detail="Studentenommer is verpligtend")
-
-    if rol_naam == "Personeel" and not user_in.PER_Nommer:
-        raise HTTPException(status_code=400, detail="Personeelnommer is verpligtend")
-
-    if rol_naam == "Kampus_Opsigter" and not user_in.KAMO_Nommer:
-        raise HTTPException(status_code=400, detail="Opsigternommer is verpligtend")
-
-    if rol_naam == "Sekuriteit_Wag" and not user_in.SEK_Nommer:
-        raise HTTPException(status_code=400, detail="Wagnommer is verpligtend")
+    user_data = user_in.dict(exclude_unset=True)
 
     try:
         db_user = models.Gebruikers(
             GEB_Naam=user_in.GEB_Naam,
             GEB_Van=user_in.GEB_Van,
             GEB_ID_Nommer=user_in.GEB_ID_Nommer,
-            GEB_Epos=user_in.GEB_Epos,
+            GEB_Epos=str(user_in.GEB_Epos),
             GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord),
             GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
             GEB_Profiel_Foto=user_in.GEB_Profiel_Foto,
@@ -260,38 +461,8 @@ def skep_gebruiker(
         db.add(db_user)
         db.flush()
 
-        if rol_naam == "Student":
-            if db.query(models.Student).filter(models.Student.STU_Nommer == user_in.STU_Nommer).first():
-                raise HTTPException(status_code=400, detail="Studentenommer reeds in gebruik")
-            db.add(models.Student(
-                Gebruiker_ID=db_user.Gebruiker_ID,
-                STU_Nommer=user_in.STU_Nommer
-            ))
-
-        elif rol_naam == "Personeel":
-            if db.query(models.Personeel).filter(models.Personeel.PER_Nommer == user_in.PER_Nommer).first():
-                raise HTTPException(status_code=400, detail="Personeelnommer reeds in gebruik")
-            db.add(models.Personeel(
-                Gebruiker_ID=db_user.Gebruiker_ID,
-                PER_Nommer=user_in.PER_Nommer,
-                PER_Departement=None
-            ))
-
-        elif rol_naam == "Kampus_Opsigter":
-            if db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.KAMO_Nommer == user_in.KAMO_Nommer).first():
-                raise HTTPException(status_code=400, detail="Opsigternommer reeds in gebruik")
-            db.add(models.Kampus_Opsigter(
-                Gebruiker_ID=db_user.Gebruiker_ID,
-                KAMO_Nommer=user_in.KAMO_Nommer
-            ))
-
-        elif rol_naam == "Sekuriteit_Wag":
-            if db.query(models.Sekuriteit_Wag).filter(models.Sekuriteit_Wag.SEK_Nommer == user_in.SEK_Nommer).first():
-                raise HTTPException(status_code=400, detail="Wagnommer reeds in gebruik")
-            db.add(models.Sekuriteit_Wag(
-                Gebruiker_ID=db_user.Gebruiker_ID,
-                SEK_Nommer=user_in.SEK_Nommer
-            ))
+        _sync_gebruiker_subrekords(db, db_user, rol_naam, user_data, creating=True)
+        _sync_gebruiker_nfc_tag(db, db_user.Gebruiker_ID, user_data)
 
         db.commit()
         db.refresh(db_user)
@@ -305,7 +476,7 @@ def skep_gebruiker(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Kon nie gebruiker skep nie: {str(e)}")
 
-@app.put("/gebruikers/{user_id}", response_model=schemas.APIResponse[schemas.User])
+@app.put("/gebruikers/{user_id}", response_model=schemas.APIResponse[Any])
 def opdateer_gebruiker(
     user_id: int, 
     user_in: schemas.UserUpdate, 
@@ -321,12 +492,51 @@ def opdateer_gebruiker(
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
     update_data = user_in.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_user, key, value)
 
-    db.commit()
-    db.refresh(db_user)
-    return schemas.APIResponse(sukses=True, data=_gebruiker_to_dict(db_user))
+    if "GEB_Epos" in update_data or "GEB_ID_Nommer" in update_data:
+        _kontroleer_unieke_gebruiker_velde(
+            db,
+            epos=str(update_data["GEB_Epos"]) if "GEB_Epos" in update_data else None,
+            id_nommer=update_data.get("GEB_ID_Nommer"),
+            exclude_user_id=user_id,
+        )
+
+    rol = _kry_rol(db, update_data.get("Rol_ID", db_user.Rol_ID))
+
+    gewone_velde = {
+        "GEB_Naam",
+        "GEB_Van",
+        "GEB_ID_Nommer",
+        "GEB_Epos",
+        "GEB_Selfoon_Nr",
+        "GEB_Profiel_Foto",
+        "Rol_ID",
+        "Is_Aktief",
+    }
+
+    try:
+        for key, value in update_data.items():
+            if key not in gewone_velde:
+                continue
+            if key == "GEB_Epos" and value is not None:
+                value = str(value)
+            setattr(db_user, key, value)
+
+        if "GEB_Wagwoord" in update_data and update_data["GEB_Wagwoord"]:
+            db_user.GEB_Wagwoord = auth.get_password_hash(update_data["GEB_Wagwoord"])
+
+        _sync_gebruiker_subrekords(db, db_user, rol.ROL_Naam, update_data)
+        _sync_gebruiker_nfc_tag(db, user_id, update_data)
+
+        db.commit()
+        db.refresh(db_user)
+        return schemas.APIResponse(sukses=True, data=_gebruiker_to_dict(db_user))
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Kon nie gebruiker opdateer nie: {str(e)}")
 
 @app.delete("/gebruikers/{user_id}", response_model=schemas.APIResponse[dict])
 def verwyder_gebruiker(
@@ -491,6 +701,73 @@ def lees_kampusse(db: Session = Depends(get_db)):
     """
     kampusse = db.query(models.Kampus).all()
     return schemas.APIResponse(sukses=True, data=kampusse)
+
+
+@app.post("/kampusse", response_model=schemas.APIResponse[schemas.Kampus], status_code=status.HTTP_201_CREATED)
+def skep_kampus(
+    kampus_in: schemas.KampusCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Skep 'n nuwe kampus. Slegs vir Admin.
+    """
+    naam = kampus_in.KAM_Naam.strip()
+    if not naam:
+        raise HTTPException(status_code=400, detail="Kampusnaam is verpligtend")
+
+    bestaande = db.query(models.Kampus).filter(
+        func.lower(models.Kampus.KAM_Naam) == naam.lower()
+    ).first()
+    if bestaande:
+        raise HTTPException(status_code=400, detail="Kampusnaam reeds in gebruik")
+
+    kampus = models.Kampus(
+        KAM_Naam=naam,
+        KAM_Adres=kampus_in.KAM_Adres,
+    )
+    db.add(kampus)
+    db.commit()
+    db.refresh(kampus)
+    return schemas.APIResponse(sukses=True, data=kampus)
+
+
+@app.put("/kampusse/{kampus_id}", response_model=schemas.APIResponse[schemas.Kampus])
+def opdateer_kampus(
+    kampus_id: int,
+    kampus_in: schemas.KampusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Dateer 'n kampus op. Slegs vir Admin.
+    """
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    update_data = kampus_in.dict(exclude_unset=True)
+    if "KAM_Naam" in update_data:
+        naam = update_data["KAM_Naam"].strip()
+        if not naam:
+            raise HTTPException(status_code=400, detail="Kampusnaam is verpligtend")
+
+        bestaande = db.query(models.Kampus).filter(
+            func.lower(models.Kampus.KAM_Naam) == naam.lower(),
+            models.Kampus.Kampus_ID != kampus_id,
+        ).first()
+        if bestaande:
+            raise HTTPException(status_code=400, detail="Kampusnaam reeds in gebruik")
+        kampus.KAM_Naam = naam
+
+    if "KAM_Adres" in update_data:
+        kampus.KAM_Adres = update_data["KAM_Adres"]
+
+    db.commit()
+    db.refresh(kampus)
+    return schemas.APIResponse(sukses=True, data=kampus)
 
 
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
@@ -1186,6 +1463,7 @@ def kry_my_profiel(
             "status": "Aktief" if current_user.Is_Aktief else "Onaktief",
 
             "student_nommer": student.STU_Nommer if student else None,
+            "student_is_koshuis": student.STU_Is_Koshuis if student else False,
             "personeel_nommer": personeel.PER_Nommer if personeel else None,
             "departement": personeel.PER_Departement if personeel else None,
             "opsigter_nommer": opsigter.KAMO_Nommer if opsigter else None,
@@ -1336,6 +1614,7 @@ def soek_studente(
             {
                 "gebruiker_id": gebruiker.Gebruiker_ID,
                 "student_nommer": student.STU_Nommer,
+                "student_is_koshuis": student.STU_Is_Koshuis,
                 "naam": gebruiker.GEB_Naam,
                 "van": gebruiker.GEB_Van,
                 "foto_url": gebruiker.GEB_Profiel_Foto,
@@ -1376,9 +1655,3 @@ def kry_lokasie_deur_uid(
             "NFC_UID": tag.NFC_UID
         }
     )
-    
-    
-    
-    
-    
-    
