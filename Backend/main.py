@@ -548,6 +548,10 @@ def verwyder_gebruiker(
     """
     F2: Sagte verwydering van 'n gebruiker (deaktiveer).
     """
+    # 'n Admin mag nie sy eie rekening skrap nie.
+    if user_id == current_user.Gebruiker_ID:
+        raise HTTPException(status_code=400, detail="Jy kan nie jou eie rekening skrap nie.")
+
     return opdateer_gebruiker_status(user_id=user_id, is_aktief=False, db=db, current_user=current_user, is_admin=is_admin)
 
 @app.get("/gebruikers", response_model=schemas.APIResponse[List[Any]])

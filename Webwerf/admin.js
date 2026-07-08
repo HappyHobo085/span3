@@ -41,6 +41,7 @@
   const userModalOverlay = document.getElementById('createUserModal');
   const closeUserModalBtn = document.getElementById('close-create-user-modal');
   const createUserBtn = document.getElementById('create-user-btn');
+  const deleteUserBtn = document.getElementById('delete-user-btn');
   const newUserName = document.getElementById('new-user-name');
   const newUserSurname = document.getElementById('new-user-surname');
   const newUserEmail = document.getElementById('new-user-email');
@@ -69,6 +70,18 @@
   // =====================================================================
   //  SHARED HELPERS
   // =====================================================================
+
+  /** Read the logged-in user's ID from the JWT payload (null if unknown). */
+  function getLoggedInUserId() {
+    const token = localStorage.getItem('access_token');
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.sub ? Number(payload.sub) : null;
+    } catch (decodeErr) {
+      return null;
+    }
+  }
 
   /** Cap a panel list at 5 visible rows; more than that scrolls inside the list. */
   function capListHeight(list, rowSelector) {
@@ -333,6 +346,7 @@
 
     if (userModalTitle) userModalTitle.textContent = 'Skep Gebruiker';
     if (createUserBtn) createUserBtn.textContent = 'Skep';
+    if (deleteUserBtn) deleteUserBtn.style.display = 'none';
   }
 
   /**
@@ -368,6 +382,11 @@
 
     if (userModalTitle) userModalTitle.textContent = 'Wysig Gebruiker';
     if (createUserBtn) createUserBtn.textContent = 'Stoor Veranderinge';
+
+    // Admins mag nie hul eie rekening skrap nie — kry ook 'n 400 van die backend.
+    if (deleteUserBtn) {
+      deleteUserBtn.style.display = Number(userId) === getLoggedInUserId() ? 'none' : '';
+    }
 
     showUserModal();
   }
@@ -419,6 +438,9 @@
 
     userList.innerHTML = '';
     json.data.forEach(function (user) {
+      // Geskrapte (onaktiewe) gebruikers word nie in die admin-lys gewys nie.
+      if (user.Is_Aktief === false) return;
+
       // 'n Gebruiker is "Aktief" sodra daar 'n NFC-tag aan sy profiel gekoppel is.
       const hetNfc = Boolean(user.NFC_UID);
       addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, hetNfc);
@@ -703,6 +725,30 @@ const json = await window.MoonApi.createGebruiker(payload);
     row.dataset.search = `${info.naam} ${info.van} ${info.epos}`.toLowerCase();
   }
 
+  /** Soft-delete the currently-edited user (DELETE /gebruikers/{id}). */
+  async function submitDeleteUser() {
+    if (!editingUserId || !window.MoonApi) return;
+
+    const naam = ((newUserName ? newUserName.value : '') + ' ' +
+                  (newUserSurname ? newUserSurname.value : '')).trim() || 'hierdie gebruiker';
+    if (!confirm('Is jy seker jy wil vir ' + naam + ' skrap?')) return;
+
+    const userId = editingUserId;
+    const json = await window.MoonApi.deleteGebruiker(userId);
+
+    if (json && json.sukses) {
+      alert('Gebruiker suksesvol geskrap.');
+      const row = userList
+        ? userList.querySelector('.admin-user-row[data-user-id="' + userId + '"]')
+        : null;
+      if (row) row.remove();
+      capListHeight(userList, '.admin-user-row');
+      closeUserModal(); // resets the form back to create mode
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skrap nie.');
+    }
+  }
+
   // =====================================================================
   //  WIRE EVENTS
   // =====================================================================
@@ -765,6 +811,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   }
   if (createUserBtn) {
     createUserBtn.addEventListener('click', function () { submitNewUser(); });
+  }
+  if (deleteUserBtn) {
+    deleteUserBtn.addEventListener('click', function () { submitDeleteUser(); });
   }
   if (userSearch) {
     userSearch.addEventListener('input', function () {

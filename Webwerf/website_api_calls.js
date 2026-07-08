@@ -182,6 +182,18 @@
     },
 
     /**
+     * DELETE /gebruikers/{userId}  (slegs Admin — sagte verwydering)
+     */
+    deleteGebruiker: async function (userId) {
+
+      const r = await apiRequest('/gebruikers/' + userId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
      * GET /kampusse/status
      * Returns summary scan counts for all campuses. No auth required.
      * Reserved for future use (e.g. a multi-campus overview dashboard).
