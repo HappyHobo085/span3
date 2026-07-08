@@ -1724,6 +1724,12 @@ def wagte_profile_scan(
             detail="Gebruiker nie gevind nie",
         )
         
+    if not gebruiker.Is_Aktief:
+        raise HTTPException(
+        status_code=403,
+        detail="Gebruiker is gedeaktiveer en mag nie scan nie",
+    )
+        
     laaste_log = (
     db.query(models.ToegangsLogs)
     .filter(
