@@ -105,19 +105,21 @@
     }
   }
 
-  /** Cap a panel list at 5 visible rows; more than that scrolls inside the list. */
-  function capListHeight(list, rowSelector) {
+  /** Cap a panel list at maxRows visible rows (default 5); more than that scrolls inside the list. */
+  function capListHeight(list, rowSelector, maxRows) {
     if (!list) return;
+
+    maxRows = maxRows || 5;
 
     const visible = Array.prototype.filter.call(
       list.querySelectorAll(rowSelector),
       function (row) { return row.style.display !== 'none'; }
     );
 
-    if (visible.length > 5) {
+    if (visible.length > maxRows) {
       const first = visible[0].getBoundingClientRect();
-      const fifth = visible[4].getBoundingClientRect();
-      list.style.maxHeight = (fifth.bottom - first.top) + 'px';
+      const last = visible[maxRows - 1].getBoundingClientRect();
+      list.style.maxHeight = (last.bottom - first.top) + 'px';
     } else {
       list.style.maxHeight = '';
     }
@@ -175,7 +177,7 @@
         ? venueList.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]')
         : null;
       if (row) row.remove();
-      capListHeight(venueList, '.admin-venue-row');
+      capListHeight(venueList, '.admin-venue-row', 6);
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie lokaal verwyder nie.');
     }
@@ -438,7 +440,7 @@
     row.style.display = (matchesSearch && matchesCampus) ? '' : 'none';
   });
 
-  capListHeight(venueList, '.admin-venue-row');
+  capListHeight(venueList, '.admin-venue-row', 6);
 }
 
   async function submitNewClass() {
@@ -483,7 +485,7 @@
       closeClassModal();
       const nuweId = json.data && json.data.lokasie ? json.data.lokasie.Lokasie_ID : '';
       addVenueRow(nuweId, roomName, kampusId);
-      capListHeight(venueList, '.admin-venue-row');
+      capListHeight(venueList, '.admin-venue-row', 6);
     } else {
       alert((json && json.fout) || 'Kon nie lokaal skep nie.');
     }
