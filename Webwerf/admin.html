@@ -36,42 +36,46 @@
       </div>
     </section>
 
-    <!-- Two-panel layout -->
+    <!-- Two-column layout: each column stacks panels independently -->
     <section class="panels">
-      <article class="glass-card panel" aria-label="Gebruikers">
-        <h2>Gebruikers</h2>
-        <div class="list-search" style="display:flex;gap:8px">
-          <input class="glass-input" type="search" id="user-search"
-                 aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
-          <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
-            <option value="">Alle Rolle</option>
+      <div class="panel-column">
+        <article class="glass-card panel" aria-label="Gebruikers">
+          <h2>Gebruikers</h2>
+          <div class="list-search" style="display:flex;gap:8px">
+            <input class="glass-input" type="search" id="user-search"
+                   aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
+            <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
+              <option value="">Alle Rolle</option>
+              <!-- Loaded from API by admin.js -->
+            </select>
+          </div>
+          <div class="admin-list" id="user-list">
             <!-- Loaded from API by admin.js -->
-          </select>
-        </div>
-        <div class="admin-list" id="user-list">
-          <!-- Loaded from API by admin.js -->
-        </div>
-      </article>
-      <article class="glass-card panel" aria-label="Lokale">
-        <h2>Lokale</h2>
-        <div class="list-search" style="display:flex;gap:8px">
-          <input class="glass-input" type="search" id="venue-search"
-                 aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
-          <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
-            <option value="">Alle Kampusse</option>
+          </div>
+        </article>
+        <article class="glass-card panel" aria-label="Kampusse">
+          <h2>Kampusse</h2>
+          <div class="admin-list" id="kampus-list">
             <!-- Loaded from API by admin.js -->
-          </select>
-        </div>
-        <div class="admin-list" id="venue-list">
-          <!-- Loaded from API by admin.js -->
-        </div>
-      </article>
-      <article class="glass-card panel" aria-label="Kampusse">
-        <h2>Kampusse</h2>
-        <div class="admin-list" id="kampus-list">
-          <!-- Loaded from API by admin.js -->
-        </div>
-      </article>
+          </div>
+        </article>
+      </div>
+      <div class="panel-column">
+        <article class="glass-card panel" aria-label="Lokale">
+          <h2>Lokale</h2>
+          <div class="list-search" style="display:flex;gap:8px">
+            <input class="glass-input" type="search" id="venue-search"
+                   aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
+            <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
+              <option value="">Alle Kampusse</option>
+              <!-- Loaded from API by admin.js -->
+            </select>
+          </div>
+          <div class="admin-list" id="venue-list">
+            <!-- Loaded from API by admin.js -->
+          </div>
+        </article>
+      </div>
     </section>
   </main>
 

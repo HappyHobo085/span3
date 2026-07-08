@@ -67,6 +67,28 @@
   };
 
   // =====================================================================
+  //  SHARED HELPERS
+  // =====================================================================
+
+  /** Cap a panel list at 5 visible rows; more than that scrolls inside the list. */
+  function capListHeight(list, rowSelector) {
+    if (!list) return;
+
+    const visible = Array.prototype.filter.call(
+      list.querySelectorAll(rowSelector),
+      function (row) { return row.style.display !== 'none'; }
+    );
+
+    if (visible.length > 5) {
+      const first = visible[0].getBoundingClientRect();
+      const fifth = visible[4].getBoundingClientRect();
+      list.style.maxHeight = (fifth.bottom - first.top) + 'px';
+    } else {
+      list.style.maxHeight = '';
+    }
+  }
+
+  // =====================================================================
   //  VENUE (LOKALE) SECTION
   // =====================================================================
 
@@ -237,6 +259,8 @@
 
     row.style.display = (matchesSearch && matchesCampus) ? '' : 'none';
   });
+
+  capListHeight(venueList, '.admin-venue-row');
 }
 
   async function submitNewClass() {
@@ -262,6 +286,7 @@
       classRoomName.value = '';
       classKampus.value = '';
       addVenueRow(roomName, kampusId);
+      capListHeight(venueList, '.admin-venue-row');
     } else {
       alert((json && json.fout) || 'Kon nie lokaal skep nie.');
     }
@@ -493,26 +518,8 @@
     row.style.display = (matchesSearch && matchesRole) ? '' : 'none';
   });
 
-  capUserListHeight();
+  capListHeight(userList, '.admin-user-row');
 }
-
-  /** Cap the user list at 5 visible rows; more than that scrolls inside the list. */
-  function capUserListHeight() {
-    if (!userList) return;
-
-    const visible = Array.prototype.filter.call(
-      userList.querySelectorAll('.admin-user-row'),
-      function (row) { return row.style.display !== 'none'; }
-    );
-
-    if (visible.length > 5) {
-      const first = visible[0].getBoundingClientRect();
-      const fifth = visible[4].getBoundingClientRect();
-      userList.style.maxHeight = (fifth.bottom - first.top) + 'px';
-    } else {
-      userList.style.maxHeight = '';
-    }
-  }
 
   /** Show/hide the studentenommer field based on selected role. */
   function toggleStudentField() {
@@ -620,7 +627,7 @@ const json = await window.MoonApi.createGebruiker(payload);
 
       // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
       addUserRow(nuweId, naam, van, epos, rolId, false);
-      capUserListHeight();
+      capListHeight(userList, '.admin-user-row');
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
     }

@@ -171,6 +171,8 @@ body{
 
 /* ─── Two-panel layout ───────────────────────────────────────────────────── */
 .panels{display:grid;grid-template-columns:1fr 1fr;gap:var(--panel-gap)}
+.panel-column{display:flex;flex-direction:column;gap:var(--panel-gap);align-items:stretch}
+.panel-column>.panel{flex:0 0 auto}
 .panel{padding:20px}
 .panel h2{font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:14px}
 
