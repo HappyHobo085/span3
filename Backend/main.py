@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, text
 import uuid
 import os
 
@@ -18,6 +18,17 @@ import models, schemas, auth
 
 # Skep alle tabelle outomaties by opstart
 models.Base.metadata.create_all(bind=engine)
+
+# Migrasie 006: create_all verander nie bestaande tabelle nie, dus word
+# Kampus_ID se NOT NULL-beperking hier verwyder op databasisse wat die
+# koshuis-tabel reeds met die ou skema het. Idempotent - veilig om elke keer te loop.
+try:
+    with engine.connect() as _conn:
+        _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "Kampus_ID" DROP NOT NULL'))
+        _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "KOS_Kapasiteit" DROP DEFAULT'))
+        _conn.commit()
+except Exception as _migrasie_fout:
+    print(f"Waarskuwing: migrasie 006 (koshuis.Kampus_ID nullable) het misluk: {_migrasie_fout}")
 
 app = FastAPI(
     title="MOON Admin API",
@@ -613,6 +624,10 @@ def verwyder_gebruiker(
     """
     F2: Sagte verwydering van 'n gebruiker (deaktiveer).
     """
+    # 'n Admin mag nie sy eie rekening skrap nie.
+    if user_id == current_user.Gebruiker_ID:
+        raise HTTPException(status_code=400, detail="Jy kan nie jou eie rekening skrap nie.")
+
     return opdateer_gebruiker_status(user_id=user_id, is_aktief=False, db=db, current_user=current_user, is_admin=is_admin)
 
 @app.get("/gebruikers", response_model=schemas.APIResponse[List[Any]])
@@ -835,6 +850,159 @@ def opdateer_kampus(
     return schemas.APIResponse(sukses=True, data=kampus)
 
 
+@app.delete("/kampusse/{kampus_id}", response_model=schemas.APIResponse[dict])
+def verwyder_kampus(
+    kampus_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n kampus. Slegs vir Admin.
+    Word geblokkeer as daar nog data aan die kampus gekoppel is.
+    """
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    if db.query(models.Lokasie).filter(models.Lokasie.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog lokale aan hierdie kampus gekoppel")
+    if db.query(models.Koshuis).filter(models.Koshuis.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog koshuise aan hierdie kampus gekoppel")
+    if db.query(models.Funksie).filter(models.Funksie.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog funksies aan hierdie kampus gekoppel")
+    if db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog opsigters aan hierdie kampus gekoppel")
+
+    db.delete(kampus)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Kampus suksesvol verwyder"})
+
+
+# --- KOSHUIS ROETES ---
+
+@app.get("/koshuise", response_model=schemas.APIResponse[List[schemas.Koshuis]])
+def lees_koshuise(db: Session = Depends(get_db)):
+    """
+    Stuur 'n lys van alle koshuise terug.
+    """
+    koshuise = db.query(models.Koshuis).all()
+    return schemas.APIResponse(sukses=True, data=koshuise)
+
+
+@app.post("/koshuise", response_model=schemas.APIResponse[schemas.Koshuis], status_code=status.HTTP_201_CREATED)
+def skep_koshuis(
+    koshuis_in: schemas.KoshuisCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Skep 'n nuwe koshuis. Slegs vir Admin.
+    """
+    naam = koshuis_in.KOS_Naam.strip()
+    if not naam:
+        raise HTTPException(status_code=400, detail="Koshuisnaam is verpligtend")
+
+    if koshuis_in.KOS_Kapasiteit <= 0:
+        raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
+
+    if koshuis_in.Kampus_ID is not None:
+        kampus_bestaan = db.query(models.Kampus).filter(
+            models.Kampus.Kampus_ID == koshuis_in.Kampus_ID
+        ).first()
+        if not kampus_bestaan:
+            raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+
+    bestaande = db.query(models.Koshuis).filter(
+        func.lower(models.Koshuis.KOS_Naam) == naam.lower()
+    ).first()
+    if bestaande:
+        raise HTTPException(status_code=400, detail="Koshuisnaam reeds in gebruik")
+
+    koshuis = models.Koshuis(
+        KOS_Naam=naam,
+        KOS_Adres=koshuis_in.KOS_Adres,
+        KOS_Kapasiteit=koshuis_in.KOS_Kapasiteit,
+        Kampus_ID=koshuis_in.Kampus_ID,
+    )
+    db.add(koshuis)
+    db.commit()
+    db.refresh(koshuis)
+    return schemas.APIResponse(sukses=True, data=koshuis)
+
+
+@app.put("/koshuise/{koshuis_id}", response_model=schemas.APIResponse[schemas.Koshuis])
+def opdateer_koshuis(
+    koshuis_id: int,
+    koshuis_in: schemas.KoshuisUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Dateer 'n koshuis op. Slegs vir Admin.
+    """
+    koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
+    if not koshuis:
+        raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+    update_data = koshuis_in.dict(exclude_unset=True)
+
+    if "KOS_Naam" in update_data:
+        naam = update_data["KOS_Naam"].strip()
+        if not naam:
+            raise HTTPException(status_code=400, detail="Koshuisnaam is verpligtend")
+
+        bestaande = db.query(models.Koshuis).filter(
+            func.lower(models.Koshuis.KOS_Naam) == naam.lower(),
+            models.Koshuis.Koshuis_ID != koshuis_id,
+        ).first()
+        if bestaande:
+            raise HTTPException(status_code=400, detail="Koshuisnaam reeds in gebruik")
+        koshuis.KOS_Naam = naam
+
+    if "KOS_Adres" in update_data:
+        koshuis.KOS_Adres = update_data["KOS_Adres"]
+
+    if "KOS_Kapasiteit" in update_data:
+        if update_data["KOS_Kapasiteit"] is None or update_data["KOS_Kapasiteit"] <= 0:
+            raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
+        koshuis.KOS_Kapasiteit = update_data["KOS_Kapasiteit"]
+
+    if "Kampus_ID" in update_data:
+        if update_data["Kampus_ID"] is not None:
+            kampus_bestaan = db.query(models.Kampus).filter(
+                models.Kampus.Kampus_ID == update_data["Kampus_ID"]
+            ).first()
+            if not kampus_bestaan:
+                raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+        koshuis.Kampus_ID = update_data["Kampus_ID"]
+
+    db.commit()
+    db.refresh(koshuis)
+    return schemas.APIResponse(sukses=True, data=koshuis)
+
+
+@app.delete("/koshuise/{koshuis_id}", response_model=schemas.APIResponse[dict])
+def verwyder_koshuis(
+    koshuis_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n koshuis. Slegs vir Admin.
+    """
+    koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
+    if not koshuis:
+        raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+    db.delete(koshuis)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Koshuis suksesvol verwyder"})
+
+
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
 def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
     """
@@ -1004,6 +1172,71 @@ def lys_lokasies(
         data=result
     )
     
+@app.put("/lokasies/{lokasie_id}", response_model=schemas.APIResponse[schemas.Lokasie])
+def opdateer_lokasie(
+    lokasie_id: int,
+    lokasie_in: schemas.LokasieUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Dateer 'n lokasie op. Slegs vir Admin.
+    """
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    update_data = lokasie_in.dict(exclude_unset=True)
+
+    if "LOK_Naam" in update_data:
+        naam = update_data["LOK_Naam"].strip()
+        if not naam:
+            raise HTTPException(status_code=400, detail="Lokaalnaam is verpligtend")
+        lokasie.LOK_Naam = naam
+
+    if "LOK_Tipe" in update_data:
+        lokasie.LOK_Tipe = update_data["LOK_Tipe"]
+
+    if "Kampus_ID" in update_data:
+        if update_data["Kampus_ID"] is not None:
+            kampus_bestaan = db.query(models.Kampus).filter(
+                models.Kampus.Kampus_ID == update_data["Kampus_ID"]
+            ).first()
+            if not kampus_bestaan:
+                raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+        lokasie.Kampus_ID = update_data["Kampus_ID"]
+
+    db.commit()
+    db.refresh(lokasie)
+    return schemas.APIResponse(sukses=True, data=lokasie)
+
+
+@app.delete("/lokasies/{lokasie_id}", response_model=schemas.APIResponse[dict])
+def verwyder_lokasie(
+    lokasie_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n lokasie en sy NFC-tags. Slegs vir Admin.
+    Word geblokkeer as daar toegangslogs vir die lokaal bestaan (oudit-geskiedenis).
+    """
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    if db.query(models.ToegangsLogs).filter(models.ToegangsLogs.Lokasie_ID == lokasie_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie lokaal verwyder nie: daar is toegangslogs vir hierdie lokaal")
+
+    # Elke lokaal kry outomaties 'n NFC-tag; verwyder dit saam met die lokaal.
+    db.query(models.NFC_Tags).filter(models.NFC_Tags.Lokasie_ID == lokasie_id).delete()
+    db.delete(lokasie)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Lokaal suksesvol verwyder"})
+
+
 @app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)
 def skep_klas_met_nfc(
     klas_in: schemas.KlasSkep,

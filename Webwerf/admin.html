@@ -33,49 +33,61 @@
       <div class="control-group" style="flex-direction:row;gap:10px">
         <button class="btn-primary" id="open-create-kampus-modal" type="button">+ Skep Kampus</button>
         <button class="btn-primary" id="open-create-venue-modal" type="button">+ Skep Lokaal</button>
+        <button class="btn-primary" id="open-create-koshuis-modal" type="button">+ Skep Koshuis</button>
       </div>
     </section>
 
-    <!-- Two-column layout: each column stacks panels independently -->
+    <!-- Two-column grid: Gebruikers|Lokale on row 1, Kampusse|Koshuise on row 2
+         so that Kampusse en Koshuise op dieselfde horisontale vlak lê -->
     <section class="panels">
-      <div class="panel-column">
-        <article class="glass-card panel" aria-label="Gebruikers">
-          <h2>Gebruikers</h2>
-          <div class="list-search" style="display:flex;gap:8px">
-            <input class="glass-input" type="search" id="user-search"
-                   aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
-            <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
-              <option value="">Alle Rolle</option>
-              <!-- Loaded from API by admin.js -->
-            </select>
-          </div>
-          <div class="admin-list" id="user-list">
+      <article class="glass-card panel" aria-label="Gebruikers">
+        <h2>Gebruikers</h2>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="user-search"
+                 aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
+          <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
+            <option value="">Alle Rolle</option>
             <!-- Loaded from API by admin.js -->
-          </div>
-        </article>
-        <article class="glass-card panel" aria-label="Kampusse">
-          <h2>Kampusse</h2>
-          <div class="admin-list" id="kampus-list">
+          </select>
+        </div>
+        <div class="admin-list" id="user-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
+      <article class="glass-card panel" aria-label="Lokale">
+        <h2>Lokale</h2>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="venue-search"
+                 aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
+          <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
+            <option value="">Alle Kampusse</option>
             <!-- Loaded from API by admin.js -->
-          </div>
-        </article>
-      </div>
-      <div class="panel-column">
-        <article class="glass-card panel" aria-label="Lokale">
-          <h2>Lokale</h2>
-          <div class="list-search" style="display:flex;gap:8px">
-            <input class="glass-input" type="search" id="venue-search"
-                   aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
-            <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
-              <option value="">Alle Kampusse</option>
-              <!-- Loaded from API by admin.js -->
-            </select>
-          </div>
-          <div class="admin-list" id="venue-list">
-            <!-- Loaded from API by admin.js -->
-          </div>
-        </article>
-      </div>
+          </select>
+        </div>
+        <div class="admin-list" id="venue-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
+      <article class="glass-card panel" aria-label="Kampusse">
+        <h2>Kampusse</h2>
+        <div class="list-search">
+          <input class="glass-input" type="search" id="kampus-search"
+                 aria-label="Soek kampus" placeholder="Soek kampus...">
+        </div>
+        <div class="admin-list" id="kampus-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
+      <article class="glass-card panel" aria-label="Koshuise">
+        <h2>Koshuise</h2>
+        <div class="list-search">
+          <input class="glass-input" type="search" id="koshuis-search"
+                 aria-label="Soek koshuis" placeholder="Soek koshuis...">
+        </div>
+        <div class="admin-list" id="koshuis-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
     </section>
   </main>
 
@@ -116,6 +128,8 @@
         </select>
       </div>
       <div class="class-modal-actions">
+        <button class="btn-outline btn-danger" id="delete-user-btn" type="button"
+                style="display:none;margin-right:auto">Verwyder</button>
         <button class="btn-outline" id="close-create-user-modal" type="button">Kanselleer</button>
         <button class="btn-primary" id="create-user-btn" type="button">Skep</button>
       </div>
@@ -175,8 +189,41 @@
         <input class="glass-input" id="new-kampus-name" type="text" placeholder="Voer kampusnaam in">
       </div>
       <div class="class-modal-actions">
+        <button class="btn-outline btn-danger" id="delete-kampus-btn" type="button"
+                style="display:none;margin-right:auto">Verwyder</button>
         <button class="btn-outline" id="close-create-kampus-modal" type="button">Kanselleer</button>
         <button class="btn-primary" id="create-kampus-btn" type="button">Skep</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Skep Koshuis -->
+  <div id="createKoshuisModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-koshuis-title">
+      <h3 id="create-koshuis-title">Skep Koshuis</h3>
+      <div class="field">
+        <label for="new-koshuis-name">Naam</label>
+        <input class="glass-input" id="new-koshuis-name" type="text" placeholder="Voer koshuisnaam in">
+      </div>
+      <div class="field">
+        <label for="new-koshuis-address">Adres</label>
+        <input class="glass-input" id="new-koshuis-address" type="text" placeholder="Voer adres in">
+      </div>
+      <div class="field">
+        <label for="new-koshuis-capacity">Kapasiteit</label>
+        <input class="glass-input" id="new-koshuis-capacity" type="number" min="1" placeholder="Voer kapasiteit in">
+      </div>
+      <div class="field">
+        <label for="new-koshuis-kampus">Kampus</label>
+        <select class="glass-select" id="new-koshuis-kampus">
+          <option value="">Kies kampus...</option>
+        </select>
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-outline btn-danger" id="delete-koshuis-btn" type="button"
+                style="display:none;margin-right:auto">Verwyder</button>
+        <button class="btn-outline" id="close-create-koshuis-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-koshuis-btn" type="button">Skep</button>
       </div>
     </div>
   </div>
@@ -196,6 +243,8 @@
         </select>
       </div>
       <div class="class-modal-actions">
+        <button class="btn-outline btn-danger" id="delete-lokaal-btn" type="button"
+                style="display:none;margin-right:auto">Verwyder</button>
         <button class="btn-outline" id="close-class-modal" type="button">Kanselleer</button>
         <button class="btn-primary" id="create-class-button" type="button">Skep</button>
       </div>

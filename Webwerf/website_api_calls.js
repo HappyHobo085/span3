@@ -108,6 +108,106 @@
     },
 
     /**
+     * PUT /kampusse/{kampusId}  (slegs Admin)
+     */
+    updateKampus: async function (kampusId, data) {
+
+      const r = await apiRequest('/kampusse/' + kampusId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * PUT /lokasies/{lokasieId}  (slegs Admin)
+     */
+    updateLokasie: async function (lokasieId, data) {
+
+      const r = await apiRequest('/lokasies/' + lokasieId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * PUT /koshuise/{koshuisId}  (slegs Admin)
+     */
+    updateKoshuis: async function (koshuisId, data) {
+
+      const r = await apiRequest('/koshuise/' + koshuisId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /kampusse/{kampusId}  (slegs Admin)
+     */
+    deleteKampus: async function (kampusId) {
+
+      const r = await apiRequest('/kampusse/' + kampusId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /lokasies/{lokasieId}  (slegs Admin)
+     */
+    deleteLokasie: async function (lokasieId) {
+
+      const r = await apiRequest('/lokasies/' + lokasieId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /koshuise/{koshuisId}  (slegs Admin)
+     */
+    deleteKoshuis: async function (koshuisId) {
+
+      const r = await apiRequest('/koshuise/' + koshuisId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * GET /koshuise
+     */
+    fetchKoshuise: async function () {
+
+      const r = await apiRequest('/koshuise', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * POST /koshuise  (slegs Admin)
+     */
+    createKoshuis: async function (data) {
+
+      const r = await apiRequest('/koshuise', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
      * GET /lokasies
      */
     fetchLokasies: async function () {
@@ -176,6 +276,18 @@
       const r = await apiRequest('/gebruikers/' + userId, {
         method: 'PUT',
         body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /gebruikers/{userId}  (slegs Admin — sagte verwydering)
+     */
+    deleteGebruiker: async function (userId) {
+
+      const r = await apiRequest('/gebruikers/' + userId, {
+        method: 'DELETE',
       });
 
       return r.body;
