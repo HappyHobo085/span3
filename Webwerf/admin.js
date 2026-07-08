@@ -316,12 +316,27 @@
 
     userList.innerHTML = '';
     json.data.forEach(function (user) {
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID);
+      // 'n Gebruiker is "Aktief" sodra daar 'n NFC-tag aan sy profiel gekoppel is.
+      const hetNfc = Boolean(user.NFC_UID);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, hetNfc);
     });
   }
 
+  /** Build the Aktief/Nie-Aktief status badge (aktief = NFC-tag gekoppel). */
+  function buildStatusBadge(hetNfc) {
+    const badge = document.createElement('span');
+    badge.className = 'status-badge ' + (hetNfc ? 'status-badge--active' : 'status-badge--inactive');
+
+    const dot = document.createElement('span');
+    dot.className = 'status-dot';
+    badge.appendChild(dot);
+    badge.appendChild(document.createTextNode(hetNfc ? 'Aktief' : 'Nie-Aktief'));
+
+    return badge;
+  }
+
   /** Create a user row in the list. */
-  function addUserRow(userId, naam, van, epos, rolId) {
+  function addUserRow(userId, naam, van, epos, rolId, hetNfc) {
     if (!userList) return;
 
     const row = document.createElement('div');
@@ -332,7 +347,13 @@
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'admin-user-name';
-    nameDiv.textContent = naam + ' ' + van;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'admin-user-name-text';
+    nameSpan.textContent = naam + ' ' + van;
+
+    nameDiv.appendChild(nameSpan);
+    nameDiv.appendChild(buildStatusBadge(hetNfc));
 
     const emailDiv = document.createElement('div');
     emailDiv.className = 'admin-user-email';
@@ -499,8 +520,8 @@ const json = await window.MoonApi.createGebruiker(payload);
       const nuweId = json.data ? json.data.Gebruiker_ID : null;
       closeUserModal(); // also resets the form back to create mode
 
-      // Add new user to the list immediately
-      addUserRow(nuweId, naam, van, epos, rolId);
+      // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
+      addUserRow(nuweId, naam, van, epos, rolId, false);
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
     }
@@ -559,11 +580,11 @@ const json = await window.MoonApi.createGebruiker(payload);
     const row = userList.querySelector('.admin-user-row[data-user-id="' + userId + '"]');
     if (!row) return;
 
-    const nameDiv = row.querySelector('.admin-user-name');
+    const nameSpan = row.querySelector('.admin-user-name-text');
     const emailDiv = row.querySelector('.admin-user-email');
     const badge = row.querySelector('.role-badge');
 
-    if (nameDiv) nameDiv.textContent = info.naam + ' ' + info.van;
+    if (nameSpan) nameSpan.textContent = info.naam + ' ' + info.van;
     if (emailDiv) emailDiv.textContent = info.epos;
 
     const rolNaam = rolleMap[String(info.rolId)] || 'Onbekend';
