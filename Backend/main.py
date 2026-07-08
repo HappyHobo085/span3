@@ -30,6 +30,27 @@ try:
 except Exception as _migrasie_fout:
     print(f"Waarskuwing: migrasie 006 (koshuis.Kampus_ID nullable) het misluk: {_migrasie_fout}")
 
+# Migrasie 007: koppel 'n student aan 'n spesifieke koshuis. create_all voeg nie
+# kolomme by bestaande tabelle nie, dus word dit hier bygevoeg. Idempotent.
+try:
+    with engine.connect() as _conn:
+        _conn.execute(text('ALTER TABLE student ADD COLUMN IF NOT EXISTS "Koshuis_ID" INT'))
+        _conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'fk_student_koshuis'
+                ) THEN
+                    ALTER TABLE student
+                    ADD CONSTRAINT fk_student_koshuis
+                    FOREIGN KEY ("Koshuis_ID") REFERENCES koshuis("Koshuis_ID");
+                END IF;
+            END $$;
+        """))
+        _conn.commit()
+except Exception as _migrasie_fout:
+    print(f"Waarskuwing: migrasie 007 (student.Koshuis_ID) het misluk: {_migrasie_fout}")
+
 app = FastAPI(
     title="MOON Admin API",
     description="Louis se Admin API vir die MOON projek.",
@@ -196,7 +217,7 @@ def _sync_gebruiker_subrekords(
     creating: bool = False,
 ):
     # --- Student ---
-    if rol_naam == "Student" or "STU_Nommer" in data or "STU_Is_Koshuis" in data:
+    if rol_naam == "Student" or "STU_Nommer" in data or "STU_Is_Koshuis" in data or "Koshuis_ID" in data:
         student = db.query(models.Student).filter(
             models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
@@ -228,6 +249,16 @@ def _sync_gebruiker_subrekords(
 
         if student and "STU_Is_Koshuis" in data:
             student.STU_Is_Koshuis = bool(data["STU_Is_Koshuis"])
+
+        if student and "Koshuis_ID" in data:
+            koshuis_id = data["Koshuis_ID"]
+            if koshuis_id is not None:
+                koshuis = db.query(models.Koshuis).filter(
+                    models.Koshuis.Koshuis_ID == koshuis_id
+                ).first()
+                if not koshuis:
+                    raise HTTPException(status_code=400, detail="Koshuis_ID bestaan nie in die databasis nie")
+            student.Koshuis_ID = koshuis_id
 
     # --- Personeel rekord vir ALLE werknemerrolle ---
     # Personeel, Sekuriteit_Wag, Kampus_Opsigter en Administrateur kry almal PER_Nommer.
@@ -400,6 +431,7 @@ def _gebruiker_to_dict(g: models.Gebruikers) -> dict:
     if getattr(g, "student", None):
         data["STU_Nommer"] = g.student.STU_Nommer
         data["STU_Is_Koshuis"] = g.student.STU_Is_Koshuis
+        data["Koshuis_ID"] = g.student.Koshuis_ID
 
     if getattr(g, "personeel", None):
         data["PER_Nommer"] = g.personeel.PER_Nommer
@@ -998,9 +1030,82 @@ def verwyder_koshuis(
     if not koshuis:
         raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
 
+    if db.query(models.Student).filter(models.Student.Koshuis_ID == koshuis_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie koshuis verwyder nie: daar is nog studente aan hierdie koshuis gekoppel")
+
     db.delete(koshuis)
     db.commit()
     return schemas.APIResponse(sukses=True, data={"boodskap": "Koshuis suksesvol verwyder"})
+
+
+@app.get("/koshuise/{koshuis_id}/status", response_model=schemas.APIResponse[schemas.KoshuisDetailStatus])
+def kry_koshuis_status_detail(koshuis_id: int, db: Session = Depends(get_db)):
+    """
+    Kry gedetailleerde inligting van die geselekteerde koshuis se studente
+    wat tans in- of uitgeklok is (nuutste skandering per student).
+    """
+    koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
+    if not koshuis:
+        raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+    studente = db.query(models.Student).filter(models.Student.Koshuis_ID == koshuis_id).all()
+    student_ids = [s.Gebruiker_ID for s in studente]
+
+    scanned_in = []
+    scanned_out = []
+
+    if student_ids:
+        # Nuutste log per student (enige lokaal)
+        subquery = db.query(
+            models.ToegangsLogs.Gebruiker_ID,
+            func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
+        ).filter(
+            models.ToegangsLogs.Gebruiker_ID.in_(student_ids)
+        ).group_by(
+            models.ToegangsLogs.Gebruiker_ID
+        ).subquery()
+
+        latest_logs = db.query(models.ToegangsLogs).join(
+            subquery,
+            models.ToegangsLogs.Log_ID == subquery.c.max_log_id
+        ).all()
+
+        for log in latest_logs:
+            gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == log.Gebruiker_ID).first()
+            if not gebruiker:
+                continue
+            rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == gebruiker.Rol_ID).first()
+            rol_naam = rol.ROL_Naam if rol else "Onbekend"
+
+            status_obj = schemas.KampusGebruikerStatus(
+                Gebruiker_ID=gebruiker.Gebruiker_ID,
+                GEB_Naam=gebruiker.GEB_Naam,
+                GEB_Van=gebruiker.GEB_Van,
+                GEB_Epos=gebruiker.GEB_Epos,
+                Rol_Naam=rol_naam,
+                Tydstempel=log.TOE_Tydstempel,
+                Rigting=log.TOE_Rigting,
+                Metode=log.TOE_Metode
+            )
+
+            if log.TOE_Rigting == "IN":
+                scanned_in.append(status_obj)
+            else:
+                scanned_out.append(status_obj)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=schemas.KoshuisDetailStatus(
+            Koshuis_ID=koshuis.Koshuis_ID,
+            KOS_Naam=koshuis.KOS_Naam,
+            KOS_Kapasiteit=koshuis.KOS_Kapasiteit,
+            inwoner_count=len(studente),
+            scanned_in_count=len(scanned_in),
+            scanned_out_count=len(scanned_out),
+            scanned_in=scanned_in,
+            scanned_out=scanned_out
+        )
+    )
 
 
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])

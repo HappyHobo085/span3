@@ -21,45 +21,38 @@
     <section class="top-controls" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="data-select">Kies Koshuis</label>
-        <select class="glass-select" id="data-select" name="data-select" style="width:220px">
-          <option value="veritas">Veritas</option>
-          <option value="patria">Patria</option>
-          <option value="heide">Heide</option>
-          <option value="wagnbietjie">Wag-'n-Bietjie</option>
-          <option value="kasteel">Kasteel</option>
-        </select>
+        <select class="glass-select" id="data-select" name="data-select" style="width:220px"></select>
       </div>
     </section>
 
+    <!-- Two-panel layout -->
     <section class="panels">
+      <!-- Left: live dashboard -->
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
-          <div class="card">Totale gebruikers</div>
-          <div class="card">Aktiewe sessies</div>
-          <div class="card mock-circle-card">
-            <div class="mock-circle" aria-label="Mock circle diagram"></div>
+          <div class="card" id="dash-student-in-count">Studente ingeteken: --</div>
+          <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
+          <div class="card wide" id="dash-kapasiteit-card">Inwoners: -- / --</div>
+          <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
+            <strong>Studente tans ingeteken</strong>
+            <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
           </div>
-          <div class="card mock-graph-card" aria-label="Mock graph">
-            <div class="mock-graph">
-              <span class="bar bar-1"></span>
-              <span class="bar bar-2"></span>
-              <span class="bar bar-3"></span>
-              <span class="bar bar-4"></span>
-              <span class="bar bar-5"></span>
-            </div>
+          <div class="card wide" id="dash-student-out-card" style="flex-direction:column;align-items:stretch">
+            <strong>Studente uitgeteken</strong>
+            <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
           </div>
-          <div class="card wide">Toegang oorsig</div>
         </div>
       </article>
 
+      <!-- Right: searchable list of the koshuis se studente -->
       <article class="glass-card panel" aria-label="Lys">
         <h2>Lys</h2>
         <div class="list-search">
           <input class="glass-input" type="search" id="list-search"
                  aria-label="Soek in Lys" placeholder="Soek student...">
         </div>
-        <ul id="data-list" class="empty-list" aria-label="Leë data lys"></ul>
+        <div id="data-list" class="admin-list" aria-label="Student lys"></div>
       </article>
     </section>
   </main>
@@ -69,20 +62,8 @@
             onclick="window.location.href='home.html'">← Terug</button>
   </div>
 
-  <script>
-    (function () {
-      const listSearch = document.getElementById('list-search');
-      const dataList   = document.getElementById('data-list');
-      function applyListFilter() {
-        if (!listSearch || !dataList) return;
-        const query = listSearch.value.trim().toLowerCase();
-        dataList.querySelectorAll('li').forEach((li) => {
-          li.hidden = query !== '' && !(li.textContent || '').trim().toLowerCase().includes(query);
-        });
-      }
-      if (listSearch) listSearch.addEventListener('input', applyListFilter);
-    })();
-  </script>
+  <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
+  <script src="koshuis.js"></script>
 </body>
 </html>

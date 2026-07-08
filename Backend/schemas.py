@@ -42,6 +42,7 @@ class UserCreate(UserBase):
     GEB_Wagwoord: str
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: bool = False
+    Koshuis_ID: Optional[int] = None
     PER_Nommer: Optional[str] = None
     PER_Departement: Optional[str] = None
     KAMO_Nommer: Optional[str] = None
@@ -63,6 +64,7 @@ class UserUpdate(BaseModel):
     Is_Aktief: Optional[bool] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: Optional[bool] = None
+    Koshuis_ID: Optional[int] = None
     PER_Nommer: Optional[str] = None
     PER_Departement: Optional[str] = None
     KAMO_Nommer: Optional[str] = None
@@ -113,6 +115,7 @@ class StudentBase(BaseModel):
     Gebruiker_ID: int
     STU_Nommer: str
     STU_Is_Koshuis: bool = False
+    Koshuis_ID: Optional[int] = None
 
 class StudentCreate(StudentBase):
     pass
@@ -120,6 +123,7 @@ class StudentCreate(StudentBase):
 class StudentUpdate(BaseModel):
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: Optional[bool] = None
+    Koshuis_ID: Optional[int] = None
 
 class Student(StudentBase):
     class Config:
@@ -504,6 +508,19 @@ class KoshuisUpdate(BaseModel):
 
 class Koshuis(KoshuisBase):
     Koshuis_ID: int
+
+    class Config:
+        from_attributes = True
+
+class KoshuisDetailStatus(BaseModel):
+    Koshuis_ID: int
+    KOS_Naam: str
+    KOS_Kapasiteit: int
+    inwoner_count: int
+    scanned_in_count: int
+    scanned_out_count: int
+    scanned_in: List[KampusGebruikerStatus]
+    scanned_out: List[KampusGebruikerStatus]
 
     class Config:
         from_attributes = True

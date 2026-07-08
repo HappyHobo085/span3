@@ -316,6 +316,17 @@
       return r.body;
     },
 
+    /**
+     * GET /koshuise/{koshuisId}/status
+     * Returns detailed scanned-in/out lists for a specific koshuis. No auth required.
+     */
+    fetchKoshuisStatus: async function (koshuisId) {
+      const r = await apiRequest('/koshuise/' + koshuisId + '/status', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
   };
 
 })();
