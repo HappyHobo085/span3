@@ -50,10 +50,10 @@ class Student(Base):
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     STU_Nommer   = Column(String(20), nullable=False, unique=True)
     STU_Is_Koshuis = Column(Boolean, nullable=False, default=False)
-    Koshuis_ID = Column(Integer, ForeignKey('koshuis.Koshuis_ID'), nullable=True)
+    Koshuis_ID   = Column(Integer, ForeignKey('koshuis.Koshuis_ID'), nullable=True)
 
     gebruiker = relationship("Gebruikers", back_populates="student")
-    koshuis = relationship("Koshuis")
+    koshuis   = relationship("Koshuis", back_populates="studente")
 
 class Personeel(Base):
     __tablename__ = 'personeel'
@@ -181,7 +181,8 @@ class Koshuis(Base):
     KOS_Kapasiteit = Column(Integer, nullable=False)
     Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
 
-    kampus = relationship("Kampus", back_populates="koshuise")
+    kampus   = relationship("Kampus", back_populates="koshuise")
+    studente = relationship("Student", back_populates="koshuis")
 
 class Funksie(Base):
     __tablename__ = 'funskie'
