@@ -29,6 +29,7 @@
 
   // ===== KAMPUS DOM NODES =====
   const kampusList = document.getElementById('kampus-list');
+  const kampusSearch = document.getElementById('kampus-search');
   const openKampusModalBtn = document.getElementById('open-create-kampus-modal');
   const kampusModalOverlay = document.getElementById('createKampusModal');
   const closeKampusModalBtn = document.getElementById('close-create-kampus-modal');
@@ -39,6 +40,7 @@
 
   // ===== KOSHUIS DOM NODES =====
   const koshuisList = document.getElementById('koshuis-list');
+  const koshuisSearch = document.getElementById('koshuis-search');
   const openKoshuisModalBtn = document.getElementById('open-create-koshuis-modal');
   const koshuisModalOverlay = document.getElementById('createKoshuisModal');
   const closeKoshuisModalBtn = document.getElementById('close-create-koshuis-modal');
@@ -257,10 +259,29 @@
       editBtn.textContent = 'Wysig';
       editBtn.addEventListener('click', function () { openEditKampusModal(k); });
 
+      row.dataset.search = k.KAM_Naam.toLowerCase();
       row.appendChild(nameSpan);
       row.appendChild(editBtn);
       kampusList.appendChild(row);
     });
+
+    applyKampusFilter();
+  }
+
+  /** Filter kampus list by search text. */
+  function applyKampusFilter() {
+    if (!kampusList) return;
+
+    const query = kampusSearch ? kampusSearch.value.trim().toLowerCase() : '';
+
+    const rows = kampusList.querySelectorAll('.admin-venue-row');
+    rows.forEach(function (row) {
+      // Rye sonder soekdata (bv. die "Geen kampusse nie" boodskap) bly altyd sigbaar.
+      if (row.dataset.search === undefined) return;
+      row.style.display = (query === '' || row.dataset.search.includes(query)) ? '' : 'none';
+    });
+
+    capListHeight(kampusList, '.admin-venue-row');
   }
 
   function openKampusModal() {
@@ -511,11 +532,32 @@
       editBtn.textContent = 'Wysig';
       editBtn.addEventListener('click', function () { openEditKoshuisModal(kos); });
 
+      row.dataset.search = (
+        kos.KOS_Naam + ' ' +
+        (kos.KOS_Adres || '') + ' ' +
+        (kampusMap[String(kos.Kampus_ID)] || '')
+      ).toLowerCase();
       row.appendChild(nameSpan);
       row.appendChild(kampusBadge);
       row.appendChild(badge);
       row.appendChild(editBtn);
       koshuisList.appendChild(row);
+    });
+
+    applyKoshuisFilter();
+  }
+
+  /** Filter koshuis list by search text (naam, adres of kampus). */
+  function applyKoshuisFilter() {
+    if (!koshuisList) return;
+
+    const query = koshuisSearch ? koshuisSearch.value.trim().toLowerCase() : '';
+
+    const rows = koshuisList.querySelectorAll('.admin-venue-row');
+    rows.forEach(function (row) {
+      // Rye sonder soekdata (bv. die "Geen koshuise nie" boodskap) bly altyd sigbaar.
+      if (row.dataset.search === undefined) return;
+      row.style.display = (query === '' || row.dataset.search.includes(query)) ? '' : 'none';
     });
 
     capListHeight(koshuisList, '.admin-venue-row');
@@ -1119,6 +1161,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   if (deleteKampusBtn) {
     deleteKampusBtn.addEventListener('click', function () { submitDeleteKampus(); });
   }
+  if (kampusSearch) {
+    kampusSearch.addEventListener('input', function () { applyKampusFilter(); });
+  }
 
   // --- Koshuis events ---
   if (openKoshuisModalBtn) {
@@ -1137,6 +1182,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   }
   if (deleteKoshuisBtn) {
     deleteKoshuisBtn.addEventListener('click', function () { submitDeleteKoshuis(); });
+  }
+  if (koshuisSearch) {
+    koshuisSearch.addEventListener('input', function () { applyKoshuisFilter(); });
   }
 
   // --- User events ---
