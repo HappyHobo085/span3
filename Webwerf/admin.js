@@ -498,7 +498,7 @@
 
       const badge = document.createElement('span');
       badge.className = 'campus-badge';
-      badge.textContent = kampusMap[String(kos.Kampus_ID)] || 'Geen kampus';
+      badge.textContent = 'Kapasiteit: ' + (kos.KOS_Kapasiteit != null ? kos.KOS_Kapasiteit : 0);
 
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
