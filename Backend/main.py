@@ -166,6 +166,16 @@ def _generate_next_per_nommer(db: Session) -> str:
 
     return f"PER{next_num:04d}"
 
+
+def _is_personeel_rol(rol_naam: str) -> bool:
+    return rol_naam in [
+        "Administrateur",
+        "Personeel",
+        "Sekuriteit_Wag",
+        "Kampus_Opsigter",
+    ]
+
+
 def _sync_gebruiker_subrekords(
     db: Session,
     gebruiker: models.Gebruikers,
@@ -174,21 +184,28 @@ def _sync_gebruiker_subrekords(
     *,
     creating: bool = False,
 ):
+    # --- Student ---
     if rol_naam == "Student" or "STU_Nommer" in data or "STU_Is_Koshuis" in data:
         student = db.query(models.Student).filter(
             models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         stu_nommer = data.get("STU_Nommer")
+
         if not student and not stu_nommer:
             if creating or rol_naam == "Student":
                 raise HTTPException(status_code=400, detail="Studentenommer is verpligtend")
+
         if stu_nommer:
             _kontroleer_unieke_subnommer(
-                db, models.Student, "STU_Nommer", stu_nommer,
+                db,
+                models.Student,
+                "STU_Nommer",
+                stu_nommer,
                 exclude_user_id=gebruiker.Gebruiker_ID,
                 detail="Studentenommer reeds in gebruik",
             )
+
             if not student:
                 student = models.Student(
                     Gebruiker_ID=gebruiker.Gebruiker_ID,
@@ -201,22 +218,28 @@ def _sync_gebruiker_subrekords(
         if student and "STU_Is_Koshuis" in data:
             student.STU_Is_Koshuis = bool(data["STU_Is_Koshuis"])
 
-    if rol_naam == "Personeel" or "PER_Nommer" in data or "PER_Departement" in data:
+    # --- Personeel rekord vir ALLE werknemerrolle ---
+    # Personeel, Sekuriteit_Wag, Kampus_Opsigter en Administrateur kry almal PER_Nommer.
+    if _is_personeel_rol(rol_naam) or "PER_Nommer" in data or "PER_Departement" in data:
         personeel = db.query(models.Personeel).filter(
             models.Personeel.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         per_nommer = data.get("PER_Nommer")
 
-        if not personeel and not per_nommer and (creating or rol_naam == "Personeel"):
+        if not personeel and not per_nommer and (creating or _is_personeel_rol(rol_naam)):
             per_nommer = _generate_next_per_nommer(db)
-            
+
         if per_nommer:
             _kontroleer_unieke_subnommer(
-                db, models.Personeel, "PER_Nommer", per_nommer,
+                db,
+                models.Personeel,
+                "PER_Nommer",
+                per_nommer,
                 exclude_user_id=gebruiker.Gebruiker_ID,
                 detail="Personeelnommer reeds in gebruik",
             )
+
             if not personeel:
                 personeel = models.Personeel(
                     Gebruiker_ID=gebruiker.Gebruiker_ID,
@@ -229,22 +252,34 @@ def _sync_gebruiker_subrekords(
         if personeel and "PER_Departement" in data:
             personeel.PER_Departement = data["PER_Departement"]
 
+    # --- Kampus Opsigter subrekord ---
+    # Geen KAMO_Nommer word meer vereis nie. PER_Nommer is die werknemer-identifiseerder.
     if rol_naam == "Kampus_Opsigter" or "KAMO_Nommer" in data or "Kampus_ID" in data:
         _kontroleer_kampus(db, data.get("Kampus_ID"))
+
         opsigter = db.query(models.Kampus_Opsigter).filter(
             models.Kampus_Opsigter.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         kamo_nommer = data.get("KAMO_Nommer")
-        if not opsigter and not kamo_nommer:
-            if creating or rol_naam == "Kampus_Opsigter":
-                raise HTTPException(status_code=400, detail="Opsigternommer is verpligtend")
+
+        if not opsigter and rol_naam == "Kampus_Opsigter":
+            opsigter = models.Kampus_Opsigter(
+                Gebruiker_ID=gebruiker.Gebruiker_ID,
+                KAMO_Nommer=kamo_nommer,
+            )
+            db.add(opsigter)
+
         if kamo_nommer:
             _kontroleer_unieke_subnommer(
-                db, models.Kampus_Opsigter, "KAMO_Nommer", kamo_nommer,
+                db,
+                models.Kampus_Opsigter,
+                "KAMO_Nommer",
+                kamo_nommer,
                 exclude_user_id=gebruiker.Gebruiker_ID,
                 detail="Opsigternommer reeds in gebruik",
             )
+
             if not opsigter:
                 opsigter = models.Kampus_Opsigter(
                     Gebruiker_ID=gebruiker.Gebruiker_ID,
@@ -257,21 +292,32 @@ def _sync_gebruiker_subrekords(
         if opsigter and "Kampus_ID" in data:
             opsigter.Kampus_ID = data["Kampus_ID"]
 
+    # --- Sekuriteit Wag subrekord ---
+    # Geen SEK_Nommer word meer vereis nie. PER_Nommer is die werknemer-identifiseerder.
     if rol_naam == "Sekuriteit_Wag" or "SEK_Nommer" in data:
         wag = db.query(models.Sekuriteit_Wag).filter(
             models.Sekuriteit_Wag.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         sek_nommer = data.get("SEK_Nommer")
-        if not wag and not sek_nommer:
-            if creating or rol_naam == "Sekuriteit_Wag":
-                raise HTTPException(status_code=400, detail="Wagnommer is verpligtend")
+
+        if not wag and rol_naam == "Sekuriteit_Wag":
+            wag = models.Sekuriteit_Wag(
+                Gebruiker_ID=gebruiker.Gebruiker_ID,
+                SEK_Nommer=sek_nommer,
+            )
+            db.add(wag)
+
         if sek_nommer:
             _kontroleer_unieke_subnommer(
-                db, models.Sekuriteit_Wag, "SEK_Nommer", sek_nommer,
+                db,
+                models.Sekuriteit_Wag,
+                "SEK_Nommer",
+                sek_nommer,
                 exclude_user_id=gebruiker.Gebruiker_ID,
                 detail="Wagnommer reeds in gebruik",
             )
+
             if not wag:
                 db.add(models.Sekuriteit_Wag(
                     Gebruiker_ID=gebruiker.Gebruiker_ID,
