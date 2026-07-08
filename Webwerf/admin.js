@@ -981,33 +981,15 @@ if (rolNaam === 'Student') {
   payload.Koshuis_ID = (newUserKoshuis && newUserKoshuis.value) ? Number(newUserKoshuis.value) : null;
 }
 
-else if (rolNaam === 'Personeel') {
-  payload.GEB_ID_Nommer = epos;
-  // PER_Nommer word outomaties deur die backend gegenereer
-}
-
-else if (rolNaam === 'Sekuriteit_Wag') {
-  const sekNr = prompt('Voer wagnommer in');
-
-  if (!sekNr) {
-    alert('Wagnommer is verpligtend');
-    return;
-  }
-
-  payload.GEB_ID_Nommer = sekNr;
-  payload.SEK_Nommer = sekNr;
-}
-
-else if (rolNaam === 'Kampus_Opsigter') {
-  const kamoNr = prompt('Voer opsigternommer in');
-
-  if (!kamoNr) {
-    alert('Opsigternommer is verpligtend');
-    return;
-  }
-
-  payload.GEB_ID_Nommer = kamoNr;
-  payload.KAMO_Nommer = kamoNr;
+else if (
+    rolNaam === 'Personeel' ||
+    rolNaam === 'Sekuriteit_Wag' ||
+    rolNaam === 'Kampus_Opsigter' ||
+    rolNaam === 'Administrateur'
+) {
+    // Werknemers login met e-pos.
+    // PER_Nommer word outomaties deur die backend geskep.
+    payload.GEB_ID_Nommer = epos;
 }
 
 else {
