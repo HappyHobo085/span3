@@ -148,6 +148,24 @@ def _kontroleer_kampus(db: Session, kampus_id: Optional[int]):
     if not db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first():
         raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
 
+def _generate_next_per_nommer(db: Session) -> str:
+    last = (
+        db.query(models.Personeel)
+        .filter(models.Personeel.PER_Nommer.like("PER%"))
+        .order_by(models.Personeel.PER_Nommer.desc())
+        .first()
+    )
+
+    if not last or not last.PER_Nommer:
+        return "PER0001"
+
+    try:
+        next_num = int(last.PER_Nommer.replace("PER", "")) + 1
+    except ValueError:
+        next_num = 1
+
+    return f"PER{next_num:04d}"
+
 def _sync_gebruiker_subrekords(
     db: Session,
     gebruiker: models.Gebruikers,
@@ -189,9 +207,10 @@ def _sync_gebruiker_subrekords(
         ).first()
 
         per_nommer = data.get("PER_Nommer")
-        if not personeel and not per_nommer:
-            if creating or rol_naam == "Personeel":
-                raise HTTPException(status_code=400, detail="Personeelnommer is verpligtend")
+
+        if not personeel and not per_nommer and (creating or rol_naam == "Personeel"):
+            per_nommer = _generate_next_per_nommer(db)
+            
         if per_nommer:
             _kontroleer_unieke_subnommer(
                 db, models.Personeel, "PER_Nommer", per_nommer,
