@@ -176,7 +176,7 @@ class Koshuis(Base):
     KOS_Naam      = Column(String(100), nullable=False)
     KOS_Adres     = Column(String(255))
     KOS_Kapasiteit = Column(Integer, nullable=False)
-    Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+    Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
 
     kampus = relationship("Kampus", back_populates="koshuise")
 

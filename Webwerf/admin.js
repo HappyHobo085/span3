@@ -33,6 +33,16 @@
   const createKampusBtn = document.getElementById('create-kampus-btn');
   const newKampusName = document.getElementById('new-kampus-name');
 
+  // ===== KOSHUIS DOM NODES =====
+  const koshuisList = document.getElementById('koshuis-list');
+  const openKoshuisModalBtn = document.getElementById('open-create-koshuis-modal');
+  const koshuisModalOverlay = document.getElementById('createKoshuisModal');
+  const closeKoshuisModalBtn = document.getElementById('close-create-koshuis-modal');
+  const createKoshuisBtn = document.getElementById('create-koshuis-btn');
+  const newKoshuisName = document.getElementById('new-koshuis-name');
+  const newKoshuisAddress = document.getElementById('new-koshuis-address');
+  const newKoshuisCapacity = document.getElementById('new-koshuis-capacity');
+
   // ===== USER DOM NODES =====
   const userList = document.getElementById('user-list');
   const userSearch = document.getElementById('user-search');
@@ -302,6 +312,101 @@
       capListHeight(venueList, '.admin-venue-row');
     } else {
       alert((json && json.fout) || 'Kon nie lokaal skep nie.');
+    }
+  }
+
+  // =====================================================================
+  //  KOSHUIS SECTION
+  // =====================================================================
+
+  /** Render all koshuise as rows (naam + kapasiteit) in the Koshuise panel. */
+  function renderKoshuisList(koshuise) {
+    if (!koshuisList) return;
+
+    koshuisList.innerHTML = '';
+
+    if (!koshuise || koshuise.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'admin-venue-row';
+      const msg = document.createElement('span');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen koshuise nie';
+      empty.appendChild(msg);
+      koshuisList.appendChild(empty);
+      return;
+    }
+
+    koshuise.forEach(function (kos) {
+      const row = document.createElement('div');
+      row.className = 'admin-venue-row';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'admin-venue-name';
+      nameSpan.textContent = kos.KOS_Naam;
+
+      const badge = document.createElement('span');
+      badge.className = 'campus-badge';
+      badge.textContent = 'Kapasiteit: ' + kos.KOS_Kapasiteit;
+
+      row.appendChild(nameSpan);
+      row.appendChild(badge);
+      koshuisList.appendChild(row);
+    });
+
+    capListHeight(koshuisList, '.admin-venue-row');
+  }
+
+  async function loadKoshuise() {
+    if (!koshuisList || !window.MoonApi) return;
+
+    const json = await window.MoonApi.fetchKoshuise();
+    if (!json || !json.sukses || !Array.isArray(json.data)) return;
+
+    renderKoshuisList(json.data);
+  }
+
+  function openKoshuisModal() {
+    if (!koshuisModalOverlay) return;
+    koshuisModalOverlay.classList.add('open');
+    koshuisModalOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeKoshuisModal() {
+    if (!koshuisModalOverlay) return;
+    koshuisModalOverlay.classList.remove('open');
+    koshuisModalOverlay.setAttribute('aria-hidden', 'true');
+    if (newKoshuisName) newKoshuisName.value = '';
+    if (newKoshuisAddress) newKoshuisAddress.value = '';
+    if (newKoshuisCapacity) newKoshuisCapacity.value = '';
+  }
+
+  /** Submit new koshuis to the backend (POST /koshuise). */
+  async function submitNewKoshuis() {
+    const naam = newKoshuisName ? newKoshuisName.value.trim() : '';
+    const adres = newKoshuisAddress ? newKoshuisAddress.value.trim() : '';
+    const kapasiteit = newKoshuisCapacity ? Number(newKoshuisCapacity.value) : NaN;
+
+    if (!naam) {
+      alert('Voer asseblief die koshuisnaam in.');
+      return;
+    }
+    if (!Number.isInteger(kapasiteit) || kapasiteit <= 0) {
+      alert("Voer asseblief 'n geldige kapasiteit in.");
+      return;
+    }
+
+    const json = await window.MoonApi.createKoshuis({
+      KOS_Naam: naam,
+      KOS_Adres: adres || null,
+      KOS_Kapasiteit: kapasiteit
+    });
+
+    if (json && json.sukses) {
+      alert('Koshuis suksesvol geskep.');
+      closeKoshuisModal();
+      await loadKoshuise();
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie koshuis skep nie.');
     }
   }
 
@@ -797,6 +902,22 @@ const json = await window.MoonApi.createGebruiker(payload);
     createKampusBtn.addEventListener('click', function () { submitNewKampus(); });
   }
 
+  // --- Koshuis events ---
+  if (openKoshuisModalBtn) {
+    openKoshuisModalBtn.addEventListener('click', openKoshuisModal);
+  }
+  if (closeKoshuisModalBtn) {
+    closeKoshuisModalBtn.addEventListener('click', closeKoshuisModal);
+  }
+  if (koshuisModalOverlay) {
+    koshuisModalOverlay.addEventListener('click', function (event) {
+      if (event.target === koshuisModalOverlay) closeKoshuisModal();
+    });
+  }
+  if (createKoshuisBtn) {
+    createKoshuisBtn.addEventListener('click', function () { submitNewKoshuis(); });
+  }
+
   // --- User events ---
   if (openUserModalBtn) {
     openUserModalBtn.addEventListener('click', openUserModal);
@@ -843,6 +964,8 @@ const json = await window.MoonApi.createGebruiker(payload);
 
   await loadLokale();
   applyVenueFilter();
+
+  await loadKoshuise();
 
   await loadGebruikers();
   applyUserFilter();

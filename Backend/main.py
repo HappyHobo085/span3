@@ -793,6 +793,52 @@ def opdateer_kampus(
     return schemas.APIResponse(sukses=True, data=kampus)
 
 
+# --- KOSHUIS ROETES ---
+
+@app.get("/koshuise", response_model=schemas.APIResponse[List[schemas.Koshuis]])
+def lees_koshuise(db: Session = Depends(get_db)):
+    """
+    Stuur 'n lys van alle koshuise terug.
+    """
+    koshuise = db.query(models.Koshuis).all()
+    return schemas.APIResponse(sukses=True, data=koshuise)
+
+
+@app.post("/koshuise", response_model=schemas.APIResponse[schemas.Koshuis], status_code=status.HTTP_201_CREATED)
+def skep_koshuis(
+    koshuis_in: schemas.KoshuisCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Skep 'n nuwe koshuis. Slegs vir Admin.
+    """
+    naam = koshuis_in.KOS_Naam.strip()
+    if not naam:
+        raise HTTPException(status_code=400, detail="Koshuisnaam is verpligtend")
+
+    if koshuis_in.KOS_Kapasiteit <= 0:
+        raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
+
+    bestaande = db.query(models.Koshuis).filter(
+        func.lower(models.Koshuis.KOS_Naam) == naam.lower()
+    ).first()
+    if bestaande:
+        raise HTTPException(status_code=400, detail="Koshuisnaam reeds in gebruik")
+
+    koshuis = models.Koshuis(
+        KOS_Naam=naam,
+        KOS_Adres=koshuis_in.KOS_Adres,
+        KOS_Kapasiteit=koshuis_in.KOS_Kapasiteit,
+        Kampus_ID=koshuis_in.Kampus_ID,
+    )
+    db.add(koshuis)
+    db.commit()
+    db.refresh(koshuis)
+    return schemas.APIResponse(sukses=True, data=koshuis)
+
+
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
 def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
     """

@@ -108,6 +108,31 @@
     },
 
     /**
+     * GET /koshuise
+     */
+    fetchKoshuise: async function () {
+
+      const r = await apiRequest('/koshuise', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * POST /koshuise  (slegs Admin)
+     */
+    createKoshuis: async function (data) {
+
+      const r = await apiRequest('/koshuise', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
      * GET /lokasies
      */
     fetchLokasies: async function () {
