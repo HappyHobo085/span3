@@ -72,6 +72,27 @@ def seed():
             db.commit()
             print("✅ Lokasies gesaai")
 
+    # --- Kampus Hek Lokasies ---
+        kampusse = db.query(Kampus).all()
+
+        for kampus in kampusse:
+            bestaande_hek = db.query(Lokasie).filter(
+                Lokasie.Kampus_ID == kampus.Kampus_ID,
+                Lokasie.LOK_Tipe == "Kampus"
+            ).first()
+
+            if not bestaande_hek:
+                db.add(
+                    Lokasie(
+                        LOK_Naam=f"{kampus.KAM_Naam} Hek",
+                        LOK_Tipe="Kampus",
+                        Kampus_ID=kampus.Kampus_ID
+                    )
+                )
+                print(f"✅ Kampus hek geskep vir {kampus.KAM_Naam}")
+
+        db.commit()
+
         # --- Gebruikers ---
         if not db.query(Gebruikers).first():
             admin_rol = db.query(Rolle).filter_by(ROL_Naam="Administrateur").first()

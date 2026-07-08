@@ -195,9 +195,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   final FocusNode _scannerFocusNode = FocusNode();
 
   bool _loading = false;
-  String _status = 'Klik IN of UIT en scan dan QR';
-  String? _pendingRigting;
-  Map<String, dynamic>? _studentResult;
+  String _status = 'Klik Scan QR of scan NFC';
 
   @override
   void dispose() {
@@ -228,7 +226,6 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
   Future<void> _submitScan({
     required String nommer,
-    required String rigting,
     required String metode,
   }) async {
     final cleanNommer = nommer.trim();
@@ -240,51 +237,57 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
     setState(() {
       _loading = true;
-      _studentResult = null;
-      _status = 'Stuur na backend...';
+      _status = 'Profiel laai...';
     });
 
     try {
-      final result = await MoonApi.wagteStudentScan(
-        studentNomOrId: cleanNommer,
-        lokasieId: 1,
-        rigting: rigting,
-        metode: metode,
+      final profile = await MoonApi.wagteProfileScan(cleanNommer);
+
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _studentController.clear();
+        _status = 'Profiel gevind';
+      });
+
+      final verified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WagteVerifyPage(
+            profile: profile,
+            kampusId: widget.kampusId,
+            kampusNaam: widget.kampusNaam,
+            metode: metode,
+          ),
+        ),
       );
 
       if (!mounted) return;
 
       setState(() {
-          _studentResult = result;
-          _studentController.clear();
-          _pendingRigting = null;
-          _status = 'SUKSES';
-        });
+        _status = verified == true
+            ? 'Scan suksesvol'
+            : 'Gereed vir volgende scan';
+      });
 
-        Future.delayed(const Duration(seconds: 5), () {
-          if (!mounted) return;
-
-          setState(() {
-            _studentResult = null;
-            _status = 'Klik IN of UIT en scan dan QR';
-          });
-
-          FocusScope.of(context).requestFocus(_scannerFocusNode);
-        });
+      FocusScope.of(context).requestFocus(_scannerFocusNode);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _status = 'Fout: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+
+      setState(() {
+        _loading = false;
+        _status = 'Fout: $e';
+      });
+
+      FocusScope.of(context).requestFocus(_scannerFocusNode);
     }
   }
 
-  void _startQrScan(String rigting) {
+  void _startQrScan() {
     setState(() {
-      _pendingRigting = rigting;
       _studentController.clear();
-      _studentResult = null;
-      _status = 'Scan QR nou vir $rigting...';
+      _status = 'Scan QR nou...';
     });
 
     Future.delayed(const Duration(milliseconds: 150), () {
@@ -294,18 +297,17 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     });
   }
 
-  Future<void> _scanStudentNfc(String rigting) async {
+  Future<void> _scanStudentNfc() async {
     setState(() {
       _loading = true;
-      _status = 'Hou student se foon teen MT90...';
-      _studentResult = null;
+      _status = 'Hou student/personeel se tag teen MT90...';
     });
 
     try {
       await NfcManager.instance.startSession(
         onDiscovered: (tag) async {
           final nommer = _readNdefText(tag);
-          debugPrint('STUDENT NOMMER GELEES VIA NFC = [$nommer]');
+          debugPrint('NOMMER GELEES VIA NFC = [$nommer]');
 
           await NfcManager.instance.stopSession();
 
@@ -313,7 +315,6 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
           await _submitScan(
             nommer: nommer,
-            rigting: rigting,
             metode: 'NFC',
           );
         },
@@ -330,14 +331,10 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   void _handleScannerInput(String value) {
     final clean = value.trim();
 
-    if (_pendingRigting == null || clean.isEmpty || _loading) return;
-
-    final rigting = _pendingRigting!;
-    _pendingRigting = null;
+    if (clean.isEmpty || _loading) return;
 
     _submitScan(
       nommer: clean,
-      rigting: rigting,
       metode: 'QR',
     );
   }
@@ -380,7 +377,11 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          const Icon(Icons.qr_code_scanner, color: kAccent, size: 54),
+                          const Icon(
+                            Icons.qr_code_scanner,
+                            color: kAccent,
+                            size: 54,
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             _status,
@@ -397,145 +398,218 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
                     const SizedBox(height: 16),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GradientActionButton(
-                            label: _loading ? 'Besig...' : 'IN',
-                            onTap: _loading ? () {} : () => _startQrScan('IN'),
-                            height: 52,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: GradientActionButton(
-                            label: _loading ? 'Besig...' : 'UIT',
-                            onTap: _loading ? () {} : () => _startQrScan('UIT'),
-                            height: 52,
-                          ),
-                        ),
-                      ],
+                    GradientActionButton(
+                      label: _loading ? 'Besig...' : 'Scan QR',
+                      onTap: _loading ? () {} : _startQrScan,
+                      height: 52,
                     ),
 
                     const SizedBox(height: 16),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GlassTapPanel(
-                            label: _loading ? 'Besig...' : 'NFC IN',
-                            subtitle: 'Toets later',
-                            icon: '⬇️',
-                            onTap: _loading ? () {} : () => _scanStudentNfc('IN'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: GlassTapPanel(
-                            label: _loading ? 'Besig...' : 'NFC UIT',
-                            subtitle: 'Toets later',
-                            icon: '⬆️',
-                            borderColor: const Color(0x3300C2FF),
-                            onTap: _loading ? () {} : () => _scanStudentNfc('UIT'),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                  if (_studentResult != null)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.green,
-                          width: 2,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 60,
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          Text(
-                            'STUDENT INGESCAN',
-                            style: GoogleFonts.inter(
-                              color: Colors.green,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          if ((_studentResult!['foto_url'] ?? '')
-                              .toString()
-                              .isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(50),
-                              child: Image.network(
-                                '${MoonApi.baseUrl}${_studentResult!['foto_url']}',
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.person,
-                                  size: 90,
-                                  color: kTextMuted,
-                                ),
-                              ),
-                            )
-                          else
-                            const Icon(
-                              Icons.person,
-                              size: 90,
-                              color: kTextMuted,
-                            ),
-
-                          const SizedBox(height: 12),
-
-                          Text(
-                            '${_studentResult!['naam']} ${_studentResult!['van']}',
-                            style: GoogleFonts.inter(
-                              color: kText1,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            'Student Nr: ${_studentResult!['student_nommer']}',
-                            style: GoogleFonts.inter(
-                              color: kText2,
-                              fontSize: 15,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            '${_studentResult!['rigting']} via ${_studentResult!['metode']}',
-                            style: GoogleFonts.inter(
-                              color: Colors.green,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
+                    GlassTapPanel(
+                      label: _loading ? 'Besig...' : 'Scan NFC',
+                      subtitle: 'Student / Personeel',
+                      icon: '📡',
+                      borderColor: const Color(0x3300C2FF),
+                      onTap: _loading ? () {} : _scanStudentNfc,
                     ),
                   ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class WagteVerifyPage extends StatefulWidget {
+  final WagteProfileScanDto profile;
+  final int kampusId;
+  final String kampusNaam;
+  final String metode;
+
+  const WagteVerifyPage({
+    super.key,
+    required this.profile,
+    required this.kampusId,
+    required this.kampusNaam,
+    required this.metode,
+  });
+
+  @override
+  State<WagteVerifyPage> createState() => _WagteVerifyPageState();
+}
+
+class _WagteVerifyPageState extends State<WagteVerifyPage> {
+  late String _rigting;
+  bool _loading = false;
+  bool _verified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rigting = widget.profile.voorgesteldeRigting;
+  }
+
+  void _toggleRigting() {
+    setState(() {
+      _rigting = _rigting == 'IN' ? 'UIT' : 'IN';
+    });
+  }
+
+  Future<void> _verify() async {
+    if (_loading) return;
+
+    setState(() => _loading = true);
+
+    try {
+      await MoonApi.wagteProfileVerify(
+        gebruikerId: widget.profile.gebruikerId,
+        kampusId: widget.kampusId,
+        rigting: _rigting,
+        metode: widget.metode,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _verified = true;
+        _loading = false;
+      });
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        Navigator.pop(context, true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Verify fout: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isIn = _rigting == 'IN';
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Verify',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: GlassCard(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if ((widget.profile.fotoUrl ?? '').isNotEmpty)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(60),
+                            child: Image.network(
+                              '${MoonApi.baseUrl}${widget.profile.fotoUrl}',
+                              width: 110,
+                              height: 110,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.person,
+                                size: 100,
+                                color: kTextMuted,
+                              ),
+                            ),
+                          )
+                        else
+                          const Icon(
+                            Icons.person,
+                            size: 100,
+                            color: kTextMuted,
+                          ),
+
+                        const SizedBox(height: 18),
+
+                        Text(
+                          '${widget.profile.naam} ${widget.profile.van}',
+                          style: GoogleFonts.inter(
+                            color: kText1,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          widget.profile.idNommer,
+                          style: GoogleFonts.inter(
+                            color: kText2,
+                            fontSize: 16,
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        if (_verified)
+                          Text(
+                            '✔ VERIFIED',
+                            style: GoogleFonts.inter(
+                              color: Colors.green,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          )
+                        else ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                isIn ? '🟢 IN' : '🔴 UIT',
+                                style: GoogleFonts.inter(
+                                  color: isIn ? Colors.green : Colors.red,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              InkWell(
+                                onTap: _toggleRigting,
+                                borderRadius: BorderRadius.circular(30),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(10),
+                                  child: Icon(
+                                    Icons.sync_rounded,
+                                    color: kAccent,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          GradientActionButton(
+                            label: _loading ? 'VERIFYING...' : 'VERIFY',
+                            onTap: _verify,
+                            height: 54,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
