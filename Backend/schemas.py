@@ -496,6 +496,12 @@ class KoshuisBase(BaseModel):
 class KoshuisCreate(KoshuisBase):
     pass
 
+class KoshuisUpdate(BaseModel):
+    KOS_Naam: Optional[str] = None
+    KOS_Adres: Optional[str] = None
+    KOS_Kapasiteit: Optional[int] = None
+    Kampus_ID: Optional[int] = None
+
 class Koshuis(KoshuisBase):
     Koshuis_ID: int
 

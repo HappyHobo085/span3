@@ -108,6 +108,45 @@
     },
 
     /**
+     * PUT /kampusse/{kampusId}  (slegs Admin)
+     */
+    updateKampus: async function (kampusId, data) {
+
+      const r = await apiRequest('/kampusse/' + kampusId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * PUT /lokasies/{lokasieId}  (slegs Admin)
+     */
+    updateLokasie: async function (lokasieId, data) {
+
+      const r = await apiRequest('/lokasies/' + lokasieId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * PUT /koshuise/{koshuisId}  (slegs Admin)
+     */
+    updateKoshuis: async function (koshuisId, data) {
+
+      const r = await apiRequest('/koshuise/' + koshuisId, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
      * GET /koshuise
      */
     fetchKoshuise: async function () {

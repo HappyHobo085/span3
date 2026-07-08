@@ -849,6 +849,52 @@ def skep_koshuis(
     return schemas.APIResponse(sukses=True, data=koshuis)
 
 
+@app.put("/koshuise/{koshuis_id}", response_model=schemas.APIResponse[schemas.Koshuis])
+def opdateer_koshuis(
+    koshuis_id: int,
+    koshuis_in: schemas.KoshuisUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Dateer 'n koshuis op. Slegs vir Admin.
+    """
+    koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
+    if not koshuis:
+        raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+    update_data = koshuis_in.dict(exclude_unset=True)
+
+    if "KOS_Naam" in update_data:
+        naam = update_data["KOS_Naam"].strip()
+        if not naam:
+            raise HTTPException(status_code=400, detail="Koshuisnaam is verpligtend")
+
+        bestaande = db.query(models.Koshuis).filter(
+            func.lower(models.Koshuis.KOS_Naam) == naam.lower(),
+            models.Koshuis.Koshuis_ID != koshuis_id,
+        ).first()
+        if bestaande:
+            raise HTTPException(status_code=400, detail="Koshuisnaam reeds in gebruik")
+        koshuis.KOS_Naam = naam
+
+    if "KOS_Adres" in update_data:
+        koshuis.KOS_Adres = update_data["KOS_Adres"]
+
+    if "KOS_Kapasiteit" in update_data:
+        if update_data["KOS_Kapasiteit"] is None or update_data["KOS_Kapasiteit"] <= 0:
+            raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
+        koshuis.KOS_Kapasiteit = update_data["KOS_Kapasiteit"]
+
+    if "Kampus_ID" in update_data:
+        koshuis.Kampus_ID = update_data["Kampus_ID"]
+
+    db.commit()
+    db.refresh(koshuis)
+    return schemas.APIResponse(sukses=True, data=koshuis)
+
+
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
 def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
     """
@@ -1018,6 +1064,46 @@ def lys_lokasies(
         data=result
     )
     
+@app.put("/lokasies/{lokasie_id}", response_model=schemas.APIResponse[schemas.Lokasie])
+def opdateer_lokasie(
+    lokasie_id: int,
+    lokasie_in: schemas.LokasieUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Dateer 'n lokasie op. Slegs vir Admin.
+    """
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    update_data = lokasie_in.dict(exclude_unset=True)
+
+    if "LOK_Naam" in update_data:
+        naam = update_data["LOK_Naam"].strip()
+        if not naam:
+            raise HTTPException(status_code=400, detail="Lokaalnaam is verpligtend")
+        lokasie.LOK_Naam = naam
+
+    if "LOK_Tipe" in update_data:
+        lokasie.LOK_Tipe = update_data["LOK_Tipe"]
+
+    if "Kampus_ID" in update_data:
+        if update_data["Kampus_ID"] is not None:
+            kampus_bestaan = db.query(models.Kampus).filter(
+                models.Kampus.Kampus_ID == update_data["Kampus_ID"]
+            ).first()
+            if not kampus_bestaan:
+                raise HTTPException(status_code=400, detail="Kampus_ID bestaan nie in die databasis nie")
+        lokasie.Kampus_ID = update_data["Kampus_ID"]
+
+    db.commit()
+    db.refresh(lokasie)
+    return schemas.APIResponse(sukses=True, data=lokasie)
+
+
 @app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)
 def skep_klas_met_nfc(
     klas_in: schemas.KlasSkep,
