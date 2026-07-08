@@ -40,6 +40,10 @@
   const studentNumberField = document.getElementById('student-number-field');
   const newUserPassword = document.getElementById('new-user-password');
   const newUserRole = document.getElementById('new-user-role');
+  const userModalTitle = document.getElementById('create-user-title');
+
+  // Edit mode tracking: null = create, a user ID = editing that user.
+  let editingUserId = null;
 
   // ===== LOOKUP MAPS =====
   let kampusMap = {};
@@ -189,16 +193,80 @@
   //  USER (GEBRUIKERS) SECTION
   // =====================================================================
 
-  function openUserModal() {
+  function showUserModal() {
     if (!userModalOverlay) return;
     userModalOverlay.classList.add('open');
     userModalOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  /** Open the modal in create mode (from the "Skep Gebruiker" button). */
+  function openUserModal() {
+    resetUserModalToCreate();
+    showUserModal();
   }
 
   function closeUserModal() {
     if (!userModalOverlay) return;
     userModalOverlay.classList.remove('open');
     userModalOverlay.setAttribute('aria-hidden', 'true');
+    // Always return the shared modal to create mode after closing.
+    resetUserModalToCreate();
+  }
+
+  /** Clear the create/edit form and put the modal back into create mode. */
+  function resetUserModalToCreate() {
+    editingUserId = null;
+
+    if (newUserName) newUserName.value = '';
+    if (newUserSurname) newUserSurname.value = '';
+    if (newUserEmail) newUserEmail.value = '';
+    if (newUserStudentNr) newUserStudentNr.value = '';
+    if (newUserPassword) {
+      newUserPassword.value = '';
+      newUserPassword.placeholder = 'Voer wagwoord in';
+    }
+    if (newUserRole) newUserRole.value = '';
+    if (studentNumberField) studentNumberField.style.display = 'none';
+
+    if (userModalTitle) userModalTitle.textContent = 'Skep Gebruiker';
+    if (createUserBtn) createUserBtn.textContent = 'Skep';
+  }
+
+  /**
+   * Open the shared modal in edit mode for a given user.
+   * Fetches fresh data via GET /gebruikers/{userId} and pre-fills the form.
+   */
+  async function openEditUserModal(userId) {
+    if (!window.MoonApi) return;
+
+    const json = await window.MoonApi.fetchGebruiker(userId);
+    if (!json || !json.sukses || !json.data) {
+      alert((json && (json.fout || json.detail)) || 'Kon nie gebruiker se data laai nie.');
+      return;
+    }
+
+    const user = json.data;
+    editingUserId = userId;
+
+    if (newUserName) newUserName.value = user.GEB_Naam || '';
+    if (newUserSurname) newUserSurname.value = user.GEB_Van || '';
+    if (newUserEmail) newUserEmail.value = user.GEB_Epos || '';
+    if (newUserRole) newUserRole.value = String(user.Rol_ID);
+
+    // Password stays blank + optional while editing.
+    if (newUserPassword) {
+      newUserPassword.value = '';
+      newUserPassword.placeholder = 'Los leeg om wagwoord te behou';
+    }
+
+    // Show/hide + pre-fill the student-number field based on the role.
+    toggleStudentField();
+    if (newUserStudentNr) newUserStudentNr.value = user.STU_Nommer || '';
+
+    if (userModalTitle) userModalTitle.textContent = 'Wysig Gebruiker';
+    if (createUserBtn) createUserBtn.textContent = 'Stoor Veranderinge';
+
+    showUserModal();
   }
 
   /** Load roles from API into the filter dropdown and build rolleMap. */
@@ -248,12 +316,12 @@
 
     userList.innerHTML = '';
     json.data.forEach(function (user) {
-      addUserRow(user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID);
     });
   }
 
   /** Create a user row in the list. */
-  function addUserRow(naam, van, epos, rolId) {
+  function addUserRow(userId, naam, van, epos, rolId) {
     if (!userList) return;
 
     const row = document.createElement('div');
@@ -282,12 +350,24 @@
     badge.textContent = rolNaam;
     rolesDiv.appendChild(badge);
 
-    // Store rol ID for filtering
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'admin-user-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn-outline btn-sm';
+    editBtn.textContent = 'Wysig';
+    editBtn.addEventListener('click', function () { openEditUserModal(userId); });
+    actionsDiv.appendChild(editBtn);
+
+    // Store IDs for filtering + editing
+    row.dataset.userId = String(userId);
     row.dataset.rolId = String(rolId);
     row.dataset.search = `${naam} ${van} ${epos}`.toLowerCase();
 
     row.appendChild(infoDiv);
     row.appendChild(rolesDiv);
+    row.appendChild(actionsDiv);
     userList.appendChild(row);
   }
 
@@ -337,14 +417,21 @@
     const rolId = newUserRole ? Number(newUserRole.value) : null;
     const studentNr = newUserStudentNr ? newUserStudentNr.value.trim() : '';
 
+    // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
+    const selected = newUserRole ? newUserRole.options[newUserRole.selectedIndex] : null;
+    const rolNaam = selected ? selected.dataset.rolNaam : '';
+
+    // ===== EDIT MODE =====
+    if (editingUserId !== null) {
+      await submitEditUser({ naam, van, epos, wagwoord, rolId, studentNr, rolNaam });
+      return;
+    }
+
+    // ===== CREATE MODE =====
     if (!naam || !van || !epos || !wagwoord || !rolId) {
       alert('Voltooi asseblief alle verpligte velde.');
       return;
     }
-
-    // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
-    const selected = newUserRole.options[newUserRole.selectedIndex];
-const rolNaam = selected ? selected.dataset.rolNaam : '';
 
 const payload = {
   GEB_Naam: naam,
@@ -409,21 +496,84 @@ const json = await window.MoonApi.createGebruiker(payload);
 
     if (json && json.sukses) {
       alert('Gebruiker suksesvol geskep.');
-      closeUserModal();
-      // Clear form
-      if (newUserName) newUserName.value = '';
-      if (newUserSurname) newUserSurname.value = '';
-      if (newUserEmail) newUserEmail.value = '';
-      if (newUserStudentNr) newUserStudentNr.value = '';
-      if (newUserPassword) newUserPassword.value = '';
-      if (newUserRole) newUserRole.value = '';
-      if (studentNumberField) studentNumberField.style.display = 'none';
+      const nuweId = json.data ? json.data.Gebruiker_ID : null;
+      closeUserModal(); // also resets the form back to create mode
 
       // Add new user to the list immediately
-      addUserRow(naam, van, epos, rolId);
+      addUserRow(nuweId, naam, van, epos, rolId);
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
     }
+  }
+
+  /** Submit edits for the currently-edited user (PUT /gebruikers/{id}). */
+  async function submitEditUser(fields) {
+    const { naam, van, epos, wagwoord, rolId, studentNr, rolNaam } = fields;
+
+    if (!naam || !van || !epos || !rolId) {
+      alert('Voltooi asseblief alle verpligte velde.');
+      return;
+    }
+
+    const payload = {
+      GEB_Naam: naam,
+      GEB_Van: van,
+      GEB_Epos: epos,
+      Rol_ID: rolId,
+    };
+
+    // Password is optional in edit mode — only send it when a new one is typed.
+    if (wagwoord) {
+      payload.GEB_Wagwoord = wagwoord;
+    }
+
+    if (rolNaam === 'Student') {
+      if (!studentNr) {
+        alert('Voer asseblief die studentenommer in.');
+        return;
+      }
+      payload.STU_Nommer = studentNr;
+    }
+
+    const json = await window.MoonApi.updateGebruiker(editingUserId, payload);
+
+    if (json && json.sukses) {
+      alert('Gebruiker suksesvol opgedateer.');
+      const data = json.data || {};
+      updateUserRow(editingUserId, {
+        naam: data.GEB_Naam || naam,
+        van: data.GEB_Van || van,
+        epos: data.GEB_Epos || epos,
+        rolId: data.Rol_ID || rolId,
+      });
+      closeUserModal(); // resets the form back to create mode
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker opdateer nie.');
+    }
+  }
+
+  /** Update an existing user row in place with fresh data. */
+  function updateUserRow(userId, info) {
+    if (!userList) return;
+
+    const row = userList.querySelector('.admin-user-row[data-user-id="' + userId + '"]');
+    if (!row) return;
+
+    const nameDiv = row.querySelector('.admin-user-name');
+    const emailDiv = row.querySelector('.admin-user-email');
+    const badge = row.querySelector('.role-badge');
+
+    if (nameDiv) nameDiv.textContent = info.naam + ' ' + info.van;
+    if (emailDiv) emailDiv.textContent = info.epos;
+
+    const rolNaam = rolleMap[String(info.rolId)] || 'Onbekend';
+    if (badge) {
+      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
+      badge.textContent = rolNaam;
+    }
+
+    row.dataset.rolId = String(info.rolId);
+    row.dataset.search = `${info.naam} ${info.van} ${info.epos}`.toLowerCase();
   }
 
   // =====================================================================
