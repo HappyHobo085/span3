@@ -803,6 +803,35 @@ def opdateer_kampus(
     return schemas.APIResponse(sukses=True, data=kampus)
 
 
+@app.delete("/kampusse/{kampus_id}", response_model=schemas.APIResponse[dict])
+def verwyder_kampus(
+    kampus_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n kampus. Slegs vir Admin.
+    Word geblokkeer as daar nog data aan die kampus gekoppel is.
+    """
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+    if db.query(models.Lokasie).filter(models.Lokasie.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog lokale aan hierdie kampus gekoppel")
+    if db.query(models.Koshuis).filter(models.Koshuis.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog koshuise aan hierdie kampus gekoppel")
+    if db.query(models.Funksie).filter(models.Funksie.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog funksies aan hierdie kampus gekoppel")
+    if db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie kampus verwyder nie: daar is nog opsigters aan hierdie kampus gekoppel")
+
+    db.delete(kampus)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Kampus suksesvol verwyder"})
+
+
 # --- KOSHUIS ROETES ---
 
 @app.get("/koshuise", response_model=schemas.APIResponse[List[schemas.Koshuis]])
@@ -893,6 +922,25 @@ def opdateer_koshuis(
     db.commit()
     db.refresh(koshuis)
     return schemas.APIResponse(sukses=True, data=koshuis)
+
+
+@app.delete("/koshuise/{koshuis_id}", response_model=schemas.APIResponse[dict])
+def verwyder_koshuis(
+    koshuis_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n koshuis. Slegs vir Admin.
+    """
+    koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
+    if not koshuis:
+        raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+    db.delete(koshuis)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Koshuis suksesvol verwyder"})
 
 
 @app.get("/kampusse/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
@@ -1102,6 +1150,31 @@ def opdateer_lokasie(
     db.commit()
     db.refresh(lokasie)
     return schemas.APIResponse(sukses=True, data=lokasie)
+
+
+@app.delete("/lokasies/{lokasie_id}", response_model=schemas.APIResponse[dict])
+def verwyder_lokasie(
+    lokasie_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """
+    Verwyder 'n lokasie en sy NFC-tags. Slegs vir Admin.
+    Word geblokkeer as daar toegangslogs vir die lokaal bestaan (oudit-geskiedenis).
+    """
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    if db.query(models.ToegangsLogs).filter(models.ToegangsLogs.Lokasie_ID == lokasie_id).first():
+        raise HTTPException(status_code=400, detail="Kan nie lokaal verwyder nie: daar is toegangslogs vir hierdie lokaal")
+
+    # Elke lokaal kry outomaties 'n NFC-tag; verwyder dit saam met die lokaal.
+    db.query(models.NFC_Tags).filter(models.NFC_Tags.Lokasie_ID == lokasie_id).delete()
+    db.delete(lokasie)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Lokaal suksesvol verwyder"})
 
 
 @app.post("/klasse", response_model=schemas.APIResponse[schemas.KlasSkepResult], status_code=status.HTTP_201_CREATED)

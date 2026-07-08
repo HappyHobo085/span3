@@ -147,6 +147,42 @@
     },
 
     /**
+     * DELETE /kampusse/{kampusId}  (slegs Admin)
+     */
+    deleteKampus: async function (kampusId) {
+
+      const r = await apiRequest('/kampusse/' + kampusId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /lokasies/{lokasieId}  (slegs Admin)
+     */
+    deleteLokasie: async function (lokasieId) {
+
+      const r = await apiRequest('/lokasies/' + lokasieId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
+     * DELETE /koshuise/{koshuisId}  (slegs Admin)
+     */
+    deleteKoshuis: async function (koshuisId) {
+
+      const r = await apiRequest('/koshuise/' + koshuisId, {
+        method: 'DELETE',
+      });
+
+      return r.body;
+    },
+
+    /**
      * GET /koshuise
      */
     fetchKoshuise: async function () {

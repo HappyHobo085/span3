@@ -25,6 +25,7 @@
   const classRoomName = document.getElementById('class-room-name');
   const classKampus = document.getElementById('class-kampus');
   const classModalTitle = document.getElementById('class-modal-title');
+  const deleteLokaalBtn = document.getElementById('delete-lokaal-btn');
 
   // ===== KAMPUS DOM NODES =====
   const kampusList = document.getElementById('kampus-list');
@@ -34,6 +35,7 @@
   const createKampusBtn = document.getElementById('create-kampus-btn');
   const newKampusName = document.getElementById('new-kampus-name');
   const kampusModalTitle = document.getElementById('create-kampus-title');
+  const deleteKampusBtn = document.getElementById('delete-kampus-btn');
 
   // ===== KOSHUIS DOM NODES =====
   const koshuisList = document.getElementById('koshuis-list');
@@ -45,6 +47,7 @@
   const newKoshuisAddress = document.getElementById('new-koshuis-address');
   const newKoshuisCapacity = document.getElementById('new-koshuis-capacity');
   const koshuisModalTitle = document.getElementById('create-koshuis-title');
+  const deleteKoshuisBtn = document.getElementById('delete-koshuis-btn');
 
   // ===== USER DOM NODES =====
   const userList = document.getElementById('user-list');
@@ -137,6 +140,7 @@
     editingLokaalId = null;
     if (classModalTitle) classModalTitle.textContent = 'Skep nuwe klas';
     if (createClassBtn) createClassBtn.textContent = 'Skep';
+    if (deleteLokaalBtn) deleteLokaalBtn.style.display = 'none';
   }
 
   /** Open the class modal in edit mode, pre-filled from the clicked venue row. */
@@ -147,7 +151,31 @@
     if (classKampus) classKampus.value = row.dataset.kampusId || '';
     if (classModalTitle) classModalTitle.textContent = 'Wysig Lokaal';
     if (createClassBtn) createClassBtn.textContent = 'Stoor Veranderinge';
+    if (deleteLokaalBtn) deleteLokaalBtn.style.display = '';
     openClassModal();
+  }
+
+  /** Delete the currently-edited lokaal (DELETE /lokasies/{id}). */
+  async function submitDeleteLokaal() {
+    if (editingLokaalId === null || !window.MoonApi) return;
+
+    const lokasieId = editingLokaalId;
+    const naam = (classRoomName ? classRoomName.value.trim() : '') || 'hierdie lokaal';
+    if (!confirm('Is jy seker jy wil "' + naam + '" verwyder?')) return;
+
+    const json = await window.MoonApi.deleteLokasie(lokasieId);
+
+    if (json && json.sukses) {
+      alert('Lokaal suksesvol verwyder.');
+      closeClassModal();
+      const row = venueList
+        ? venueList.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]')
+        : null;
+      if (row) row.remove();
+      capListHeight(venueList, '.admin-venue-row');
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie lokaal verwyder nie.');
+    }
   }
 
   async function loadKampusDropdown() {
@@ -239,6 +267,7 @@
     editingKampusId = null;
     if (kampusModalTitle) kampusModalTitle.textContent = 'Skep Kampus';
     if (createKampusBtn) createKampusBtn.textContent = 'Skep';
+    if (deleteKampusBtn) deleteKampusBtn.style.display = 'none';
   }
 
   /** Open the kampus modal in edit mode, pre-filled with the kampus data. */
@@ -247,7 +276,27 @@
     if (newKampusName) newKampusName.value = kampus.KAM_Naam || '';
     if (kampusModalTitle) kampusModalTitle.textContent = 'Wysig Kampus';
     if (createKampusBtn) createKampusBtn.textContent = 'Stoor Veranderinge';
+    if (deleteKampusBtn) deleteKampusBtn.style.display = '';
     openKampusModal();
+  }
+
+  /** Delete the currently-edited kampus (DELETE /kampusse/{id}). */
+  async function submitDeleteKampus() {
+    if (editingKampusId === null || !window.MoonApi) return;
+
+    const naam = (newKampusName ? newKampusName.value.trim() : '') || 'hierdie kampus';
+    if (!confirm('Is jy seker jy wil "' + naam + '" verwyder?')) return;
+
+    const json = await window.MoonApi.deleteKampus(editingKampusId);
+
+    if (json && json.sukses) {
+      alert('Kampus suksesvol verwyder.');
+      closeKampusModal();
+      // Herlaai sodat die lys én die kampus-dropdowns opdateer.
+      await loadKampusDropdown();
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie kampus verwyder nie.');
+    }
   }
 
   /** Submit the kampus modal: POST /kampusse or PUT /kampusse/{id} in edit mode. */
@@ -481,6 +530,7 @@
     editingKoshuisId = null;
     if (koshuisModalTitle) koshuisModalTitle.textContent = 'Skep Koshuis';
     if (createKoshuisBtn) createKoshuisBtn.textContent = 'Skep';
+    if (deleteKoshuisBtn) deleteKoshuisBtn.style.display = 'none';
   }
 
   /** Open the koshuis modal in edit mode, pre-filled with the koshuis data. */
@@ -491,7 +541,26 @@
     if (newKoshuisCapacity) newKoshuisCapacity.value = koshuis.KOS_Kapasiteit != null ? String(koshuis.KOS_Kapasiteit) : '';
     if (koshuisModalTitle) koshuisModalTitle.textContent = 'Wysig Koshuis';
     if (createKoshuisBtn) createKoshuisBtn.textContent = 'Stoor Veranderinge';
+    if (deleteKoshuisBtn) deleteKoshuisBtn.style.display = '';
     openKoshuisModal();
+  }
+
+  /** Delete the currently-edited koshuis (DELETE /koshuise/{id}). */
+  async function submitDeleteKoshuis() {
+    if (editingKoshuisId === null || !window.MoonApi) return;
+
+    const naam = (newKoshuisName ? newKoshuisName.value.trim() : '') || 'hierdie koshuis';
+    if (!confirm('Is jy seker jy wil "' + naam + '" verwyder?')) return;
+
+    const json = await window.MoonApi.deleteKoshuis(editingKoshuisId);
+
+    if (json && json.sukses) {
+      alert('Koshuis suksesvol verwyder.');
+      closeKoshuisModal();
+      await loadKoshuise();
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie koshuis verwyder nie.');
+    }
   }
 
   /** Submit the koshuis modal: POST /koshuise or PUT /koshuise/{id} in edit mode. */
@@ -991,6 +1060,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   if (createClassBtn) {
     createClassBtn.addEventListener('click', function () { submitNewClass(); });
   }
+  if (deleteLokaalBtn) {
+    deleteLokaalBtn.addEventListener('click', function () { submitDeleteLokaal(); });
+  }
   if (venueSearch) {
     venueSearch.addEventListener('input', function () {
       console.log('VENUE SEARCH FIRED');
@@ -1019,6 +1091,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   if (createKampusBtn) {
     createKampusBtn.addEventListener('click', function () { submitNewKampus(); });
   }
+  if (deleteKampusBtn) {
+    deleteKampusBtn.addEventListener('click', function () { submitDeleteKampus(); });
+  }
 
   // --- Koshuis events ---
   if (openKoshuisModalBtn) {
@@ -1034,6 +1109,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   }
   if (createKoshuisBtn) {
     createKoshuisBtn.addEventListener('click', function () { submitNewKoshuis(); });
+  }
+  if (deleteKoshuisBtn) {
+    deleteKoshuisBtn.addEventListener('click', function () { submitDeleteKoshuis(); });
   }
 
   // --- User events ---
