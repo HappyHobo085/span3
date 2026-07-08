@@ -45,6 +45,7 @@
   const createKoshuisBtn = document.getElementById('create-koshuis-btn');
   const newKoshuisName = document.getElementById('new-koshuis-name');
   const newKoshuisAddress = document.getElementById('new-koshuis-address');
+  const newKoshuisCapacity = document.getElementById('new-koshuis-capacity');
   const newKoshuisKampus = document.getElementById('new-koshuis-kampus');
   const koshuisModalTitle = document.getElementById('create-koshuis-title');
   const deleteKoshuisBtn = document.getElementById('delete-koshuis-btn');
@@ -496,9 +497,13 @@
       nameSpan.className = 'admin-venue-name';
       nameSpan.textContent = kos.KOS_Naam;
 
+      const kampusBadge = document.createElement('span');
+      kampusBadge.className = 'campus-badge';
+      kampusBadge.textContent = kampusMap[String(kos.Kampus_ID)] || 'Geen kampus';
+
       const badge = document.createElement('span');
       badge.className = 'campus-badge';
-      badge.textContent = 'Kapasiteit: ' + (kos.KOS_Kapasiteit != null ? kos.KOS_Kapasiteit : 0);
+      badge.textContent = 'Kapasiteit: ' + kos.KOS_Kapasiteit;
 
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
@@ -507,6 +512,7 @@
       editBtn.addEventListener('click', function () { openEditKoshuisModal(kos); });
 
       row.appendChild(nameSpan);
+      row.appendChild(kampusBadge);
       row.appendChild(badge);
       row.appendChild(editBtn);
       koshuisList.appendChild(row);
@@ -536,6 +542,7 @@
     koshuisModalOverlay.setAttribute('aria-hidden', 'true');
     if (newKoshuisName) newKoshuisName.value = '';
     if (newKoshuisAddress) newKoshuisAddress.value = '';
+    if (newKoshuisCapacity) newKoshuisCapacity.value = '';
     if (newKoshuisKampus) newKoshuisKampus.value = '';
     // Return the shared modal to create mode after closing.
     editingKoshuisId = null;
@@ -549,6 +556,7 @@
     editingKoshuisId = koshuis.Koshuis_ID;
     if (newKoshuisName) newKoshuisName.value = koshuis.KOS_Naam || '';
     if (newKoshuisAddress) newKoshuisAddress.value = koshuis.KOS_Adres || '';
+    if (newKoshuisCapacity) newKoshuisCapacity.value = koshuis.KOS_Kapasiteit != null ? String(koshuis.KOS_Kapasiteit) : '';
     if (newKoshuisKampus) newKoshuisKampus.value = koshuis.Kampus_ID != null ? String(koshuis.Kampus_ID) : '';
     if (koshuisModalTitle) koshuisModalTitle.textContent = 'Wysig Koshuis';
     if (createKoshuisBtn) createKoshuisBtn.textContent = 'Stoor Veranderinge';
@@ -578,10 +586,15 @@
   async function submitNewKoshuis() {
     const naam = newKoshuisName ? newKoshuisName.value.trim() : '';
     const adres = newKoshuisAddress ? newKoshuisAddress.value.trim() : '';
+    const kapasiteit = newKoshuisCapacity ? Number(newKoshuisCapacity.value) : NaN;
     const kampusId = newKoshuisKampus && newKoshuisKampus.value ? Number(newKoshuisKampus.value) : null;
 
     if (!naam) {
       alert('Voer asseblief die koshuisnaam in.');
+      return;
+    }
+    if (!Number.isInteger(kapasiteit) || kapasiteit <= 0) {
+      alert("Voer asseblief 'n geldige kapasiteit in.");
       return;
     }
     if (!kampusId) {
@@ -592,6 +605,7 @@
     const payload = {
       KOS_Naam: naam,
       KOS_Adres: adres || null,
+      KOS_Kapasiteit: kapasiteit,
       Kampus_ID: kampusId
     };
 

@@ -490,7 +490,7 @@ class KampusSummaryStatus(BaseModel):
 class KoshuisBase(BaseModel):
     KOS_Naam: str
     KOS_Adres: Optional[str] = None
-    KOS_Kapasiteit: int = 0
+    KOS_Kapasiteit: int
     Kampus_ID: Optional[int] = None
 
 class KoshuisCreate(KoshuisBase):

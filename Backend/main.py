@@ -19,16 +19,16 @@ import models, schemas, auth
 # Skep alle tabelle outomaties by opstart
 models.Base.metadata.create_all(bind=engine)
 
-# Migrasies 006/007: create_all verander nie bestaande tabelle nie, dus word
-# skema-aanpassings aan die koshuis-tabel hier toegepas op databasisse wat die
-# tabel reeds met die ou skema het. Idempotent - veilig om elke keer te loop.
+# Migrasie 006: create_all verander nie bestaande tabelle nie, dus word
+# Kampus_ID se NOT NULL-beperking hier verwyder op databasisse wat die
+# koshuis-tabel reeds met die ou skema het. Idempotent - veilig om elke keer te loop.
 try:
     with engine.connect() as _conn:
         _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "Kampus_ID" DROP NOT NULL'))
-        _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "KOS_Kapasiteit" SET DEFAULT 0'))
+        _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "KOS_Kapasiteit" DROP DEFAULT'))
         _conn.commit()
 except Exception as _migrasie_fout:
-    print(f"Waarskuwing: koshuis-migrasies (006/007) het misluk: {_migrasie_fout}")
+    print(f"Waarskuwing: migrasie 006 (koshuis.Kampus_ID nullable) het misluk: {_migrasie_fout}")
 
 app = FastAPI(
     title="MOON Admin API",
@@ -858,8 +858,8 @@ def skep_koshuis(
     if not naam:
         raise HTTPException(status_code=400, detail="Koshuisnaam is verpligtend")
 
-    if koshuis_in.KOS_Kapasiteit < 0:
-        raise HTTPException(status_code=400, detail="Kapasiteit mag nie negatief wees nie")
+    if koshuis_in.KOS_Kapasiteit <= 0:
+        raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
 
     if koshuis_in.Kampus_ID is not None:
         kampus_bestaan = db.query(models.Kampus).filter(
@@ -920,8 +920,8 @@ def opdateer_koshuis(
         koshuis.KOS_Adres = update_data["KOS_Adres"]
 
     if "KOS_Kapasiteit" in update_data:
-        if update_data["KOS_Kapasiteit"] is None or update_data["KOS_Kapasiteit"] < 0:
-            raise HTTPException(status_code=400, detail="Kapasiteit mag nie negatief wees nie")
+        if update_data["KOS_Kapasiteit"] is None or update_data["KOS_Kapasiteit"] <= 0:
+            raise HTTPException(status_code=400, detail="Kapasiteit moet groter as nul wees")
         koshuis.KOS_Kapasiteit = update_data["KOS_Kapasiteit"]
 
     if "Kampus_ID" in update_data:
