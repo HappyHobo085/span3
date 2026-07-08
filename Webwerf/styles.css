@@ -355,7 +355,7 @@ body{
 }
 .status-badge--active{border-color:#10b981;color:#10b981}
 .status-badge--active .status-dot{background:#10b981}
-.status-badge--inactive{border-color:var(--text-muted);color:var(--text-muted)}
+.status-badge--inactive{border-color:#ef4444;color:#ef4444}
 .status-badge--inactive .status-dot{background:#ef4444}
 
 /* ─── Admin rows ────────────────────────────────────────────────────────── */
