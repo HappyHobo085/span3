@@ -131,12 +131,37 @@
     },
 
     /**
+     * GET /gebruikers/{userId}
+     */
+    fetchGebruiker: async function (userId) {
+
+      const r = await apiRequest('/gebruikers/' + userId, {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    /**
      * POST /gebruikers
      */
     createGebruiker: async function (data) {
 
       const r = await apiRequest('/gebruikers', {
         method: 'POST',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
+     * PUT /gebruikers/{userId}
+     */
+    updateGebruiker: async function (userId, data) {
+
+      const r = await apiRequest('/gebruikers/' + userId, {
+        method: 'PUT',
         body: JSON.stringify(data),
       });
 
