@@ -30,7 +30,10 @@
         <button class="btn-outline" id="upload-csv-btn" type="button">Oplaai CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none">
       </div>
-      <button class="btn-primary" id="open-create-venue-modal" type="button">+ Skep Lokaal</button>
+      <div class="control-group" style="flex-direction:row;gap:10px">
+        <button class="btn-primary" id="open-create-kampus-modal" type="button">+ Skep Kampus</button>
+        <button class="btn-primary" id="open-create-venue-modal" type="button">+ Skep Lokaal</button>
+      </div>
     </section>
 
     <!-- Two-panel layout -->
@@ -60,6 +63,12 @@
           </select>
         </div>
         <div class="admin-list" id="venue-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
+      <article class="glass-card panel" aria-label="Kampusse">
+        <h2>Kampusse</h2>
+        <div class="admin-list" id="kampus-list">
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
@@ -149,6 +158,21 @@
       <div class="class-modal-actions">
         <button class="btn-outline" id="close-password-modal" type="button">Kanselleer</button>
         <button class="btn-primary" id="change-password-btn" type="button">Verander</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Skep Kampus -->
+  <div id="createKampusModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-kampus-title">
+      <h3 id="create-kampus-title">Skep Kampus</h3>
+      <div class="field">
+        <label for="new-kampus-name">Naam</label>
+        <input class="glass-input" id="new-kampus-name" type="text" placeholder="Voer kampusnaam in">
+      </div>
+      <div class="class-modal-actions">
+        <button class="btn-outline" id="close-create-kampus-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="create-kampus-btn" type="button">Skep</button>
       </div>
     </div>
   </div>

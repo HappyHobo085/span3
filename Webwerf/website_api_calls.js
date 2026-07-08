@@ -82,6 +82,19 @@
     },
 
     /**
+     * POST /kampusse  (slegs Admin)
+     */
+    createKampus: async function (data) {
+
+      const r = await apiRequest('/kampusse', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+
+      return r.body;
+    },
+
+    /**
      * POST /klasse
      */
     createKlas: async function (data) {

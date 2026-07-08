@@ -25,6 +25,14 @@
   const classRoomName = document.getElementById('class-room-name');
   const classKampus = document.getElementById('class-kampus');
 
+  // ===== KAMPUS DOM NODES =====
+  const kampusList = document.getElementById('kampus-list');
+  const openKampusModalBtn = document.getElementById('open-create-kampus-modal');
+  const kampusModalOverlay = document.getElementById('createKampusModal');
+  const closeKampusModalBtn = document.getElementById('close-create-kampus-modal');
+  const createKampusBtn = document.getElementById('create-kampus-btn');
+  const newKampusName = document.getElementById('new-kampus-name');
+
   // ===== USER DOM NODES =====
   const userList = document.getElementById('user-list');
   const userSearch = document.getElementById('user-search');
@@ -103,6 +111,76 @@
     json.data.forEach(function (k) {
       kampusMap[String(k.Kampus_ID)] = k.KAM_Naam;
     });
+
+    renderKampusList(json.data);
+  }
+
+  // =====================================================================
+  //  KAMPUS SECTION
+  // =====================================================================
+
+  /** Render all kampusse as simple name rows in the Kampusse panel. */
+  function renderKampusList(kampusse) {
+    if (!kampusList) return;
+
+    kampusList.innerHTML = '';
+
+    if (!kampusse || kampusse.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'admin-venue-row';
+      const msg = document.createElement('span');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen kampusse nie';
+      empty.appendChild(msg);
+      kampusList.appendChild(empty);
+      return;
+    }
+
+    kampusse.forEach(function (k) {
+      const row = document.createElement('div');
+      row.className = 'admin-venue-row';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'admin-venue-name';
+      nameSpan.textContent = k.KAM_Naam;
+
+      row.appendChild(nameSpan);
+      kampusList.appendChild(row);
+    });
+  }
+
+  function openKampusModal() {
+    if (!kampusModalOverlay) return;
+    kampusModalOverlay.classList.add('open');
+    kampusModalOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeKampusModal() {
+    if (!kampusModalOverlay) return;
+    kampusModalOverlay.classList.remove('open');
+    kampusModalOverlay.setAttribute('aria-hidden', 'true');
+    if (newKampusName) newKampusName.value = '';
+  }
+
+  /** Submit new kampus to the backend (POST /kampusse). */
+  async function submitNewKampus() {
+    const naam = newKampusName ? newKampusName.value.trim() : '';
+
+    if (!naam) {
+      alert('Voer asseblief die kampusnaam in.');
+      return;
+    }
+
+    const json = await window.MoonApi.createKampus({ KAM_Naam: naam });
+
+    if (json && json.sukses) {
+      alert('Kampus suksesvol geskep.');
+      closeKampusModal();
+      // Herlaai sodat die lys én die kampus-dropdowns die nuwe kampus wys.
+      await loadKampusDropdown();
+    } else {
+      alert((json && json.fout) || (json && json.detail) || 'Kon nie kampus skep nie.');
+    }
   }
 
   async function loadLokale() {
@@ -627,6 +705,22 @@ const json = await window.MoonApi.createGebruiker(payload);
       console.log('VENUE CAMPUS FILTER FIRED');
       applyVenueFilter();
     });
+  }
+
+  // --- Kampus events ---
+  if (openKampusModalBtn) {
+    openKampusModalBtn.addEventListener('click', openKampusModal);
+  }
+  if (closeKampusModalBtn) {
+    closeKampusModalBtn.addEventListener('click', closeKampusModal);
+  }
+  if (kampusModalOverlay) {
+    kampusModalOverlay.addEventListener('click', function (event) {
+      if (event.target === kampusModalOverlay) closeKampusModal();
+    });
+  }
+  if (createKampusBtn) {
+    createKampusBtn.addEventListener('click', function () { submitNewKampus(); });
   }
 
   // --- User events ---
