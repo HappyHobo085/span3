@@ -66,6 +66,8 @@
   const newUserEmail = document.getElementById('new-user-email');
   const newUserStudentNr = document.getElementById('new-user-student-nr');
   const studentNumberField = document.getElementById('student-number-field');
+  const newUserIsKoshuis = document.getElementById('new-user-is-koshuis');
+  const studentIsKoshuisField = document.getElementById('student-is-koshuis-field');
   const newUserKoshuis = document.getElementById('new-user-koshuis');
   const studentKoshuisField = document.getElementById('student-koshuis-field');
   const newUserPassword = document.getElementById('new-user-password');
@@ -582,7 +584,7 @@
     if (!newUserKoshuis) return;
 
     const huidigeWaarde = newUserKoshuis.value;
-    newUserKoshuis.innerHTML = '<option value="">Geen koshuis</option>';
+    newUserKoshuis.innerHTML = '<option value="">Kies koshuis...</option>';
 
     koshuise.forEach(function (kos) {
       const opt = document.createElement('option');
@@ -723,8 +725,10 @@
       newUserPassword.placeholder = 'Voer wagwoord in';
     }
     if (newUserRole) newUserRole.value = '';
+    if (newUserIsKoshuis) newUserIsKoshuis.checked = false;
     if (newUserKoshuis) newUserKoshuis.value = '';
     if (studentNumberField) studentNumberField.style.display = 'none';
+    if (studentIsKoshuisField) studentIsKoshuisField.style.display = 'none';
     if (studentKoshuisField) studentKoshuisField.style.display = 'none';
 
     if (userModalTitle) userModalTitle.textContent = 'Skep Gebruiker';
@@ -760,6 +764,9 @@
     }
 
     // Show/hide + pre-fill the student-number field based on the role.
+    if (newUserIsKoshuis) {
+      newUserIsKoshuis.checked = !!(user.STU_Is_Koshuis || user.Koshuis_ID != null);
+    }
     toggleStudentField();
     if (newUserStudentNr) newUserStudentNr.value = user.STU_Nommer || '';
     if (newUserKoshuis) newUserKoshuis.value = user.Koshuis_ID != null ? String(user.Koshuis_ID) : '';
@@ -930,11 +937,24 @@
 
   const selected = newUserRole.options[newUserRole.selectedIndex];
   const rolNaam = selected ? selected.dataset.rolNaam : '';
-  const display = rolNaam === 'Student' ? 'block' : 'none';
+  const isStudent = rolNaam === 'Student';
 
-  studentNumberField.style.display = display;
-  if (studentKoshuisField) studentKoshuisField.style.display = display;
+  studentNumberField.style.display = isStudent ? 'block' : 'none';
+  // Die koshuis-merkblokkie wys slegs vir studente; die dropdown volg die merkblokkie.
+  if (studentIsKoshuisField) studentIsKoshuisField.style.display = isStudent ? 'block' : 'none';
+  if (!isStudent && newUserIsKoshuis) newUserIsKoshuis.checked = false;
+  toggleKoshuisDropdown();
 }
+
+  /** Show the koshuis dropdown only while the "bly in 'n koshuis" checkbox is ticked. */
+  function toggleKoshuisDropdown() {
+    if (!studentKoshuisField) return;
+
+    const wys = !!(newUserIsKoshuis && newUserIsKoshuis.checked &&
+                   studentIsKoshuisField && studentIsKoshuisField.style.display !== 'none');
+    studentKoshuisField.style.display = wys ? 'block' : 'none';
+    if (!wys && newUserKoshuis) newUserKoshuis.value = '';
+  }
 
   /** Submit new user to the backend. */
   async function submitNewUser() {
@@ -976,9 +996,16 @@ if (rolNaam === 'Student') {
     return;
   }
 
+  const isKoshuis = !!(newUserIsKoshuis && newUserIsKoshuis.checked);
+  if (isKoshuis && (!newUserKoshuis || !newUserKoshuis.value)) {
+    alert('Kies asseblief die koshuis waarin die student bly.');
+    return;
+  }
+
   payload.GEB_ID_Nommer = studentNr;
   payload.STU_Nommer = studentNr;
-  payload.Koshuis_ID = (newUserKoshuis && newUserKoshuis.value) ? Number(newUserKoshuis.value) : null;
+  payload.STU_Is_Koshuis = isKoshuis;
+  payload.Koshuis_ID = isKoshuis ? Number(newUserKoshuis.value) : null;
 }
 
 else if (
@@ -1037,8 +1064,16 @@ const json = await window.MoonApi.createGebruiker(payload);
         alert('Voer asseblief die studentenommer in.');
         return;
       }
+
+      const isKoshuis = !!(newUserIsKoshuis && newUserIsKoshuis.checked);
+      if (isKoshuis && (!newUserKoshuis || !newUserKoshuis.value)) {
+        alert('Kies asseblief die koshuis waarin die student bly.');
+        return;
+      }
+
       payload.STU_Nommer = studentNr;
-      payload.Koshuis_ID = (newUserKoshuis && newUserKoshuis.value) ? Number(newUserKoshuis.value) : null;
+      payload.STU_Is_Koshuis = isKoshuis;
+      payload.Koshuis_ID = isKoshuis ? Number(newUserKoshuis.value) : null;
     }
 
     const json = await window.MoonApi.updateGebruiker(editingUserId, payload);
@@ -1220,6 +1255,9 @@ const json = await window.MoonApi.createGebruiker(payload);
   }
   if (newUserRole) {
     newUserRole.addEventListener('change', toggleStudentField);
+  }
+  if (newUserIsKoshuis) {
+    newUserIsKoshuis.addEventListener('change', toggleKoshuisDropdown);
   }
 
   // =====================================================================
