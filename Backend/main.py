@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, text
 import uuid
 import os
 
@@ -18,6 +18,16 @@ import models, schemas, auth
 
 # Skep alle tabelle outomaties by opstart
 models.Base.metadata.create_all(bind=engine)
+
+# Migrasie 006: create_all verander nie bestaande tabelle nie, dus word
+# Kampus_ID se NOT NULL-beperking hier verwyder op databasisse wat die
+# koshuis-tabel reeds met die ou skema het. Idempotent - veilig om elke keer te loop.
+try:
+    with engine.connect() as _conn:
+        _conn.execute(text('ALTER TABLE koshuis ALTER COLUMN "Kampus_ID" DROP NOT NULL'))
+        _conn.commit()
+except Exception as _migrasie_fout:
+    print(f"Waarskuwing: migrasie 006 (koshuis.Kampus_ID nullable) het misluk: {_migrasie_fout}")
 
 app = FastAPI(
     title="MOON Admin API",
