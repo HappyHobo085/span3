@@ -799,30 +799,27 @@
 
     userList.innerHTML = '';
     json.data.forEach(function (user) {
-      // Geskrapte (onaktiewe) gebruikers word nie in die admin-lys gewys nie.
-      if (user.Is_Aktief === false) return;
-
-      // 'n Gebruiker is "Aktief" sodra daar 'n NFC-tag aan sy profiel gekoppel is.
-      const hetNfc = Boolean(user.NFC_UID);
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, hetNfc);
+      // Die Is_Aktief veld uit die databasis bepaal die status in die lys.
+      const isAktief = user.Is_Aktief !== false;
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, isAktief);
     });
   }
 
-  /** Build the Aktief/Nie-Aktief status badge (aktief = NFC-tag gekoppel). */
-  function buildStatusBadge(hetNfc) {
+  /** Build the Aktief/Nie-Aktief status badge vanaf die Is_Aktief veld. */
+  function buildStatusBadge(isAktief) {
     const badge = document.createElement('span');
-    badge.className = 'status-badge ' + (hetNfc ? 'status-badge--active' : 'status-badge--inactive');
+    badge.className = 'status-badge ' + (isAktief ? 'status-badge--active' : 'status-badge--inactive');
 
     const dot = document.createElement('span');
     dot.className = 'status-dot';
     badge.appendChild(dot);
-    badge.appendChild(document.createTextNode(hetNfc ? 'Aktief' : 'Nie-Aktief'));
+    badge.appendChild(document.createTextNode(isAktief ? 'Aktief' : 'Nie-Aktief'));
 
     return badge;
   }
 
   /** Create a user row in the list. */
-  function addUserRow(userId, naam, van, epos, rolId, hetNfc) {
+  function addUserRow(userId, naam, van, epos, rolId, isAktief) {
     if (!userList) return;
 
     const row = document.createElement('div');
@@ -839,7 +836,7 @@
     nameSpan.textContent = naam + ' ' + van;
 
     nameDiv.appendChild(nameSpan);
-    nameDiv.appendChild(buildStatusBadge(hetNfc));
+    nameDiv.appendChild(buildStatusBadge(isAktief));
 
     const emailDiv = document.createElement('div');
     emailDiv.className = 'admin-user-email';
@@ -1074,11 +1071,14 @@ const json = await window.MoonApi.createGebruiker(payload);
 
     if (json && json.sukses) {
       alert('Gebruiker suksesvol geskrap.');
+      // Geskrapte gebruikers bly in die lys, maar hul badge wys nou Nie-Aktief.
       const row = userList
         ? userList.querySelector('.admin-user-row[data-user-id="' + userId + '"]')
         : null;
-      if (row) row.remove();
-      capListHeight(userList, '.admin-user-row');
+      if (row) {
+        const oldBadge = row.querySelector('.status-badge');
+        if (oldBadge) oldBadge.replaceWith(buildStatusBadge(false));
+      }
       closeUserModal(); // resets the form back to create mode
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skrap nie.');
