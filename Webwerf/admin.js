@@ -959,15 +959,8 @@ if (rolNaam === 'Student') {
 }
 
 else if (rolNaam === 'Personeel') {
-  const perNr = prompt('Voer personeelnommer in');
-
-  if (!perNr) {
-    alert('Personeelnommer is verpligtend');
-    return;
-  }
-
-  payload.GEB_ID_Nommer = perNr;
-  payload.PER_Nommer = perNr;
+  payload.GEB_ID_Nommer = epos;
+  // PER_Nommer word outomaties deur die backend gegenereer
 }
 
 else if (rolNaam === 'Sekuriteit_Wag') {
