@@ -241,7 +241,7 @@ class _TuisTabState extends State<_TuisTab> {
                 Expanded(
                   child: GradientActionButton(
                     label: 'Wys QR',
-                  onTap: () {
+                    onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -256,7 +256,7 @@ class _TuisTabState extends State<_TuisTab> {
                 Expanded(
                   child: GradientActionButton(
                     label: 'Skandeer Klas',
-                  onTap: () {
+                    onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -314,6 +314,8 @@ class _DashboardInfoCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   mainText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: kText1,
                     fontSize: 17,
@@ -323,6 +325,8 @@ class _DashboardInfoCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: kText2,
                     fontSize: 12,
@@ -490,12 +494,16 @@ class _SaamryTabState extends State<_SaamryTab> {
                         size: 26,
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        'My Saamry Groep',
-                        style: GoogleFonts.inter(
-                          color: kText1,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: Text(
+                          'My Saamry Groep',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: kText1,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ],
@@ -925,13 +933,16 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    _otp!,
-                    style: GoogleFonts.inter(
-                      color: kText1,
-                      fontSize: 38,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 6,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _otp!,
+                      style: GoogleFonts.inter(
+                        color: kText1,
+                        fontSize: 38,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 6,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -1105,13 +1116,17 @@ class _StudentNavBar extends StatelessWidget {
                     color: active ? kAccent : kTextMuted,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    items[i].label,
-                    style: GoogleFonts.inter(
-                      color: active ? kText1 : kTextMuted,
-                      fontSize: 10,
-                      fontWeight:
-                          active ? FontWeight.w600 : FontWeight.w400,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      items[i].label,
+                      maxLines: 1,
+                      style: GoogleFonts.inter(
+                        color: active ? kText1 : kTextMuted,
+                        fontSize: 10,
+                        fontWeight:
+                            active ? FontWeight.w600 : FontWeight.w400,
+                      ),
                     ),
                   ),
                 ],
@@ -1147,35 +1162,45 @@ class ScanSelectionPage extends StatelessWidget {
               showBack: true,
             ),
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Kampus Skandering',
-                        subtitle: 'Druk om te skandeer',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LeftEmptyPage()),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top -
+                        MediaQuery.of(context).padding.bottom -
+                        140,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Kampus Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LeftEmptyPage()),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Klas Skandering',
-                        subtitle: 'Druk om te skandeer',
-                        borderColor: const Color(0x3300C2FF),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const RightEmptyPage()),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Klas Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            borderColor: const Color(0x3300C2FF),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const RightEmptyPage()),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1231,19 +1256,27 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
   @override
   Widget build(BuildContext context) {
     final nommer = _studentNommer ?? 'Onbekend';
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final qrSize = screenHeight < 620
+        ? 110.0
+        : screenHeight < 700
+            ? 130.0
+            : 170.0;
+    final numberFontSize = screenWidth < 360 ? 32.0 : 38.0;
 
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
+            const AppScreenHeader(
               title: 'Kampus Skandering',
               subtitle: 'Student',
               showBack: true,
             ),
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: GlassCard(
                   padding: const EdgeInsets.all(20),
@@ -1251,14 +1284,14 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                     child: _loading
                         ? const CircularProgressIndicator()
                         : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.nfc,
                                 color: kAccent,
-                                size: 72,
+                                size: 56,
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 14),
                               Text(
                                 'Studentenommer',
                                 style: GoogleFonts.inter(
@@ -1268,16 +1301,18 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                nommer,
-                                style: GoogleFonts.inter(
-                                  color: kText1,
-                                  fontSize: 42,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 2,
+                              FittedBox(
+                                child: Text(
+                                  nommer,
+                                  style: GoogleFonts.inter(
+                                    color: kText1,
+                                    fontSize: numberFontSize,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 2,
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 14),
                               Text(
                                 _status,
                                 textAlign: TextAlign.center,
@@ -1286,10 +1321,11 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                                   fontSize: 14,
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 18),
                               GlassCard(
                                 padding: const EdgeInsets.all(14),
                                 child: Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       'Alternatiewe QR-Kode',
@@ -1306,7 +1342,7 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                                       child: QrImageView(
                                         data: nommer,
                                         version: QrVersions.auto,
-                                        size: 170,
+                                        size: qrSize,
                                       ),
                                     ),
                                   ],
@@ -1455,36 +1491,51 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
               showBack: true,
             ),
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: GlassCard(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.nfc,
-                          color: kAccent,
-                          size: 64,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _status,
-                          style: GoogleFonts.inter(
-                            color: kText1,
-                            fontSize: 14,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top -
+                        MediaQuery.of(context).padding.bottom -
+                        140,
+                  ),
+                  child: GlassCard(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.nfc,
+                            color: kAccent,
+                            size: 64,
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: _busy ? null : _scanKlas,
-                          child: Text(
-                            _busy
-                                ? 'Besig...'
-                                : 'Skandeer Klas',
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              _status,
+                              textAlign: TextAlign.center,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: kText1,
+                                fontSize: 14,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: _busy ? null : _scanKlas,
+                            child: Text(
+                              _busy
+                                  ? 'Besig...'
+                                  : 'Skandeer Klas',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1662,6 +1713,8 @@ class _AddFriendPageState extends State<AddFriendPage> {
                                           children: [
                                             Text(
                                               student.fullName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.inter(
                                                 color: kText1,
                                                 fontSize: 14,
@@ -1671,6 +1724,8 @@ class _AddFriendPageState extends State<AddFriendPage> {
                                             const SizedBox(height: 3),
                                             Text(
                                               student.studentNommer,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.inter(
                                                 color: kTextMuted,
                                                 fontSize: 11,
