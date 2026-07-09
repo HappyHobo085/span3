@@ -74,6 +74,7 @@
   const newUserRole = document.getElementById('new-user-role');
   const userModalTitle = document.getElementById('create-user-title');
   const newUserActive = document.getElementById('newUserActive');
+  const userActiveRow = document.getElementById('user-active-row');
 
   // Edit mode tracking: null = create, an ID = editing that record.
   let editingUserId = null;
@@ -991,8 +992,9 @@ const payload = {
   GEB_Naam: naam,
   GEB_Van: van,
   GEB_Epos: epos,
+  GEB_Wagwoord: wagwoord,
   Rol_ID: rolId,
-  Is_Aktief: newUserActive.checked,
+  Is_Aktief: newUserActive ? newUserActive.checked : true,
 };
 
 if (rolNaam === 'Student') {
@@ -1036,7 +1038,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       closeUserModal(); // also resets the form back to create mode
 
       // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
-      addUserRow(nuweId, naam, van, epos, rolId, false);
+      addUserRow(nuweId, naam, van, epos, rolId, payload.Is_Aktief);
       capListHeight(userList, '.admin-user-row');
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
@@ -1057,6 +1059,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       GEB_Van: van,
       GEB_Epos: epos,
       Rol_ID: rolId,
+      Is_Aktief: newUserActive.checked,
     };
 
     // Password is optional in edit mode — only send it when a new one is typed.
