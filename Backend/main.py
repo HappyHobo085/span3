@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func, text
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import uuid
 import os
 
@@ -2033,6 +2034,7 @@ def kry_my_dashboard(
     laaste_kampus_log = db.query(models.ToegangsLogs).filter(
         models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
         models.ToegangsLogs.TOE_Metode == "QR",
+        models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
     ).order_by(
         models.ToegangsLogs.TOE_Tydstempel.desc()
     ).first()
@@ -2040,6 +2042,7 @@ def kry_my_dashboard(
     laaste_klas_log = db.query(models.ToegangsLogs).filter(
         models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
         models.ToegangsLogs.TOE_Metode == "NFC",
+        models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
     ).order_by(
         models.ToegangsLogs.TOE_Tydstempel.desc()
     ).first()
@@ -2087,14 +2090,14 @@ def dashboard_live(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
-    vandag = datetime.utcnow().date()
+    vandag = datetime.now(ZoneInfo("Africa/Johannesburg")).date()
 
-    # Kry laaste log per gebruiker
     laaste_logs_subq = (
         db.query(
             models.ToegangsLogs.Gebruiker_ID,
             func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
         )
+        .filter(models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]))
         .group_by(models.ToegangsLogs.Gebruiker_ID)
         .subquery()
     )
@@ -2130,11 +2133,13 @@ def dashboard_live(
 
     toegange_vandag = (
         db.query(models.ToegangsLogs)
-        .filter(func.date(models.ToegangsLogs.TOE_Tydstempel) == vandag)
+        .filter(
+            func.date(models.ToegangsLogs.TOE_Tydstempel) == vandag,
+            models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+        )
         .count()
     )
 
-    # Vir nou 0, want besoeker backend is nog nie volledig gekoppel nie
     besoekers_vandag = 0
 
     return schemas.APIResponse(
