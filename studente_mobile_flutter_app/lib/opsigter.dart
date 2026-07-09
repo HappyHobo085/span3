@@ -302,48 +302,296 @@ class _TuisTabState extends State<_TuisTab> {
   }
 }
 
-class _KampusPage extends StatelessWidget {
+class _KampusPage extends StatefulWidget {
   const _KampusPage();
 
   @override
+  State<_KampusPage> createState() => _KampusPageState();
+}
+
+class _KampusPageState extends State<_KampusPage> {
+  bool _laaiKampusse = true;
+  bool _laaiStatus = false;
+  String? _fout;
+  List<KampusDto> _kampusse = [];
+  KampusDto? _gekoseKampus;
+  Map<String, dynamic> _status = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _laaiKampusLys();
+  }
+
+  Future<void> _laaiKampusLys() async {
+    setState(() {
+      _laaiKampusse = true;
+      _fout = null;
+    });
+
+    try {
+      final result = await MoonApi.fetchKampusse();
+
+      if (!mounted) return;
+
+      setState(() {
+        _kampusse = result.where((k) => k.kampusId != null).toList();
+        _gekoseKampus = _kampusse.isNotEmpty ? _kampusse.first : null;
+        _laaiKampusse = false;
+      });
+
+      if (_gekoseKampus?.kampusId != null) {
+        await _laaiKampusStatus();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fout = e.toString().replaceFirst('Exception: ', '');
+        _laaiKampusse = false;
+      });
+    }
+  }
+
+  Future<void> _laaiKampusStatus() async {
+    final kampusId = _gekoseKampus?.kampusId;
+    if (kampusId == null) return;
+
+    setState(() {
+      _laaiStatus = true;
+      _fout = null;
+    });
+
+    try {
+      final result = await MoonApi.fetchKampusStatus(kampusId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _status = result;
+        _laaiStatus = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fout = e.toString().replaceFirst('Exception: ', '');
+        _laaiStatus = false;
+      });
+    }
+  }
+
+  String _waarde(List<String> sleutels) {
+    if (_laaiStatus) return '—';
+
+    for (final sleutel in sleutels) {
+      final waarde = _status[sleutel];
+      if (waarde != null) return waarde.toString();
+    }
+
+    return '0';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final studenteIn = _waarde([
+      'students_in',
+      'studente_in',
+      'studente_op_kampus',
+      'students_on_campus',
+    ]);
+
+    final studenteUit = _waarde([
+      'students_out',
+      'studente_out',
+      'studente_uit',
+    ]);
+
+    final personeelIn = _waarde([
+      'personnel_in',
+      'personeel_in',
+      'personeel_op_kampus',
+      'personnel_on_campus',
+    ]);
+
+    final personeelUit = _waarde([
+      'personnel_out',
+      'personeel_out',
+      'personeel_uit',
+    ]);
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Kampus', subtitle: 'Regstreekse kampusoorsig', showBack: true),
+            const AppScreenHeader(
+              title: 'Kampus',
+              subtitle: 'Regstreekse kampusoorsig',
+              showBack: true,
+            ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
-                      children: const [
-                        Expanded(child: _OpsigterMetricCard(label: 'STUDENTE', value: '0', subtitle: 'Op kampus', icon: Icons.school_rounded)),
-                        SizedBox(width: 12),
-                        Expanded(child: _OpsigterMetricCard(label: 'PERSONEEL', value: '0', subtitle: 'Op kampus', icon: Icons.badge_rounded)),
+              child: RefreshIndicator(
+                onRefresh: _laaiKampusStatus,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('KIES KAMPUS'),
+                            const SizedBox(height: 12),
+                            if (_laaiKampusse)
+                              const Center(child: CircularProgressIndicator())
+                            else if (_kampusse.isEmpty)
+                              Text(
+                                'Geen kampusse gevind nie',
+                                style: GoogleFonts.inter(color: kText2, fontSize: 13),
+                              )
+                            else
+                              DropdownButtonFormField<KampusDto>(
+                                value: _gekoseKampus,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF111827),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0x14FFFFFF),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: kAccent),
+                                  ),
+                                ),
+                                items: _kampusse
+                                    .map(
+                                      (kampus) => DropdownMenuItem<KampusDto>(
+                                        value: kampus,
+                                        child: Text(
+                                          kampus.naam,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(color: kText1, fontSize: 13),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) async {
+                                  if (value == null) return;
+                                  setState(() => _gekoseKampus = value);
+                                  await _laaiKampusStatus();
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      if (_fout != null) ...[
+                        const SizedBox(height: 12),
+                        GlassCard(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Kampusdata kon nie laai nie: $_fout',
+                                  style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _laaiKampusStatus,
+                                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'AKTIEWE BEWEGING', name: 'Geen aktiewe beweging', detail: 'Kampus beweging sal hier verskyn.', icon: Icons.timeline_rounded),
-                    const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'LAASTE TOEGANGSLOGS', name: 'Geen toegangslogs', detail: 'Toegangslogs sal hier vertoon word.', icon: Icons.info_outline),
-                    const SizedBox(height: 14),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                      const SizedBox(height: 14),
+
+                      Row(
                         children: [
-                          const _SectionTitle('AKSIES'),
-                          const SizedBox(height: 12),
-                          _QuickActionRow(label: 'Soek persoon op kampus', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
-                          const _ThinDivider(),
-                          _QuickActionRow(label: 'Verfris kampusdata', icon: Icons.refresh_rounded, onTap: () => _showComingSoon(context)),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'STUDENTE IN',
+                              value: studenteIn,
+                              subtitle: 'Op kampus',
+                              icon: Icons.school_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'STUDENTE UIT',
+                              value: studenteUit,
+                              subtitle: 'Nie op kampus',
+                              icon: Icons.logout_rounded,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'PERSONEEL IN',
+                              value: personeelIn,
+                              subtitle: 'Op kampus',
+                              icon: Icons.badge_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'PERSONEEL UIT',
+                              value: personeelUit,
+                              subtitle: 'Nie op kampus',
+                              icon: Icons.exit_to_app_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 14),
+                      const _InfoGlassCard(
+                        title: 'AKTIEWE BEWEGING',
+                        name: 'Kampusdata opgedateer',
+                        detail: 'Kies ’n kampus bo om die regstreekse syfers te sien.',
+                        icon: Icons.timeline_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                      const _InfoGlassCard(
+                        title: 'LAASTE TOEGANGSLOGS',
+                        name: 'Geen toegangslogs',
+                        detail: 'Toegangslogs sal hier vertoon word.',
+                        icon: Icons.info_outline,
+                      ),
+                      const SizedBox(height: 14),
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('AKSIES'),
+                            const SizedBox(height: 12),
+                            _QuickActionRow(label: 'Soek persoon op kampus', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                            const _ThinDivider(),
+                            _QuickActionRow(label: 'Verfris kampusdata', icon: Icons.refresh_rounded, onTap: _laaiKampusStatus),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -354,11 +602,128 @@ class _KampusPage extends StatelessWidget {
   }
 }
 
-class _KoshuisPage extends StatelessWidget {
+class _KoshuisPage extends StatefulWidget {
   const _KoshuisPage();
 
   @override
+  State<_KoshuisPage> createState() => _KoshuisPageState();
+}
+
+class _KoshuisPageState extends State<_KoshuisPage> {
+  bool _laaiKoshuise = true;
+  bool _laaiStatus = false;
+  String? _fout;
+  List<KoshuisDto> _koshuise = [];
+  KoshuisDto? _gekoseKoshuis;
+  Map<String, dynamic> _status = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _laaiKoshuisLys();
+  }
+
+  Future<void> _laaiKoshuisLys() async {
+    setState(() {
+      _laaiKoshuise = true;
+      _fout = null;
+    });
+
+    try {
+      final result = await MoonApi.fetchKoshuise();
+
+      if (!mounted) return;
+
+      setState(() {
+        _koshuise = result.where((k) => k.koshuisId != null).toList();
+        _gekoseKoshuis = _koshuise.isNotEmpty ? _koshuise.first : null;
+        _laaiKoshuise = false;
+      });
+
+      if (_gekoseKoshuis?.koshuisId != null) {
+        await _laaiKoshuisStatus();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fout = e.toString().replaceFirst('Exception: ', '');
+        _laaiKoshuise = false;
+      });
+    }
+  }
+
+  Future<void> _laaiKoshuisStatus() async {
+    final koshuisId = _gekoseKoshuis?.koshuisId;
+    if (koshuisId == null) return;
+
+    setState(() {
+      _laaiStatus = true;
+      _fout = null;
+    });
+
+    try {
+      final result = await MoonApi.fetchKoshuisStatus(koshuisId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _status = result;
+        _laaiStatus = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fout = e.toString().replaceFirst('Exception: ', '');
+        _laaiStatus = false;
+      });
+    }
+  }
+
+  String _waarde(List<String> sleutels) {
+    if (_laaiStatus) return '—';
+
+    for (final sleutel in sleutels) {
+      final waarde = _status[sleutel];
+      if (waarde != null) return waarde.toString();
+    }
+
+    return '0';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final studenteIn = _waarde([
+      'students_in',
+      'studente_in',
+      'inwoners_in',
+      'current_residents',
+      'huidige_inwoners',
+      'residents',
+      'inwoners',
+    ]);
+
+    final studenteUit = _waarde([
+      'students_out',
+      'studente_out',
+      'studente_uit',
+      'inwoners_uit',
+    ]);
+
+    final kapasiteit = _waarde([
+      'capacity',
+      'kapasiteit',
+      'koshuis_capacity',
+    ]);
+
+    final inwoners = _waarde([
+      'current_residents',
+      'huidige_inwoners',
+      'residents',
+      'inwoners',
+    ]);
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -366,36 +731,157 @@ class _KoshuisPage extends StatelessWidget {
           children: [
             const AppScreenHeader(title: 'Koshuis', subtitle: 'Koshuis oorsig', showBack: true),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
-                      children: const [
-                        Expanded(child: _OpsigterMetricCard(label: 'INWONERS', value: '0', subtitle: 'In koshuis', icon: Icons.bed_rounded)),
-                        SizedBox(width: 12),
-                        Expanded(child: _OpsigterMetricCard(label: 'BESOEKERS', value: '0', subtitle: 'Aktief', icon: Icons.person_add_alt_1_rounded)),
+              child: RefreshIndicator(
+                onRefresh: _laaiKoshuisStatus,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('KIES KOSHUIS'),
+                            const SizedBox(height: 12),
+                            if (_laaiKoshuise)
+                              const Center(child: CircularProgressIndicator())
+                            else if (_koshuise.isEmpty)
+                              Text(
+                                'Geen koshuise gevind nie',
+                                style: GoogleFonts.inter(color: kText2, fontSize: 13),
+                              )
+                            else
+                              DropdownButtonFormField<KoshuisDto>(
+                                value: _gekoseKoshuis,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF111827),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0x14FFFFFF),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: kAccent),
+                                  ),
+                                ),
+                                items: _koshuise
+                                    .map(
+                                      (koshuis) => DropdownMenuItem<KoshuisDto>(
+                                        value: koshuis,
+                                        child: Text(
+                                          koshuis.naam,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(color: kText1, fontSize: 13),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) async {
+                                  if (value == null) return;
+                                  setState(() => _gekoseKoshuis = value);
+                                  await _laaiKoshuisStatus();
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      if (_fout != null) ...[
+                        const SizedBox(height: 12),
+                        GlassCard(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Koshuisdata kon nie laai nie: $_fout',
+                                  style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _laaiKoshuisStatus,
+                                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'KOSHUIS STATUS', name: 'Geen waarskuwings', detail: 'Alles funksioneer normaal.', icon: Icons.check_circle),
-                    const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'LAASTE AKTIWITEIT', name: 'Geen aktiwiteit', detail: 'Koshuis logs sal hier verskyn.', icon: Icons.history),
-                    const SizedBox(height: 14),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                      const SizedBox(height: 14),
+
+                      Row(
                         children: [
-                          const _SectionTitle('AKSIES'),
-                          const SizedBox(height: 12),
-                          _QuickActionRow(label: 'Soek inwoner', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
-                          const _ThinDivider(),
-                          _QuickActionRow(label: 'Besoeker oorsig', icon: Icons.groups_rounded, onTap: () => _showComingSoon(context)),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'STUDENTE IN',
+                              value: studenteIn,
+                              subtitle: 'In koshuis',
+                              icon: Icons.bed_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'STUDENTE UIT',
+                              value: studenteUit,
+                              subtitle: 'Uit koshuis',
+                              icon: Icons.logout_rounded,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'KAPASITEIT',
+                              value: kapasiteit,
+                              subtitle: 'Maksimum',
+                              icon: Icons.apartment_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _OpsigterMetricCard(
+                              label: 'INWONERS',
+                              value: inwoners,
+                              subtitle: 'Huidig',
+                              icon: Icons.groups_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 14),
+                      const _InfoGlassCard(title: 'KOSHUIS STATUS', name: 'Koshuisdata opgedateer', detail: 'Kies ’n koshuis bo om die regstreekse syfers te sien.', icon: Icons.check_circle),
+                      const SizedBox(height: 14),
+                      const _InfoGlassCard(title: 'LAASTE AKTIWITEIT', name: 'Geen aktiwiteit', detail: 'Koshuis logs sal hier verskyn.', icon: Icons.history),
+                      const SizedBox(height: 14),
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('AKSIES'),
+                            const SizedBox(height: 12),
+                            _QuickActionRow(label: 'Soek inwoner', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                            const _ThinDivider(),
+                            _QuickActionRow(label: 'Verfris koshuisdata', icon: Icons.refresh_rounded, onTap: _laaiKoshuisStatus),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

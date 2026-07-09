@@ -26,6 +26,36 @@ class KampusDto {
 }
 
 /// =========================
+/// Koshuis DTO
+/// =========================
+
+class KoshuisDto {
+  final int? koshuisId;
+  final String naam;
+  final int? kapasiteit;
+
+  KoshuisDto({
+    required this.koshuisId,
+    required this.naam,
+    this.kapasiteit,
+  });
+
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  factory KoshuisDto.fromJson(Map<String, dynamic> json) {
+    return KoshuisDto(
+      koshuisId: _asInt(json['Koshuis_ID'] ?? json['koshuis_id'] ?? json['id']),
+      naam: (json['KOS_Naam'] ?? json['naam'] ?? json['name'] ?? 'Koshuis').toString(),
+      kapasiteit: _asInt(json['KOS_Kapasiteit'] ?? json['kapasiteit'] ?? json['capacity']),
+    );
+  }
+}
+
+/// =========================
 /// Lokasie DTO
 /// =========================
 
@@ -564,6 +594,75 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     return Map<String, dynamic>.from(decoded['data']);
   }
   
+
+  static Future<Map<String, dynamic>> fetchKampusStatus(int kampusId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/kampusse/$kampusId/status'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kampus status kon nie laai nie',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data'] ?? {});
+  }
+
+  static Future<List<KoshuisDto>> fetchKoshuise() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/koshuise'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuise laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw == null) return [];
+
+    return (raw as List)
+        .map((e) => KoshuisDto.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  static Future<Map<String, dynamic>> fetchKoshuisStatus(int koshuisId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/koshuise/$koshuisId/status'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Koshuis status kon nie laai nie',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data'] ?? {});
+  }
+
 }
 
 
