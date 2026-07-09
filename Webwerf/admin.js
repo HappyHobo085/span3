@@ -73,6 +73,7 @@
   const newUserPassword = document.getElementById('new-user-password');
   const newUserRole = document.getElementById('new-user-role');
   const userModalTitle = document.getElementById('create-user-title');
+  const newUserActive = document.getElementById('newUserActive');
 
   // Edit mode tracking: null = create, an ID = editing that record.
   let editingUserId = null;
@@ -730,6 +731,8 @@
     if (studentNumberField) studentNumberField.style.display = 'none';
     if (studentIsKoshuisField) studentIsKoshuisField.style.display = 'none';
     if (studentKoshuisField) studentKoshuisField.style.display = 'none';
+    if (userActiveRow) userActiveRow.style.display = 'none';
+    if (newUserActive) newUserActive.checked = true;
 
     if (userModalTitle) userModalTitle.textContent = 'Skep Gebruiker';
     if (createUserBtn) createUserBtn.textContent = 'Skep';
@@ -778,6 +781,9 @@
     if (deleteUserBtn) {
       deleteUserBtn.style.display = Number(userId) === getLoggedInUserId() ? 'none' : '';
     }
+
+    if (userActiveRow) userActiveRow.style.display = 'block';
+    if (newUserActive) newUserActive.checked = user.Is_Aktief !== false;
 
     showUserModal();
   }
@@ -985,9 +991,8 @@ const payload = {
   GEB_Naam: naam,
   GEB_Van: van,
   GEB_Epos: epos,
-  GEB_Wagwoord: wagwoord,
   Rol_ID: rolId,
-  Is_Aktief: true,
+  Is_Aktief: newUserActive.checked,
 };
 
 if (rolNaam === 'Student') {
@@ -1081,12 +1086,13 @@ const json = await window.MoonApi.createGebruiker(payload);
     if (json && json.sukses) {
       alert('Gebruiker suksesvol opgedateer.');
       const data = json.data || {};
-      updateUserRow(editingUserId, {
+      updateUserRow(editingUserId,{
         naam: data.GEB_Naam || naam,
         van: data.GEB_Van || van,
         epos: data.GEB_Epos || epos,
         rolId: data.Rol_ID || rolId,
-      });
+        isAktief: data.Is_Aktief,
+    });
       closeUserModal(); // resets the form back to create mode
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker opdateer nie.');
@@ -1111,6 +1117,11 @@ const json = await window.MoonApi.createGebruiker(payload);
     if (badge) {
       badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
       badge.textContent = rolNaam;
+    }
+
+    const oldBadge = row.querySelector('.status-badge');
+    if (oldBadge) {
+        oldBadge.replaceWith(buildStatusBadge(info.isAktief !== false));
     }
 
     row.dataset.rolId = String(info.rolId);
