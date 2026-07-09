@@ -96,7 +96,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${gekoseKlas.klasNaam} het nog geen UID nie. Herlaai klasse of wag vir server rebuild.',
+          '${gekoseKlas.klasNaam} het nog geen NFC-tag nie. Herlaai die klasse of wag totdat die bediener opgedateer is.',
         ),
       ),
     );
@@ -112,7 +112,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         side: BorderSide(color: kBorderEm, width: 1),
       ),
       title: Text(
-        'Skryf NFC tag',
+        'Skryf NFC-tag',
         style: GoogleFonts.inter(
           color: kText1,
           fontSize: 16,
@@ -120,7 +120,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         ),
       ),
       content: Text(
-        'Hou die NFC tag teen die toestel.\n\n'
+        'Hou die NFC-tag teen die toestel.\n\n'
         'Klas: ${gekoseKlas.klasNaam}\n'
         'UID: $uid',
         style: GoogleFonts.inter(
@@ -173,7 +173,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           const SnackBar(
             backgroundColor: Colors.green,
             content: Text(
-              'NFC tag suksesvol geskryf.',
+              'NFC-tag suksesvol geskryf.',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -348,7 +348,7 @@ class _TuisTab extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Kies \'n klas en skryf \'n NFC tag',
+                        'Kies \'n klas en skryf \'n NFC-tag',
                         style: GoogleFonts.inter(
                           color: kText2,
                           fontSize: 13,
@@ -570,7 +570,7 @@ class _NfcTab extends StatelessWidget {
                       child: Text(
                         gekoseLokasieId == null
                           ? 'Kies \'n klas in die Klasse-tab'
-                          : 'Klas gekies — gaan terug na Klasse om UID te sien',
+                          : 'Klas gekies. Druk "Skryf NFC" om die tag te programmeer.',
                         style: GoogleFonts.inter(
                           color: gekoseLokasieId == null ? kTextMuted : kText2,
                           fontSize: 13,
