@@ -275,9 +275,11 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     } catch (e) {
       if (!mounted) return;
 
+      final msg = e.toString().replaceFirst('Exception: ', '');
+
       setState(() {
         _loading = false;
-        _status = 'Fout: $e';
+        _status = msg;
       });
 
       FocusScope.of(context).requestFocus(_scannerFocusNode);

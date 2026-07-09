@@ -493,7 +493,7 @@ class MoonApi {
     final decoded = jsonDecode(response.body);
 
     if (response.statusCode != 200 || decoded["sukses"] != true) {
-      throw Exception(decoded["fout"] ?? "Kon nie profiel kry nie");
+      throw Exception(decoded["fout"] ?? decoded["detail"] ?? "Kon nie profiel kry nie");
     }
 
     final d = decoded["data"];
