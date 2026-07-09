@@ -297,26 +297,24 @@ class MoonApi {
 
 
 static Future<Map<String, dynamic>> fetchLiveDashboard() async {
-  final token = await getToken();
-
-  final res = await http.get(
+  final response = await http.get(
     Uri.parse('$baseUrl/dashboard/live'),
     headers: {
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty)
-        'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+      if (bearerToken != null)
+        'Authorization': 'Bearer $bearerToken',
     },
   );
 
-  final json = jsonDecode(res.body);
+  final decoded = jsonDecode(response.body);
 
-  if (res.statusCode >= 400 || json['sukses'] != true) {
+  if (response.statusCode != 200 || decoded['sukses'] != true) {
     throw Exception(
-      json['fout'] ?? json['detail'] ?? 'Dashboard kon nie laai nie',
+      decoded['fout'] ?? decoded['detail'] ?? 'Dashboard kon nie laai nie',
     );
   }
 
-  return Map<String, dynamic>.from(json['data']);
+  return Map<String, dynamic>.from(decoded['data']);
 }
 
   /// -------------------------
