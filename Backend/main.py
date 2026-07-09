@@ -7,8 +7,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func, text
+from datetime import datetime
 import uuid
 import os
+
 
 from typing import List, Optional, Any
 
@@ -1999,6 +2001,71 @@ def kry_my_dashboard(
             "laaste_klas": log_to_dict(laaste_klas_log),
         },
     }
+    
+@app.get("/dashboard/live")
+def dashboard_live(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    vandag = datetime.utcnow().date()
+
+    # Kry laaste log per gebruiker
+    laaste_logs_subq = (
+        db.query(
+            models.ToegangsLogs.Gebruiker_ID,
+            func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
+        )
+        .group_by(models.ToegangsLogs.Gebruiker_ID)
+        .subquery()
+    )
+
+    laaste_logs = (
+        db.query(models.ToegangsLogs)
+        .join(
+            laaste_logs_subq,
+            models.ToegangsLogs.Log_ID == laaste_logs_subq.c.max_log_id
+        )
+        .all()
+    )
+
+    op_kampus_ids = [
+        log.Gebruiker_ID
+        for log in laaste_logs
+        if log.TOE_Rigting == "IN"
+    ]
+
+    studente_op_kampus = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID.in_(op_kampus_ids))
+        .count()
+        if op_kampus_ids else 0
+    )
+
+    personeel_op_kampus = (
+        db.query(models.Personeel)
+        .filter(models.Personeel.Gebruiker_ID.in_(op_kampus_ids))
+        .count()
+        if op_kampus_ids else 0
+    )
+
+    toegange_vandag = (
+        db.query(models.ToegangsLogs)
+        .filter(func.date(models.ToegangsLogs.TOE_Tydstempel) == vandag)
+        .count()
+    )
+
+    # Vir nou 0, want besoeker backend is nog nie volledig gekoppel nie
+    besoekers_vandag = 0
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "studente_op_kampus": studente_op_kampus,
+            "personeel_op_kampus": personeel_op_kampus,
+            "besoekers_vandag": besoekers_vandag,
+            "toegange_vandag": toegange_vandag,
+        }
+    )
     
 @app.get("/studente/search")
 def soek_studente(
