@@ -62,6 +62,10 @@
     };
   }
 
+  async function fetchLiveDashboard() {
+  return apiGet('/dashboard/live');
+}
+
   /**
    * Public API
    */

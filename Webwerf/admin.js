@@ -1274,6 +1274,33 @@ const json = await window.MoonApi.createGebruiker(payload);
     newUserIsKoshuis.addEventListener('change', toggleKoshuisDropdown);
   }
 
+  async function refreshDashboard() {
+  if (!window.MoonApi) return;
+
+  try {
+    const json = await window.MoonApi.fetchLiveDashboard();
+
+    if (!json || !json.sukses) return;
+
+    const d = json.data;
+
+    document.getElementById('dashboard-studente').textContent =
+      d.studente_op_kampus;
+
+    document.getElementById('dashboard-personeel').textContent =
+      d.personeel_op_kampus;
+
+    document.getElementById('dashboard-besoekers').textContent =
+      d.besoekers_vandag;
+
+    document.getElementById('dashboard-toegange').textContent =
+      d.toegange_vandag;
+
+  } catch (e) {
+    console.error(e);
+  }
+}
+
   // =====================================================================
   //  INIT
   // =====================================================================
@@ -1291,5 +1318,10 @@ const json = await window.MoonApi.createGebruiker(payload);
 
   await loadGebruikers();
   applyUserFilter();
+
+  await refreshDashboard();
+
+  setInterval(refreshDashboard, 5000);
+
   });
 })();

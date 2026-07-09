@@ -299,7 +299,10 @@ class MoonApi {
 static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   final res = await http.get(
     Uri.parse('$baseUrl/dashboard/live'),
-    headers: authHeaders,
+    headers: {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    },
   );
 
   final json = jsonDecode(res.body);
