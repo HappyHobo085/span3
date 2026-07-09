@@ -57,9 +57,9 @@ class _TuisTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Dashboard', style: GoogleFonts.inter(color: kText1, fontSize: 24, fontWeight: FontWeight.w800)),
+          Text('Paneelbord', style: GoogleFonts.inter(color: kText1, fontSize: 24, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text('Kampusbeheer en oorsig', style: GoogleFonts.inter(color: kTextMuted, fontSize: 12)),
+          Text('Kampusbeheer en monitering', style: GoogleFonts.inter(color: kTextMuted, fontSize: 12)),
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
@@ -101,7 +101,7 @@ class _TuisTab extends StatelessWidget {
             children: const [
               Expanded(child: _OpsigterMetricCard(label: 'BESOEKERS', value: '0', subtitle: 'Vandag', icon: Icons.person_add_alt_1_rounded)),
               SizedBox(width: 12),
-              Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
+              Expanded(child: _OpsigterMetricCard(label: 'GELEENTHEDE', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
             ],
           ),
           const SizedBox(height: 16),
@@ -116,7 +116,7 @@ class _TuisTab extends StatelessWidget {
                 const _ThinDivider(),
                 _QuickActionRow(label: 'Koshuis', icon: Icons.apartment_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _KoshuisPage()))),
                 const _ThinDivider(),
-                _QuickActionRow(label: 'Events', icon: Icons.event_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _EventsPage()))),
+                _QuickActionRow(label: 'Geleenthede', icon: Icons.event_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _EventsPage()))),
               ],
             ),
           ),
@@ -136,7 +136,7 @@ class _KampusPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Kampus', subtitle: 'Live kampus oorsig', showBack: true),
+            const AppScreenHeader(title: 'Kampus', subtitle: 'Regstreekse kampusoorsig', showBack: true),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -152,7 +152,7 @@ class _KampusPage extends StatelessWidget {
                     const SizedBox(height: 14),
                     const _InfoGlassCard(title: 'AKTIEWE BEWEGING', name: 'Geen aktiewe beweging', detail: 'Kampus beweging sal hier verskyn.', icon: Icons.timeline_rounded),
                     const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'LAASTE TOEGANGSLOGS', name: 'Geen logs', detail: 'Kampus logs kom later vanaf backend.', icon: Icons.info_outline),
+                    const _InfoGlassCard(title: 'LAASTE TOEGANGSLOGS', name: 'Geen toegangslogs', detail: 'Toegangslogs sal hier vertoon word.', icon: Icons.info_outline),
                     const SizedBox(height: 14),
                     GlassCard(
                       padding: const EdgeInsets.all(16),
@@ -240,7 +240,7 @@ class _EventsPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Events', subtitle: 'Funksies en kampusgeleenthede', showBack: true),
+            const AppScreenHeader(title: 'Geleenthede', subtitle: 'Kampusgeleenthede', showBack: true),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -248,13 +248,13 @@ class _EventsPage extends StatelessWidget {
                   children: [
                     Row(
                       children: const [
-                        Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
+                        Expanded(child: _OpsigterMetricCard(label: 'GELEENTHEDE', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
                         SizedBox(width: 12),
-                        Expanded(child: _OpsigterMetricCard(label: 'CHECK-INS', value: '0', subtitle: 'Vandag', icon: Icons.qr_code_scanner_rounded)),
+                        Expanded(child: _OpsigterMetricCard(label: 'TOEGANGE', value: '0', subtitle: 'Vandag', icon: Icons.qr_code_scanner_rounded)),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'AKTIEWE EVENTS', name: 'Geen aktiewe events', detail: 'Events sal hier verskyn wanneer dit geskep word.', icon: Icons.event_busy_rounded),
+                    const _InfoGlassCard(title: 'AKTIEWE GELEENTHEDE', name: 'Geen aktiewe geleenthede', detail: 'Geleenthede sal hier verskyn wanneer dit geskep word.', icon: Icons.event_busy_rounded),
                     const SizedBox(height: 14),
                     GlassCard(
                       padding: const EdgeInsets.all(16),
@@ -263,9 +263,9 @@ class _EventsPage extends StatelessWidget {
                         children: [
                           const _SectionTitle('AKSIES'),
                           const SizedBox(height: 12),
-                          _QuickActionRow(label: 'Skep event', icon: Icons.add_circle_outline_rounded, onTap: () => _showComingSoon(context)),
+                          _QuickActionRow(label: 'Skep Geleentheid', icon: Icons.add_circle_outline_rounded, onTap: () => _showComingSoon(context)),
                           const _ThinDivider(),
-                          _QuickActionRow(label: 'Event check-in', icon: Icons.qr_code_2_rounded, onTap: () => _showComingSoon(context)),
+                          _QuickActionRow(label: 'Geleentheid-toegang', icon: Icons.qr_code_2_rounded, onTap: () => _showComingSoon(context)),
                         ],
                       ),
                     ),
@@ -428,7 +428,7 @@ class _OpsigterNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+      _NavItem(icon: Icons.dashboard_rounded, label: 'Paneelbord'),
       _NavItem(icon: Icons.location_city_rounded, label: 'Kampus'),
       _NavItem(icon: Icons.apartment_rounded, label: 'Koshuis'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
