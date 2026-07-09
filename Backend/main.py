@@ -1849,6 +1849,52 @@ def wagte_profile_verify(
         },
     )
     
+@router.post("/wagte/profile/decline")
+def decline_profile_access(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    gebruiker_id = data.get("gebruiker_id")
+    kampus_id = data.get("kampus_id")
+    metode = data.get("metode", "QR")
+
+    if not gebruiker_id or not kampus_id:
+        raise HTTPException(status_code=400, detail="Gebruiker en kampus is verpligtend")
+
+    main_gate = (
+        db.query(Lokasie)
+        .filter(
+            Lokasie.Kampus_ID == kampus_id,
+            Lokasie.LOK_Tipe == "Kampus",
+        )
+        .first()
+    )
+
+    if not main_gate:
+        raise HTTPException(status_code=404, detail="Geen kampus hek gevind nie")
+
+    log = ToegangLog(
+        Gebruiker_ID=gebruiker_id,
+        Lokasie_ID=main_gate.Lokasie_ID,
+        Rigting="GEWEIER",
+        Metode=metode,
+    )
+
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return {
+        "sukses": True,
+        "data": {
+            "message": "Toegang geweier",
+            "log_id": log.Log_ID,
+            "rigting": "GEWEIER",
+        },
+        "fout": None,
+    }
+    
 
 @app.get("/me")
 def kry_my_profiel(

@@ -595,6 +595,38 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   }
   
 
+  static Future<Map<String, dynamic>> wagteProfileDecline({
+  required int gebruikerId,
+  required int kampusId,
+  required String metode,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/wagte/profile/decline'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    },
+    body: jsonEncode({
+      'gebruiker_id': gebruikerId,
+      'kampus_id': kampusId,
+      'metode': metode,
+    }),
+  );
+
+  final decoded = jsonDecode(response.body);
+
+  if (response.statusCode != 200 || decoded['sukses'] != true) {
+    throw Exception(
+      decoded['fout'] ?? decoded['detail'] ?? 'Toegang kon nie geweier word nie',
+    );
+  }
+
+  return Map<String, dynamic>.from(decoded['data']);
+}
+  
+
   static Future<List<KampusDto>> fetchOpsigterKampusse() async {
     final response = await http.get(
       Uri.parse('$baseUrl/wagte/kampusse'),

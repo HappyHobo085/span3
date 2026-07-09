@@ -467,6 +467,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
   late String _rigting;
   bool _loading = false;
   bool _verified = false;
+  bool _declined = false;
 
   @override
   void initState() {
@@ -515,6 +516,85 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
     }
   }
 
+  Future<void> _declineAccess() async {
+    if (_loading) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF111827),
+          title: const Text(
+            'Weier Toegang',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            'Is jy seker jy wil hierdie persoon se toegang weier?',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Kanselleer'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Weier',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _loading = true);
+
+    try {
+      await MoonApi.wagteProfileDecline(
+        gebruikerId: widget.profile.gebruikerId,
+        kampusId: widget.kampusId,
+        metode: widget.metode,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _declined = true;
+        _loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            'Toegang geweier',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        Navigator.pop(context, true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Weier fout: $e'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isIn = _rigting == 'IN';
@@ -531,7 +611,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
             ),
             Expanded(
               child: Center(
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(18),
                   child: GlassCard(
                     padding: const EdgeInsets.all(22),
@@ -564,6 +644,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
 
                         Text(
                           '${widget.profile.naam} ${widget.profile.van}',
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             color: kText1,
                             fontSize: 24,
@@ -575,6 +656,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
 
                         Text(
                           widget.profile.idNommer,
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             color: kText2,
                             fontSize: 16,
@@ -586,8 +668,19 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
                         if (_verified)
                           Text(
                             '✔ TOEGANG BEVESTIG',
+                            textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
                               color: Colors.green,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          )
+                        else if (_declined)
+                          Text(
+                            '✖ TOEGANG GEWEIER',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                             ),
@@ -622,10 +715,24 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
 
                           const SizedBox(height: 24),
 
-                          GradientActionButton(
-                            label: _loading ? 'BEVESTIG...' : 'BEVESTIG',
-                            onTap: _verify,
-                            height: 54,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: GradientActionButton(
+                                  label: _loading ? 'BEVESTIG...' : 'BEVESTIG',
+                                  onTap: _verify,
+                                  height: 54,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlineActionButton(
+                                  label: _loading ? 'BESIG...' : 'WEIER',
+                                  onTap: _declineAccess,
+                                  height: 54,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ],
@@ -640,7 +747,6 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
     );
   }
 }
-
 
 class OnverwagteBesoekerPage extends StatefulWidget {
   const OnverwagteBesoekerPage({super.key});
