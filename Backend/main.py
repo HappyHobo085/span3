@@ -839,10 +839,25 @@ def skep_kampus(
         KAM_Naam=naam,
         KAM_Adres=kampus_in.KAM_Adres,
     )
+
     db.add(kampus)
     db.commit()
     db.refresh(kampus)
-    return schemas.APIResponse(sukses=True, data=kampus)
+
+    # Skep outomaties die hoofhek vir die kampus
+    hek = models.Lokasie(
+        LOK_Naam=f"{kampus.KAM_Naam}-Hek",
+        LOK_Tipe="Kampus",
+        Kampus_ID=kampus.Kampus_ID,
+    )
+
+    db.add(hek)
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=kampus,
+    )
 
 
 @app.put("/kampusse/{kampus_id}", response_model=schemas.APIResponse[schemas.Kampus])
