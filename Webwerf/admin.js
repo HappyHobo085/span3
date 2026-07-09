@@ -1059,7 +1059,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       GEB_Van: van,
       GEB_Epos: epos,
       Rol_ID: rolId,
-      Is_Aktief: newUserActive.checked,
+      Is_Aktief: newUserActive ? newUserActive.checked : true,
     };
 
     // Password is optional in edit mode — only send it when a new one is typed.
