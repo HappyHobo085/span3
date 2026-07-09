@@ -193,7 +193,7 @@
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(function () {
       refreshDashboard(currentKoshuisId);
-    }, 30000);
+    }, 5000);
   }
 
   /** Hide list rows that do not contain the search text. */

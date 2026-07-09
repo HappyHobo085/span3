@@ -195,10 +195,10 @@
     var perInCount = document.getElementById('dash-personeel-in-count');
     var perOutCount = document.getElementById('dash-personeel-out-count');
 
-    if (stuInCount) stuInCount.textContent = 'Studente ingeklokt: ' + studentIn.length;
-    if (stuOutCount) stuOutCount.textContent = 'Studente uitgeklokt: ' + studentOut.length;
-    if (perInCount) perInCount.textContent = 'Personeel ingeklokt: ' + personeelIn.length;
-    if (perOutCount) perOutCount.textContent = 'Personeel uitgeklokt: ' + personeelOut.length;
+    if (stuInCount) stuInCount.textContent = 'Studente ingeteken: ' + studentIn.length;
+    if (stuOutCount) stuOutCount.textContent = 'Studente uitgeteken: ' + studentOut.length;
+    if (perInCount) perInCount.textContent = 'Personeel ingeteken: ' + personeelIn.length;
+    if (perOutCount) perOutCount.textContent = 'Personeel uitgeteken: ' + personeelOut.length;
 
     // Update lists
     renderUserList(document.getElementById('dash-student-in-list'), studentIn);
@@ -241,7 +241,7 @@
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(function () {
       refreshDashboard(currentKampusId);
-    }, 30000);
+    }, 5000);
   }
 
   /** Hide list rows that do not contain the search text. */
