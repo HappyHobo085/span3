@@ -308,7 +308,7 @@ def _sync_gebruiker_subrekords(
         if not opsigter and rol_naam == "Kampus_Opsigter":
             opsigter = models.Kampus_Opsigter(
                 Gebruiker_ID=gebruiker.Gebruiker_ID,
-                KAMO_Nommer=kamo_nommer,
+                KAMO_Nommer=per_nommer,
             )
             db.add(opsigter)
 
@@ -346,7 +346,7 @@ def _sync_gebruiker_subrekords(
         if not wag and rol_naam == "Sekuriteit_Wag":
             wag = models.Sekuriteit_Wag(
                 Gebruiker_ID=gebruiker.Gebruiker_ID,
-                SEK_Nommer=sek_nommer,
+                SEK_Nommer=per_nommer,
             )
             db.add(wag)
 
