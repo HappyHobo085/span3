@@ -64,7 +64,7 @@ Wide list cards:
   seeded PRNG (seed = hash of class id + ISO date), so the same day always
   shows the same result across reloads without any storage.
 - Weekends and future dates show "Geen klasdata vir hierdie dag nie" and
-  zeroed counts.
+  `--` placeholder counts (Totaal studente keeps its real value).
 
 ## 2. Access control — `main.js`
 
