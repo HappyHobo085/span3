@@ -139,32 +139,51 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Kampus Skandeer',
-                        subtitle: 'IN / UIT',
-                        icon: '🚪',
-                        onTap: _openKampusScan,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Kampus Skandeer',
+                            subtitle: 'IN / UIT',
+                            icon: '🚪',
+                            onTap: _openKampusScan,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Besoekers',
+                            subtitle: 'OTP verifieer',
+                            icon: '👤',
+                            borderColor: const Color(0x3300C2FF),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const VisitorVerifyPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Besoekers',
-                        subtitle: 'OTP / Lisensie Foto',
-                        icon: '👤',
-                        borderColor: const Color(0x3300C2FF),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const VisitorVerifyPage(),
-                            ),
-                          );
-                        },
-                      ),
+                    const SizedBox(height: 16),
+                    GlassTapPanel(
+                      label: 'Onverwagte Besoeker',
+                      subtitle: 'Neem lisensie foto en rede',
+                      icon: '📷',
+                      borderColor: const Color(0x3300C2FF),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const OnverwagteBesoekerPage(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -612,6 +631,203 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
                       ],
                     ),
                   ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class OnverwagteBesoekerPage extends StatefulWidget {
+  const OnverwagteBesoekerPage({super.key});
+
+  @override
+  State<OnverwagteBesoekerPage> createState() => _OnverwagteBesoekerPageState();
+}
+
+class _OnverwagteBesoekerPageState extends State<OnverwagteBesoekerPage> {
+  final TextEditingController _redeController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+
+  XFile? _lisensieFoto;
+
+  @override
+  void dispose() {
+    _redeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _neemFoto() async {
+    final foto = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+
+    if (foto == null) return;
+
+    setState(() {
+      _lisensieFoto = foto;
+    });
+  }
+
+  void _registreer() {
+    if (_lisensieFoto == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Neem eers ’n foto van die bestuurslisensie')),
+      );
+      return;
+    }
+
+    if (_redeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vul asseblief die rede vir besoek in')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Besoeker geregistreer'),
+        content: const Text('Onverwagte besoeker is voorlopig geregistreer.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _lisensieFoto = null;
+                _redeController.clear();
+              });
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Onverwagte Besoeker',
+              subtitle: 'Lisensie foto en rede',
+              showBack: true,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'BESTUURSLISENSIE',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: _neemFoto,
+                            child: Container(
+                              height: 210,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.white24),
+                                color: Colors.white10,
+                              ),
+                              child: _lisensieFoto == null
+                                  ? Center(
+                                      child: Text(
+                                        '📷 Neem foto van bestuurslisensie',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.inter(
+                                          color: kText1,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    )
+                                  : ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Image.file(
+                                        File(_lisensieFoto!.path),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'REDE VIR BESOEK',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _redeController,
+                            maxLines: 4,
+                            style: GoogleFonts.inter(color: kText1),
+                            decoration: InputDecoration(
+                              hintText: 'Byvoorbeeld: vergadering, aflewering, onderhoud...',
+                              hintStyle: GoogleFonts.inter(color: kTextMuted),
+                              filled: true,
+                              fillColor: Colors.white10,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Colors.white24),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Colors.white24),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: kAccent),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    GradientActionButton(
+                      label: 'Registreer Besoeker',
+                      onTap: _registreer,
+                      height: 54,
+                    ),
+                  ],
                 ),
               ),
             ),
