@@ -88,6 +88,24 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
+      <article class="glass-card panel" aria-label="Outo-Uitskandering">
+        <h2>Outo-Uitskandering</h2>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">
+          Stel die tyd waarop alle gebruikers outomaties van kampusgronde
+          uitgeskandeer word.
+        </p>
+        <div class="field">
+          <label class="field-label" for="auto-scanout-time">Uitskandering Tyd</label>
+          <input class="glass-input" type="time" id="auto-scanout-time"
+                 value="18:00" style="width:160px;display:block;margin-top:6px">
+        </div>
+        <button class="btn-primary" id="save-auto-scanout" type="button">Stoor Tyd</button>
+        <div id="auto-scanout-msg"
+             style="margin-top:10px;font-size:12px;color:var(--success);display:none"></div>
+        <p style="margin-top:12px;font-size:11px;color:var(--warning)">
+          Demo — backend word later gekoppel.
+        </p>
+      </article>
     </section>
   </main>
 

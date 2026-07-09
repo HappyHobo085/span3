@@ -1301,6 +1301,30 @@ async function refreshDashboard() {
 }
 
   // =====================================================================
+  //  OUTO-UITSKANDERING (demo — geen backend, geen stoor nie)
+  // =====================================================================
+
+  var autoScanoutTime = document.getElementById('auto-scanout-time');
+  var saveAutoScanoutBtn = document.getElementById('save-auto-scanout');
+  var autoScanoutMsg = document.getElementById('auto-scanout-msg');
+
+  if (saveAutoScanoutBtn) {
+    saveAutoScanoutBtn.addEventListener('click', function () {
+      var tyd = autoScanoutTime ? autoScanoutTime.value : '';
+
+      if (!tyd) {
+        alert('Kies asseblief \'n tyd.');
+        return;
+      }
+
+      if (autoScanoutMsg) {
+        autoScanoutMsg.textContent = 'Outo-uitskandering gestel vir ' + tyd + '.';
+        autoScanoutMsg.style.display = 'block';
+      }
+    });
+  }
+
+  // =====================================================================
   //  INIT
   // =====================================================================
 
