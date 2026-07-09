@@ -1016,11 +1016,11 @@ else if (
 ) {
     // Werknemers login met e-pos.
     // PER_Nommer word outomaties deur die backend geskep.
-    payload.GEB_ID_Nommer = epos;
+    payload.GEB_ID_Nommer = "0000000000000";
 }
 
 else {
-  payload.GEB_ID_Nommer = epos;
+  payload.GEB_ID_Nommer = "0000000000000";
 }
 
 const json = await window.MoonApi.createGebruiker(payload);
