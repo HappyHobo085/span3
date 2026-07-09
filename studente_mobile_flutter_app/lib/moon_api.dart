@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+
 /// =========================
 /// Kampus DTO
 /// =========================
@@ -292,6 +293,24 @@ class MoonApi {
   return (raw as List)
       .map((e) => StudentSearchDto.fromJson(Map<String, dynamic>.from(e)))
       .toList();
+}
+
+
+static Future<Map<String, dynamic>> fetchLiveDashboard() async {
+  final res = await http.get(
+    Uri.parse('$baseUrl/dashboard/live'),
+    headers: authHeaders,
+  );
+
+  final json = jsonDecode(res.body);
+
+  if (res.statusCode >= 400 || json['sukses'] != true) {
+    throw Exception(
+      json['fout'] ?? json['detail'] ?? 'Dashboard kon nie laai nie',
+    );
+  }
+
+  return Map<String, dynamic>.from(json['data']);
 }
 
   /// -------------------------

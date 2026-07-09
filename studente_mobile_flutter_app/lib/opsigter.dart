@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
+import 'moon_api.dart';
 import 'profile_page.dart';
 
 class OpsigterHomePage extends StatefulWidget {
@@ -47,80 +48,255 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
   }
 }
 
-class _TuisTab extends StatelessWidget {
+class _TuisTab extends StatefulWidget {
   const _TuisTab();
 
   @override
+  State<_TuisTab> createState() => _TuisTabState();
+}
+
+class _TuisTabState extends State<_TuisTab> {
+  bool _laai = true;
+  String? _fout;
+  Map<String, dynamic> _data = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _laaiDashboard();
+  }
+
+  Future<void> _laaiDashboard() async {
+    setState(() {
+      _laai = true;
+      _fout = null;
+    });
+
+    try {
+      final result = await MoonApi.fetchLiveDashboard();
+
+      if (!mounted) return;
+
+      setState(() {
+        _data = result;
+        _laai = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fout = e.toString().replaceFirst('Exception: ', '');
+        _laai = false;
+      });
+    }
+  }
+
+  String _waarde(String sleutel) {
+    if (_laai) return '—';
+    return '${_data[sleutel] ?? 0}';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Paneelbord', style: GoogleFonts.inter(color: kText1, fontSize: 24, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('Kampusbeheer en monitering', style: GoogleFonts.inter(color: kTextMuted, fontSize: 12)),
-          const SizedBox(height: 18),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.green, width: 1.4),
+    final studente = _waarde('studente_op_kampus');
+    final personeel = _waarde('personeel_op_kampus');
+    final besoekers = _waarde('besoekers_vandag');
+    final toegange = _waarde('toegange_vandag');
+
+    return RefreshIndicator(
+      onRefresh: _laaiDashboard,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Paneelbord',
+              style: GoogleFonts.inter(
+                color: kText1,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            child: Row(
+            const SizedBox(height: 4),
+            Text(
+              'Kampusbeheer en monitering',
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 12,
+              ),
+            ),
+
+            if (_fout != null) ...[
+              const SizedBox(height: 12),
+              GlassCard(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Dashboard kon nie laai nie: $_fout',
+                        style: GoogleFonts.inter(
+                          color: kText2,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _laaiDashboard,
+                      icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 18),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green, width: 1.4),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 38),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'KAMPUS STATUS',
+                          style: GoogleFonts.inter(
+                            color: Colors.green,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Alles normaal',
+                          style: GoogleFonts.inter(
+                            color: kText1,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Geen aktiewe noodgevalle nie',
+                          style: GoogleFonts.inter(
+                            color: kText2,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _laaiDashboard,
+                    icon: const Icon(Icons.refresh_rounded, color: Colors.green),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 38),
+                Expanded(
+                  child: _OpsigterMetricCard(
+                    label: 'STUDENTE',
+                    value: studente,
+                    subtitle: 'Op kampus',
+                    icon: Icons.school_rounded,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('KAMPUS STATUS', style: GoogleFonts.inter(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
-                      const SizedBox(height: 4),
-                      Text('Alles normaal', style: GoogleFonts.inter(color: kText1, fontSize: 18, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text('Geen aktiewe noodgevalle nie', style: GoogleFonts.inter(color: kText2, fontSize: 12)),
-                    ],
+                  child: _OpsigterMetricCard(
+                    label: 'PERSONEEL',
+                    value: personeel,
+                    subtitle: 'Op kampus',
+                    icon: Icons.badge_rounded,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: const [
-              Expanded(child: _OpsigterMetricCard(label: 'STUDENTE', value: '0', subtitle: 'Op kampus', icon: Icons.school_rounded)),
-              SizedBox(width: 12),
-              Expanded(child: _OpsigterMetricCard(label: 'PERSONEEL', value: '0', subtitle: 'Op kampus', icon: Icons.badge_rounded)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: const [
-              Expanded(child: _OpsigterMetricCard(label: 'BESOEKERS', value: '0', subtitle: 'Vandag', icon: Icons.person_add_alt_1_rounded)),
-              SizedBox(width: 12),
-              Expanded(child: _OpsigterMetricCard(label: 'GELEENTHEDE', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+
+            const SizedBox(height: 12),
+
+            Row(
               children: [
-                const _SectionTitle('VINNIGE TOEGANG'),
-                const SizedBox(height: 12),
-                _QuickActionRow(label: 'Kampus', icon: Icons.location_city_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _KampusPage()))),
-                const _ThinDivider(),
-                _QuickActionRow(label: 'Koshuis', icon: Icons.apartment_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _KoshuisPage()))),
-                const _ThinDivider(),
-                _QuickActionRow(label: 'Geleenthede', icon: Icons.event_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _EventsPage()))),
+                Expanded(
+                  child: _OpsigterMetricCard(
+                    label: 'BESOEKERS',
+                    value: besoekers,
+                    subtitle: 'Vandag',
+                    icon: Icons.person_add_alt_1_rounded,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _OpsigterMetricCard(
+                    label: 'TOEGANGE',
+                    value: toegange,
+                    subtitle: 'Vandag',
+                    icon: Icons.qr_code_scanner_rounded,
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
+
+            const SizedBox(height: 16),
+
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionTitle('VINNIGE TOEGANG'),
+                  const SizedBox(height: 12),
+                  _QuickActionRow(
+                    label: 'Kampus',
+                    icon: Icons.location_city_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const _KampusPage()),
+                    ),
+                  ),
+                  const _ThinDivider(),
+                  _QuickActionRow(
+                    label: 'Koshuis',
+                    icon: Icons.apartment_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const _KoshuisPage()),
+                    ),
+                  ),
+                  const _ThinDivider(),
+                  _QuickActionRow(
+                    label: 'Geleenthede',
+                    icon: Icons.event_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const _EventsPage()),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
