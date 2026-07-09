@@ -297,11 +297,14 @@ class MoonApi {
 
 
 static Future<Map<String, dynamic>> fetchLiveDashboard() async {
+  final token = await getToken();
+
   final res = await http.get(
     Uri.parse('$baseUrl/dashboard/live'),
     headers: {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (token != null && token.isNotEmpty)
+        'Authorization': 'Bearer $token',
     },
   );
 
