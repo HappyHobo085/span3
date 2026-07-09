@@ -994,7 +994,7 @@ const payload = {
   GEB_Epos: epos,
   GEB_Wagwoord: wagwoord,
   Rol_ID: rolId,
-  Is_Aktief: newUserActive ? newUserActive.checked : true,
+  Is_Aktief: true,
 };
 
 if (rolNaam === 'Student') {
@@ -1023,11 +1023,11 @@ else if (
 ) {
     // Werknemers login met e-pos.
     // PER_Nommer word outomaties deur die backend geskep.
-    payload.GEB_ID_Nommer = "0000000000000";
+    payload.GEB_ID_Nommer = Date.now().toString().slice(-13);
 }
 
 else {
-  payload.GEB_ID_Nommer = "0000000000000";
+  payload.GEB_ID_Nommer = Date.now().toString().slice(-13);
 }
 
 const json = await window.MoonApi.createGebruiker(payload);
@@ -1094,7 +1094,7 @@ const json = await window.MoonApi.createGebruiker(payload);
         van: data.GEB_Van || van,
         epos: data.GEB_Epos || epos,
         rolId: data.Rol_ID || rolId,
-        isAktief: data.Is_Aktief,
+        isAktief: data.Is_Aktief ?? payload.Is_Aktief,
     });
       closeUserModal(); // resets the form back to create mode
     } else {
