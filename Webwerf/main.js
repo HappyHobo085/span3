@@ -67,6 +67,14 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
     return;
   }
 
+  // Silently redirect non-personeel away from personeel.html.
+  // Slegs die Personeel-rol (nie Admin, Sekuriteit_Wag of Kampus_Opsigter nie)
+  // mag die klas-bywoning blad sien.
+  if (currentPage === 'personeel.html' && userRole !== 'Personeel') {
+    window.location.href = 'home.html';
+    return;
+  }
+
   // Show the Admin nav link only for admin users
   if (userRole === 'Administrateur' && currentPage !== 'login.html') {
     document.addEventListener('DOMContentLoaded', function () {
@@ -86,6 +94,28 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
         navbar.insertBefore(adminLink, navRight);
       } else {
         navbar.appendChild(adminLink);
+      }
+    });
+  }
+
+  // Show the "My Klasse" nav link only for Personeel users
+  if (userRole === 'Personeel' && currentPage !== 'login.html') {
+    document.addEventListener('DOMContentLoaded', function () {
+      var navbar = document.querySelector('.navbar');
+      if (!navbar) return;
+
+      // Don't add if already present (e.g. on personeel.html itself)
+      if (navbar.querySelector('a[href="personeel.html"]')) return;
+
+      var personeelLink = document.createElement('a');
+      personeelLink.href = 'personeel.html';
+      personeelLink.textContent = 'My Klasse';
+
+      var navRight = navbar.querySelector('.navbar-right');
+      if (navRight) {
+        navbar.insertBefore(personeelLink, navRight);
+      } else {
+        navbar.appendChild(personeelLink);
       }
     });
   }
