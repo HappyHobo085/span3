@@ -604,7 +604,7 @@ class _SaamryTabState extends State<_SaamryTab> {
 
                 if (_friends.isEmpty)
                   Text(
-                    'Geen vriende nog nie',
+                    'Geen vriende nie',
                     style: GoogleFonts.inter(
                       color: kText2,
                       fontSize: 13,

@@ -420,7 +420,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                     const SizedBox(height: 16),
 
                     GradientActionButton(
-                      label: _loading ? 'Besig...' : 'Scan QR',
+                      label: _loading ? 'Besig...' : 'Skandeer QR',
                       onTap: _loading ? () {} : _startQrScan,
                       height: 52,
                     ),
@@ -428,7 +428,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                     const SizedBox(height: 16),
 
                     GlassTapPanel(
-                      label: _loading ? 'Besig...' : 'Scan NFC',
+                      label: _loading ? 'Besig...' : 'Skandeer NFC',
                       subtitle: 'Student / Personeel',
                       icon: '📡',
                       borderColor: const Color(0x3300C2FF),
@@ -525,7 +525,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Verify',
+              title: 'Bevestig Toegang',
               subtitle: widget.kampusNaam,
               showBack: true,
             ),
@@ -585,7 +585,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
 
                         if (_verified)
                           Text(
-                            '✔ VERIFIED',
+                            '✔ TOEGANG BEVESTIG',
                             style: GoogleFonts.inter(
                               color: Colors.green,
                               fontSize: 22,
@@ -623,7 +623,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
                           const SizedBox(height: 24),
 
                           GradientActionButton(
-                            label: _loading ? 'VERIFYING...' : 'VERIFY',
+                            label: _loading ? 'BEVESTIG...' : 'BEVESTIG',
                             onTap: _verify,
                             height: 54,
                           ),
@@ -874,7 +874,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
       const SnackBar(
         backgroundColor: Colors.green,
         content: Text(
-          'Visitor entry allowed',
+          'Toegang toegestaan',
           style: TextStyle(color: Colors.white),
         ),
       ),
@@ -886,7 +886,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
       const SnackBar(
         backgroundColor: Colors.red,
         content: Text(
-          'Visitor entry denied',
+          'Toegang geweier',
           style: TextStyle(color: Colors.white),
         ),
       ),
@@ -901,7 +901,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
         child: Column(
           children: [
             const AppScreenHeader(
-              title: 'Visitor OTP',
+              title: 'Besoeker OTP',
               subtitle: 'Verifieer besoeker',
               showBack: true,
             ),
@@ -916,7 +916,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'VERIFY OTP',
+                            'VERIFIEER OTP',
                             style: GoogleFonts.inter(
                               color: kTextMuted,
                               fontSize: 9,
@@ -927,7 +927,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                           const SizedBox(height: 14),
                           GlassInput(
                             controller: _otpController,
-                            hintText: 'Tik visitor OTP',
+                            hintText: 'Tik besoeker OTP',
                             keyboardType: TextInputType.number,
                             prefixIcon: const Icon(
                               Icons.password_rounded,
@@ -937,7 +937,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                           ),
                           const SizedBox(height: 16),
                           GradientActionButton(
-                            label: 'Verify OTP',
+                            label: 'Verifieer OTP',
                             onTap: _verifyOtp,
                             height: 50,
                           ),
@@ -970,7 +970,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             const SizedBox(height: 12),
 
                             Text(
-                              'VALID VISITOR',
+                              'GELDIGE BESOEKER',
                               style: GoogleFonts.inter(
                                 color: Colors.green,
                                 fontSize: 13,
@@ -993,7 +993,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             const SizedBox(height: 4),
 
                             Text(
-                              'Invited by Steven Nel',
+                              'Genooi deur Steven Nel',
                               style: GoogleFonts.inter(
                                 color: kTextMuted,
                                 fontSize: 13,
@@ -1007,8 +1007,8 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                               child: Column(
                                 children: [
                                   _VisitorInfoRow(
-                                    label: 'Reason',
-                                    value: 'Meeting',
+                                    label: 'Rede',
+                                    value: 'Vergadering',
                                   ),
                                   const _VisitorDivider(),
                                   _VisitorInfoRow(
@@ -1018,7 +1018,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                   const _VisitorDivider(),
                                   const _VisitorInfoRow(
                                     label: 'Status',
-                                    value: 'Waiting',
+                                    value: 'Hangend',
                                   ),
                                 ],
                               ),
@@ -1030,7 +1030,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                               children: [
                                 Expanded(
                                   child: GradientActionButton(
-                                    label: 'Allow Entry',
+                                    label: 'Laat Toegang Toe',
                                     onTap: _allowEntry,
                                     height: 48,
                                   ),
@@ -1038,7 +1038,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: OutlineActionButton(
-                                    label: 'Deny',
+                                    label: 'Weier Toegang',
                                     onTap: _denyEntry,
                                     height: 48,
                                   ),
