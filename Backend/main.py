@@ -1849,7 +1849,7 @@ def wagte_profile_verify(
         },
     )
     
-@router.post("/wagte/profile/decline")
+@app.post("/wagte/profile/decline")
 def decline_profile_access(
     data: dict,
     db: Session = Depends(get_db),
