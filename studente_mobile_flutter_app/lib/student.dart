@@ -1141,41 +1141,78 @@ class ScanSelectionPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
+            const AppScreenHeader(
               title: 'Skandeer',
               subtitle: 'Student',
               showBack: true,
             ),
             Expanded(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Kampus Skandering',
-                        subtitle: 'Druk om te skandeer',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LeftEmptyPage()),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final smallScreen = constraints.maxWidth < 380;
+
+                    if (smallScreen) {
+                      return Column(
+                        children: [
+                          GlassTapPanel(
+                            label: 'Kampus Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LeftEmptyPage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          GlassTapPanel(
+                            label: 'Klas Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            borderColor: const Color(0x3300C2FF),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RightEmptyPage(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Kampus Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LeftEmptyPage(),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: GlassTapPanel(
-                        label: 'Klas Skandering',
-                        subtitle: 'Druk om te skandeer',
-                        borderColor: const Color(0x3300C2FF),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const RightEmptyPage()),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GlassTapPanel(
+                            label: 'Klas Skandering',
+                            subtitle: 'Druk om te skandeer',
+                            borderColor: const Color(0x3300C2FF),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RightEmptyPage(),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
