@@ -17,10 +17,16 @@ class KampusDto {
     required this.naam,
   });
 
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
   factory KampusDto.fromJson(Map<String, dynamic> json) {
     return KampusDto(
-      kampusId: json['Kampus_ID'] as int?,
-      naam: json['KAM_Naam'] as String,
+      kampusId: _asInt(json['Kampus_ID'] ?? json['kampus_id'] ?? json['id']),
+      naam: (json['KAM_Naam'] ?? json['naam'] ?? json['name'] ?? 'Kampus').toString(),
     );
   }
 }
@@ -185,37 +191,40 @@ class MoonApi {
   /// -------------------------
 
   static Future<List<KampusDto>> fetchKampusse() async {
-    final uri = Uri.parse('$baseUrl/kampusse');
-
     final headers = <String, String>{
       'Accept': 'application/json',
       if (bearerToken != null && bearerToken!.trim().isNotEmpty)
         'Authorization': 'Bearer ${bearerToken!.trim()}',
     };
 
-    final response = await http.get(uri, headers: headers);
+    Future<List<KampusDto>> readFrom(String path) async {
+      final response = await http.get(Uri.parse('$baseUrl$path'), headers: headers);
+      final decoded = jsonDecode(response.body);
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
-      );
+      if (response.statusCode != 200 || decoded['sukses'] != true) {
+        throw Exception(
+          decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampusse laai nie',
+        );
+      }
+
+      final raw = decoded['data'];
+      if (raw == null) return [];
+
+      return (raw as List)
+          .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e)))
+          .where((k) => k.kampusId != null)
+          .toList();
     }
 
-    final decoded = jsonDecode(response.body);
-
-    if (decoded['sukses'] != true) {
-      throw Exception(
-        decoded['fout']?.toString() ?? 'Kon nie kampusse laai nie',
-      );
+    try {
+      final result = await readFrom('/kampusse');
+      if (result.isNotEmpty) return result;
+    } catch (_) {
+      // Opsigter/Wag roles may not have access to /kampusse.
+      // Fall back to the security/campus list endpoint.
     }
 
-    final raw = decoded['data'];
-
-    if (raw == null) return [];
-
-    return (raw as List)
-        .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    return readFrom('/wagte/kampusse');
   }
 
   /// -------------------------

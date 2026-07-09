@@ -330,7 +330,7 @@ class _KampusPageState extends State<_KampusPage> {
     });
 
     try {
-      final result = await MoonApi.fetchKampusse();
+      final result = await MoonApi.fetchWagteKampusse();
 
       if (!mounted) return;
 
@@ -397,27 +397,31 @@ class _KampusPageState extends State<_KampusPage> {
     final studenteIn = _waarde([
       'students_in',
       'studente_in',
-      'studente_op_kampus',
+      'Studente_IN',
       'students_on_campus',
+      'studente_op_kampus',
     ]);
 
     final studenteUit = _waarde([
       'students_out',
       'studente_out',
       'studente_uit',
+      'Studente_UIT',
     ]);
 
     final personeelIn = _waarde([
       'personnel_in',
       'personeel_in',
-      'personeel_op_kampus',
+      'Personeel_IN',
       'personnel_on_campus',
+      'personeel_op_kampus',
     ]);
 
     final personeelUit = _waarde([
       'personnel_out',
       'personeel_out',
       'personeel_uit',
+      'Personeel_UIT',
     ]);
 
     return Scaffold(
