@@ -62,16 +62,20 @@
     };
   }
 
-  async function fetchLiveDashboard() {
-  return apiGet('/dashboard/live');
-}
-
   /**
    * Public API
    */
   window.MoonApi = {
 
     baseUrl: API_BASE_URL,
+
+    fetchLiveDashboard: async function () {
+      const r = await apiRequest('/dashboard/live', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
 
     /**
      * GET /kampusse

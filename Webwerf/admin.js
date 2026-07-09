@@ -1274,30 +1274,29 @@ const json = await window.MoonApi.createGebruiker(payload);
     newUserIsKoshuis.addEventListener('change', toggleKoshuisDropdown);
   }
 
-  async function refreshDashboard() {
-  if (!window.MoonApi) return;
+
+async function refreshDashboard() {
+  if (!window.MoonApi || !window.MoonApi.fetchLiveDashboard) return;
 
   try {
     const json = await window.MoonApi.fetchLiveDashboard();
 
-    if (!json || !json.sukses) return;
+    if (!json || !json.sukses || !json.data) return;
 
     const d = json.data;
 
-    document.getElementById('dashboard-studente').textContent =
-      d.studente_op_kampus;
+    const studenteEl = document.getElementById('dashboard-studente');
+    const personeelEl = document.getElementById('dashboard-personeel');
+    const besoekersEl = document.getElementById('dashboard-besoekers');
+    const toegangeEl = document.getElementById('dashboard-toegange');
 
-    document.getElementById('dashboard-personeel').textContent =
-      d.personeel_op_kampus;
-
-    document.getElementById('dashboard-besoekers').textContent =
-      d.besoekers_vandag;
-
-    document.getElementById('dashboard-toegange').textContent =
-      d.toegange_vandag;
+    if (studenteEl) studenteEl.textContent = d.studente_op_kampus ?? 0;
+    if (personeelEl) personeelEl.textContent = d.personeel_op_kampus ?? 0;
+    if (besoekersEl) besoekersEl.textContent = d.besoekers_vandag ?? 0;
+    if (toegangeEl) toegangeEl.textContent = d.toegange_vandag ?? 0;
 
   } catch (e) {
-    console.error(e);
+    console.error('Dashboard kon nie laai nie:', e);
   }
 }
 
