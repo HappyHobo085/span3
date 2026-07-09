@@ -9,6 +9,9 @@
  *   If the current page is admin.html and the user is not an Administrateur, block access.
  * Part 4 — Admin nav link:
  *   Dynamically adds an "Admin" link in the navbar for admin users only.
+ * Part 5 — Personeel gate + nav link:
+ *   personeel.html is only for the Personeel role; a "My Klasse" navbar link
+ *   is added dynamically for Personeel users only.
  */
 
 // -----------------------------------------------------------------------------
