@@ -255,7 +255,7 @@ class _TuisTabState extends State<_TuisTab> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: GradientActionButton(
-                    label: 'Scan Klas',
+                    label: 'Skandeer Klas',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -386,12 +386,12 @@ class _SaamryTabState extends State<_SaamryTab> {
       }
     });
 
-    _placeholder('Friend request gestuur na $result');
+    _placeholder('Vriendskapversoek gestuur na $result');
   }
 
   void _openInviteFriendPage() async {
     if (_friends.isEmpty) {
-      _placeholder('Jy het nog geen friends om te invite nie');
+      _placeholder('Jy het nog geen vriende om te nooi nie');
       return;
     }
 
@@ -410,7 +410,7 @@ class _SaamryTabState extends State<_SaamryTab> {
       }
     });
 
-    _placeholder('$result is genooi');
+    _placeholder('$result is suksesvol genooi');
   }
 
   @override
@@ -430,7 +430,7 @@ class _SaamryTabState extends State<_SaamryTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Skep ’n groep en nooi friends om saam te ry.',
+            'Skep ’n groep en nooi vriende om saam te ry.',
             style: GoogleFonts.inter(
               color: kTextMuted,
               fontSize: 12,
@@ -461,7 +461,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Klik Create Groep as jy die driver is.',
+                    'Klik "Skep Groep" as jy die bestuurder is.',
                     style: GoogleFonts.inter(
                       color: kText2,
                       fontSize: 13,
@@ -469,7 +469,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   ),
                   const SizedBox(height: 16),
                   GradientActionButton(
-                    label: 'Create Groep',
+                    label: 'Skep Groep',
                     onTap: _createGroep,
                     height: 50,
                   ),
@@ -510,7 +510,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   ),
                   const _SaamryDivider(),
                   const _SaamryInfoRow(
-                    label: 'Driver',
+                    label: 'Bestuurder',
                     value: 'Jy',
                   ),
                   const _SaamryDivider(),
@@ -522,7 +522,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   if (_passengers.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'PASSENGERS',
+                      'PASSASIERS',
                       style: GoogleFonts.inter(
                         color: kTextMuted,
                         fontSize: 9,
@@ -568,7 +568,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   const SizedBox(height: 18),
 
                   GradientActionButton(
-                    label: 'Invite Friend',
+                    label: 'Nooi Vriend',
                     onTap: _openInviteFriendPage,
                     height: 48,
                   ),
@@ -592,7 +592,7 @@ class _SaamryTabState extends State<_SaamryTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'FRIENDS',
+                  'VRIENDE',
                   style: GoogleFonts.inter(
                     color: kTextMuted,
                     fontSize: 9,
@@ -604,7 +604,7 @@ class _SaamryTabState extends State<_SaamryTab> {
 
                 if (_friends.isEmpty)
                   Text(
-                    'Geen friends nog nie',
+                    'Geen vriende nog nie',
                     style: GoogleFonts.inter(
                       color: kText2,
                       fontSize: 13,
@@ -640,7 +640,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   if (_pendingRequests.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Text(
-                      'PENDING REQUESTS',
+                      'HANGENDE VERSOEKE',
                       style: GoogleFonts.inter(
                         color: kTextMuted,
                         fontSize: 9,
@@ -677,7 +677,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                                         }
                                       });
                                     },
-                                    child: const Text('Demo Accept'),
+                                    child: const Text('Aanvaar'),
                                   ),
                                 ],
                               ),
@@ -690,7 +690,7 @@ class _SaamryTabState extends State<_SaamryTab> {
                   const SizedBox(height: 16),
 
                   OutlineActionButton(
-                    label: 'Add Friend',
+                    label: 'Voeg Vriend By',
                     onTap: _openAddFriendPage,
                     height: 46,
                   ),
@@ -806,7 +806,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
         'selfoon': selfoon,
         'rede': rede.isEmpty ? 'Besoek' : rede,
         'otp': generated,
-        'status': 'Waiting',
+        'status': 'Hangend',
       });
 
       _naamController.clear();
@@ -824,7 +824,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Visitors',
+            'Besoeker',
             style: GoogleFonts.inter(
               color: kText1,
               fontSize: 22,
@@ -848,7 +848,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'INVITE VISITOR',
+                  'Genooide besoeker',
                   style: GoogleFonts.inter(
                     color: kTextMuted,
                     fontSize: 9,
@@ -893,7 +893,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                 const SizedBox(height: 16),
 
                 GradientActionButton(
-                  label: 'Generate OTP',
+                  label: 'Genereer OTP',
                   onTap: _generateOtp,
                   height: 50,
                 ),
@@ -916,7 +916,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                   const Icon(Icons.check_circle, color: Colors.green, size: 44),
                   const SizedBox(height: 8),
                   Text(
-                    'INVITE CREATED',
+                    'Uitnodiging geskep',
                     style: GoogleFonts.inter(
                       color: Colors.green,
                       fontSize: 13,
@@ -936,7 +936,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Share OTP with visitor',
+                    'Deel OTP met besoeker',
                     style: GoogleFonts.inter(
                       color: kText2,
                       fontSize: 12,
@@ -955,7 +955,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'MY INVITES',
+                  'My uitnodigings',
                   style: GoogleFonts.inter(
                     color: kTextMuted,
                     fontSize: 9,
@@ -968,7 +968,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
 
                 if (_invites.isEmpty)
                   Text(
-                    'Geen visitor invites nog nie',
+                    'Geen besoekers genooi nie',
                     style: GoogleFonts.inter(
                       color: kText2,
                       fontSize: 13,
@@ -1057,7 +1057,7 @@ class _StudentNavBar extends StatelessWidget {
       _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
       _NavItem(icon: Icons.nfc_rounded, label: 'Skandeer'),
       _NavItem(icon: Icons.directions_car_rounded, label: 'Saamry'),
-      _NavItem(icon: Icons.person_add_alt_1_rounded, label: 'Visitors'),
+      _NavItem(icon: Icons.person_add_alt_1_rounded, label: 'Besoekers'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
@@ -1154,7 +1154,7 @@ class ScanSelectionPage extends StatelessWidget {
                     Expanded(
                       child: GlassTapPanel(
                         label: 'Kampus Skandering',
-                        subtitle: 'Tap om te skandeer',
+                        subtitle: 'Druk om te skandeer',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1166,7 +1166,7 @@ class ScanSelectionPage extends StatelessWidget {
                     Expanded(
                       child: GlassTapPanel(
                         label: 'Klas Skandering',
-                        subtitle: 'Tap om te skandeer',
+                        subtitle: 'Druk om te skandeer',
                         borderColor: const Color(0x3300C2FF),
                         onTap: () => Navigator.push(
                           context,
@@ -1214,7 +1214,7 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
       setState(() {
         _studentNommer = MoonApi.myStudentNommer;
         _loading = false;
-        _status = 'Hou jou foon teen die MT90';
+        _status = 'Hou jou foon teen die skandeerder';
       });
     } catch (e) {
       setState(() {
@@ -1292,7 +1292,7 @@ class _LeftEmptyPageState extends State<LeftEmptyPage> {
                                 child: Column(
                                   children: [
                                     Text(
-                                      'QR Backup',
+                                      'Alternatiewe QR-Kode',
                                       style: GoogleFonts.inter(
                                         color: kTextMuted,
                                         fontSize: 12,
@@ -1335,7 +1335,7 @@ class RightEmptyPage extends StatefulWidget {
 
 class _RightEmptyPageState extends State<RightEmptyPage> {
   bool _busy = false;
-  String _status = 'Tap om klas te skandeer';
+  String _status = 'Druk om klas te skandeer';
 
   Future<void> _scanKlas() async {
     setState(() {
@@ -1377,7 +1377,7 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
               );
               return;
             }
-            debugPrint('UID WAT NA BACKEND GESTUUR WORD = [$uid]');
+            debugPrint('UID WAT NA RUGSTEUN GESTUUR WORD = [$uid]');
             final result = await MoonApi.studentScanKlas(
               nfcUid: uid,
               rigting: 'IN',
@@ -1481,7 +1481,7 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
                           child: Text(
                             _busy
                                 ? 'Besig...'
-                                : 'Scan Klas',
+                                : 'Skandeer Klas',
                           ),
                         ),
                       ],
@@ -1565,7 +1565,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
         child: Column(
           children: [
             const AppScreenHeader(
-              title: 'Add Friend',
+              title: 'Voeg Vriend By',
               subtitle: 'Soek student',
               showBack: true,
             ),
@@ -1683,7 +1683,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
                                       TextButton(
                                         onPressed: () =>
                                             _sendRequest(student),
-                                        child: const Text('Add'),
+                                        child: const Text('Voeg by'),
                                       ),
                                     ],
                                   ),
@@ -1713,8 +1713,8 @@ class InviteFriendPage extends StatelessWidget {
         child: Column(
           children: [
             const AppScreenHeader(
-              title: 'Invite Friend',
-              subtitle: 'Kies friend',
+              title: 'Nooi Vriend',
+              subtitle: 'Kies Vriend',
               showBack: true,
             ),
             Expanded(
@@ -1743,7 +1743,7 @@ class InviteFriendPage extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(context, name),
-                          child: const Text('Invite'),
+                          child: const Text('Nooi'),
                         ),
                       ],
                     ),
