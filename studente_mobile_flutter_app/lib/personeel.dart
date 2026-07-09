@@ -43,16 +43,16 @@ class _PersoneelHomePageState extends State<PersoneelHomePage> {
             ),
             Expanded(
               child: _selectedIndex == 0
-              ? const _TuisTab()
-              : _selectedIndex == 2
-                  ? const _SaamryTab()
-                  : _selectedIndex == 3
-                      ? const _VisitorsTab()
-                      : const _ProfielTab(),
-                      ),
-                    ],
-                  ),
-                ),
+                  ? const _TuisTab()
+                  : _selectedIndex == 2
+                      ? const _SaamryTab()
+                      : _selectedIndex == 3
+                          ? const _VisitorsTab()
+                          : const _ProfielTab(),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: _PersoneelNavBar(
         selectedIndex: _selectedIndex,
         onTap: _onNavTap,
@@ -235,6 +235,426 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+
+class _SaamryTab extends StatefulWidget {
+  const _SaamryTab();
+
+  @override
+  State<_SaamryTab> createState() => _SaamryTabState();
+}
+
+class _SaamryTabState extends State<_SaamryTab> {
+  bool _groepAktief = false;
+
+  final List<String> _friends = [];
+  final List<String> _pendingRequests = [];
+  final List<String> _passengers = [];
+
+  void _createGroep() {
+    setState(() {
+      _groepAktief = true;
+    });
+  }
+
+  void _sluitGroep() {
+    setState(() {
+      _groepAktief = false;
+    });
+  }
+
+  void _placeholder(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _openAddFriendPage() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AddFriendPage(),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      if (!_pendingRequests.contains(result)) {
+        _pendingRequests.add(result);
+      }
+    });
+
+    _placeholder('Vriendskapversoek gestuur na $result');
+  }
+
+  void _openInviteFriendPage() async {
+    if (_friends.isEmpty) {
+      _placeholder('Jy het nog geen vriende om te nooi nie');
+      return;
+    }
+
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InviteFriendPage(friends: _friends),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      if (!_passengers.contains(result)) {
+        _passengers.add(result);
+      }
+    });
+
+    _placeholder('$result is suksesvol genooi');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Saamry',
+            style: GoogleFonts.inter(
+              color: kText1,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Skep ’n groep en nooi vriende om saam te ry.',
+            style: GoogleFonts.inter(
+              color: kTextMuted,
+              fontSize: 12,
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          if (!_groepAktief)
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.directions_car_rounded,
+                    color: kAccent,
+                    size: 44,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Geen aktiewe saamry groep nie',
+                    style: GoogleFonts.inter(
+                      color: kText1,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Klik "Skep Groep" as jy die bestuurder is.',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GradientActionButton(
+                    label: 'Skep Groep',
+                    onTap: _createGroep,
+                    height: 50,
+                  ),
+                ],
+              ),
+            )
+          else
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle,
+                        color: kSuccess,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'My Saamry Groep',
+                        style: GoogleFonts.inter(
+                          color: kText1,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _SaamryInfoRow(
+                    label: 'Status',
+                    value: 'Aktief',
+                    valueColor: kSuccess,
+                  ),
+                  const _SaamryDivider(),
+                  const _SaamryInfoRow(
+                    label: 'Bestuurder',
+                    value: 'Jy',
+                  ),
+                  const _SaamryDivider(),
+                  _SaamryInfoRow(
+                    label: 'Lede',
+                    value: _passengers.length.toString(),
+                  ),
+
+                  if (_passengers.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'PASSASIERS',
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Column(
+                      children: _passengers
+                          .map(
+                            (name) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person, color: kAccent, size: 22),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: GoogleFonts.inter(
+                                        color: kText1,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Genooi',
+                                    style: GoogleFonts.inter(
+                                      color: kTextMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  GradientActionButton(
+                    label: 'Nooi Vriend',
+                    onTap: _openInviteFriendPage,
+                    height: 48,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  OutlineActionButton(
+                    label: 'Sluit Groep',
+                    onTap: _sluitGroep,
+                    height: 48,
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 16),
+
+          GlassCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'VRIENDE',
+                  style: GoogleFonts.inter(
+                    color: kTextMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (_friends.isEmpty)
+                  Text(
+                    'Nog geen vriende nie',
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 13,
+                    ),
+                  )
+                else
+                  Column(
+                    children: _friends
+                        .map(
+                          (friend) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.person, color: kAccent, size: 24),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    friend,
+                                    style: GoogleFonts.inter(
+                                      color: kText1,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+
+                  if (_pendingRequests.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'HANGENDE VERSOEKE',
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Column(
+                      children: _pendingRequests
+                          .map(
+                            (friend) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.schedule, color: kTextMuted, size: 22),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      friend,
+                                      style: GoogleFonts.inter(
+                                        color: kText2,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _pendingRequests.remove(friend);
+                                        if (!_friends.contains(friend)) {
+                                          _friends.add(friend);
+                                        }
+                                      });
+                                    },
+                                    child: const Text('Aanvaar'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  OutlineActionButton(
+                    label: 'Voeg Vriend By',
+                    onTap: _openAddFriendPage,
+                    height: 46,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SaamryInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _SaamryInfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: valueColor ?? kText1,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SaamryDivider extends StatelessWidget {
+  const _SaamryDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      color: Color(0x0AFFFFFF),
+      height: 1,
+    );
+  }
+}
+
 
 
 class _VisitorsTab extends StatefulWidget {
@@ -600,6 +1020,7 @@ class _NavItem {
   const _NavItem({required this.icon, required this.label});
 }
 
+
 // ─── Kampus Inskandering ──────────────────────────────────────────────────────
 class PersoneelKampusInskanderingPage extends StatefulWidget {
   const PersoneelKampusInskanderingPage({super.key});
@@ -625,20 +1046,25 @@ class _PersoneelKampusInskanderingPageState
     try {
       final profile = MoonApi.myProfile ?? await MoonApi.getMyProfile();
 
+      if (!mounted) return;
+
       setState(() {
         _personeelNommer =
             profile['personeel_nommer']?.toString() ??
             profile['PER_Nommer']?.toString() ??
             profile['per_nommer']?.toString() ??
-            profile['Personeel_Nommer']?.toString();
+            profile['Personeel_Nommer']?.toString() ??
+            profile['personeelNommer']?.toString();
 
         _loading = false;
         _status = 'Hou jou foon teen die skandeerder';
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
-        _status = 'Kon nie personeel nommer laai nie';
+        _status = 'Kon nie personeelnommer laai nie';
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -656,7 +1082,7 @@ class _PersoneelKampusInskanderingPageState
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(
+            AppScreenHeader(
               title: 'Kampus Skandering',
               subtitle: 'Personeel',
               showBack: true,
@@ -744,17 +1170,65 @@ class _PersoneelKampusInskanderingPageState
   }
 }
 
-// ─── Klas Bywoning ────────────────────────────────────────────────────────────
-class KlasBywoningPage extends StatefulWidget {
-  const KlasBywoningPage({super.key});
+
+class AddFriendPage extends StatefulWidget {
+  const AddFriendPage({super.key});
 
   @override
-  State<KlasBywoningPage> createState() => _KlasBywoningPageState();
+  State<AddFriendPage> createState() => _AddFriendPageState();
 }
 
-class _KlasBywoningPageState extends State<KlasBywoningPage> {
-  String _selectedOpsie = 'Opsie 1';
-  String _selectedFilter = 'Filtreer';
+class _AddFriendPageState extends State<AddFriendPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  bool _loading = false;
+  String? _error;
+  List<StudentSearchDto> _results = [];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _searchController.text.trim();
+
+    if (query.length < 2) {
+      setState(() {
+        _results = [];
+        _error = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await MoonApi.searchStudents(query);
+
+      if (!mounted) return;
+
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  void _sendRequest(StudentSearchDto student) {
+    Navigator.pop(context, student.fullName);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -763,86 +1237,191 @@ class _KlasBywoningPageState extends State<KlasBywoningPage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
-              title: 'Klas Bywoning',
-              subtitle: 'Personeel',
+            const AppScreenHeader(
+              title: 'Voeg Vriend By',
+              subtitle: 'Soek student',
+              showBack: true,
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GlassInput(
+                controller: _searchController,
+                hintText: 'Soek naam, van of studentenommer',
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: kTextMuted,
+                  size: 18,
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GradientActionButton(
+                label: 'Soek',
+                onTap: _search,
+                height: 46,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
+                          child: Text(
+                            _error!,
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
+                              fontSize: 13,
+                            ),
+                          ),
+                        )
+                      : _results.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Geen studente gevind nie',
+                                style: GoogleFonts.inter(
+                                  color: kTextMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _results.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final student = _results[index];
+
+                                return GlassCard(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      if ((student.fotoUrl ?? '').isNotEmpty)
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          child: Image.network(
+                                            '${MoonApi.baseUrl}${student.fotoUrl}?v=${DateTime.now().millisecondsSinceEpoch}',
+                                            width: 44,
+                                            height: 44,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.person,
+                                              color: kTextMuted,
+                                              size: 34,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        const Icon(
+                                          Icons.person,
+                                          color: kTextMuted,
+                                          size: 40,
+                                        ),
+
+                                      const SizedBox(width: 12),
+
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              student.fullName,
+                                              style: GoogleFonts.inter(
+                                                color: kText1,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              student.studentNommer,
+                                              style: GoogleFonts.inter(
+                                                color: kTextMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      TextButton(
+                                        onPressed: () =>
+                                            _sendRequest(student),
+                                        child: const Text('Voeg by'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+class InviteFriendPage extends StatelessWidget {
+  final List<String> friends;
+
+  const InviteFriendPage({
+    super.key,
+    required this.friends,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Nooi Vriend',
+              subtitle: 'Kies Vriend',
               showBack: true,
             ),
             Expanded(
-              child: Padding(
+              child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    GlassSelect<String>(
-                      value: _selectedOpsie,
-                      items: ['Opsie 1', 'Opsie 2', 'Opsie 3']
-                          .map((v) => DropdownMenuItem(
-                              value: v,
-                              child: Text(v,
-                                  style: GoogleFonts.inter(
-                                      color: kText1, fontSize: 12))))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedOpsie = v);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+                itemCount: friends.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final name = friends[index];
+
+                  return GlassCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
                       children: [
-                        SizedBox(
-                          width: 130,
-                          child: GlassSelect<String>(
-                            value: _selectedFilter,
-                            items: ['Filtreer', 'Ander']
-                                .map((v) => DropdownMenuItem(
-                                    value: v,
-                                    child: Text(v,
-                                        style: GoogleFonts.inter(
-                                            color: kText1, fontSize: 12))))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v != null)
-                                setState(() => _selectedFilter = v);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(child: GlassSearchRow()),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: GlassCard(
-                        child: Center(
+                        const Icon(Icons.person_add_alt_1, color: kAccent, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
                           child: Text(
-                            'Klas Bywoning Inligting',
+                            name,
                             style: GoogleFonts.inter(
-                                color: kTextMuted, fontSize: 12),
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        GradientActionButton(
-                          label: 'Verfris',
-                          onTap: () {},
-                          width: 120,
-                          height: 44,
-                        ),
-                        const SizedBox(width: 10),
-                        OutlineActionButton(
-                          label: 'Terug',
-                          onTap: () => Navigator.pop(context),
-                          width: 100,
-                          height: 44,
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, name),
+                          child: const Text('Nooi'),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ],
