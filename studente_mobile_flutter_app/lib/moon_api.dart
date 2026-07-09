@@ -17,19 +17,15 @@ class KampusDto {
     required this.naam,
   });
 
-  static int? _asInt(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    return int.tryParse(value.toString());
-  }
-
   factory KampusDto.fromJson(Map<String, dynamic> json) {
     return KampusDto(
-      kampusId: _asInt(json['Kampus_ID'] ?? json['kampus_id'] ?? json['id']),
-      naam: (json['KAM_Naam'] ?? json['naam'] ?? json['name'] ?? 'Kampus').toString(),
+      kampusId: json['Kampus_ID'] as int?,
+      naam: json['KAM_Naam'] as String,
     );
   }
 }
+
+
 
 /// =========================
 /// Koshuis DTO
@@ -38,28 +34,26 @@ class KampusDto {
 class KoshuisDto {
   final int? koshuisId;
   final String naam;
-  final int? kapasiteit;
 
   KoshuisDto({
     required this.koshuisId,
     required this.naam,
-    this.kapasiteit,
   });
-
-  static int? _asInt(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    return int.tryParse(value.toString());
-  }
 
   factory KoshuisDto.fromJson(Map<String, dynamic> json) {
     return KoshuisDto(
-      koshuisId: _asInt(json['Koshuis_ID'] ?? json['koshuis_id'] ?? json['id']),
-      naam: (json['KOS_Naam'] ?? json['naam'] ?? json['name'] ?? 'Koshuis').toString(),
-      kapasiteit: _asInt(json['KOS_Kapasiteit'] ?? json['kapasiteit'] ?? json['capacity']),
+      koshuisId: (json['Koshuis_ID'] ??
+              json['koshuis_id'] ??
+              json['id']) as int?,
+      naam: (json['KOS_Naam'] ??
+              json['naam'] ??
+              json['name'] ??
+              'Onbekende koshuis')
+          .toString(),
     );
   }
 }
+
 
 /// =========================
 /// Lokasie DTO
@@ -191,40 +185,37 @@ class MoonApi {
   /// -------------------------
 
   static Future<List<KampusDto>> fetchKampusse() async {
+    final uri = Uri.parse('$baseUrl/kampusse');
+
     final headers = <String, String>{
       'Accept': 'application/json',
       if (bearerToken != null && bearerToken!.trim().isNotEmpty)
         'Authorization': 'Bearer ${bearerToken!.trim()}',
     };
 
-    Future<List<KampusDto>> readFrom(String path) async {
-      final response = await http.get(Uri.parse('$baseUrl$path'), headers: headers);
-      final decoded = jsonDecode(response.body);
+    final response = await http.get(uri, headers: headers);
 
-      if (response.statusCode != 200 || decoded['sukses'] != true) {
-        throw Exception(
-          decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampusse laai nie',
-        );
-      }
-
-      final raw = decoded['data'];
-      if (raw == null) return [];
-
-      return (raw as List)
-          .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e)))
-          .where((k) => k.kampusId != null)
-          .toList();
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
+      );
     }
 
-    try {
-      final result = await readFrom('/kampusse');
-      if (result.isNotEmpty) return result;
-    } catch (_) {
-      // Opsigter/Wag roles may not have access to /kampusse.
-      // Fall back to the security/campus list endpoint.
+    final decoded = jsonDecode(response.body);
+
+    if (decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout']?.toString() ?? 'Kon nie kampusse laai nie',
+      );
     }
 
-    return readFrom('/wagte/kampusse');
+    final raw = decoded['data'];
+
+    if (raw == null) return [];
+
+    return (raw as List)
+        .map((e) => KampusDto.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   /// -------------------------
@@ -604,9 +595,9 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   }
   
 
-  static Future<Map<String, dynamic>> fetchKampusStatus(int kampusId) async {
+  static Future<List<KampusDto>> fetchOpsigterKampusse() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/kampusse/$kampusId/status'),
+      Uri.parse('$baseUrl/wagte/kampusse'),
       headers: {
         'Accept': 'application/json',
         if (bearerToken != null && bearerToken!.trim().isNotEmpty)
@@ -614,46 +605,36 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
       },
     );
 
-    final decoded = jsonDecode(response.body);
-
-    if (response.statusCode != 200 || decoded['sukses'] != true) {
-      throw Exception(
-        decoded['fout'] ?? decoded['detail'] ?? 'Kampus status kon nie laai nie',
-      );
-    }
-
-    return Map<String, dynamic>.from(decoded['data'] ?? {});
-  }
-
-  static Future<List<KoshuisDto>> fetchKoshuise() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/koshuise'),
-      headers: {
-        'Accept': 'application/json',
-        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
-          'Authorization': 'Bearer ${bearerToken!.trim()}',
-      },
-    );
+    print('KAMPUS LYS URL = $baseUrl/wagte/kampusse');
+    print('KAMPUS LYS STATUS = ${response.statusCode}');
+    print('KAMPUS LYS BODY = ${response.body}');
 
     final decoded = jsonDecode(response.body);
 
     if (response.statusCode != 200 || decoded['sukses'] != true) {
       throw Exception(
-        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuise laai nie',
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampusse laai nie',
       );
     }
 
     final raw = decoded['data'];
     if (raw == null) return [];
 
-    return (raw as List)
-        .map((e) => KoshuisDto.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    return (raw as List).map((e) {
+      final item = Map<String, dynamic>.from(e as Map);
+
+      return KampusDto(
+        kampusId: item['kampus_id'] as int?,
+        naam: item['naam']?.toString() ?? '',
+      );
+    }).toList();
   }
 
-  static Future<Map<String, dynamic>> fetchKoshuisStatus(int koshuisId) async {
+  static Future<Map<String, dynamic>> fetchKampusStatus(int kampusId) async {
+    final url = '$baseUrl/kampusse/$kampusId/status';
+
     final response = await http.get(
-      Uri.parse('$baseUrl/koshuise/$koshuisId/status'),
+      Uri.parse(url),
       headers: {
         'Accept': 'application/json',
         if (bearerToken != null && bearerToken!.trim().isNotEmpty)
@@ -661,15 +642,95 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
       },
     );
 
+    print('KAMPUS STATUS URL = $url');
+    print('KAMPUS STATUS CODE = ${response.statusCode}');
+    print('KAMPUS STATUS BODY = ${response.body}');
+
     final decoded = jsonDecode(response.body);
 
     if (response.statusCode != 200 || decoded['sukses'] != true) {
       throw Exception(
-        decoded['fout'] ?? decoded['detail'] ?? 'Koshuis status kon nie laai nie',
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampus status laai nie',
       );
     }
 
-    return Map<String, dynamic>.from(decoded['data'] ?? {});
+    return Map<String, dynamic>.from(decoded['data']);
+  }
+
+
+  static Future<List<KoshuisDto>> fetchKoshuise() async {
+    final candidates = [
+      '$baseUrl/koshuise',
+      '$baseUrl/koshuis',
+    ];
+
+    http.Response? lastResponse;
+
+    for (final url in candidates) {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Accept': 'application/json',
+          if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+            'Authorization': 'Bearer ${bearerToken!.trim()}',
+        },
+      );
+
+      print('KOSHUIS LYS URL = $url');
+      print('KOSHUIS LYS STATUS = ${response.statusCode}');
+      print('KOSHUIS LYS BODY = ${response.body}');
+
+      lastResponse = response;
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded['sukses'] == true) {
+          final raw = decoded['data'];
+          if (raw == null) return [];
+
+          return (raw as List)
+              .map((e) => KoshuisDto.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+        }
+      }
+    }
+
+    if (lastResponse != null) {
+      final decoded = jsonDecode(lastResponse.body);
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuise laai nie',
+      );
+    }
+
+    throw Exception('Kon nie koshuise laai nie');
+  }
+
+  static Future<Map<String, dynamic>> fetchKoshuisStatus(int koshuisId) async {
+    final url = '$baseUrl/koshuise/$koshuisId/status';
+
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    print('KOSHUIS STATUS URL = $url');
+    print('KOSHUIS STATUS CODE = ${response.statusCode}');
+    print('KOSHUIS STATUS BODY = ${response.body}');
+
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuis status laai nie',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data']);
   }
 
 }

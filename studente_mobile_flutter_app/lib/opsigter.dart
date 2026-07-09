@@ -302,6 +302,7 @@ class _TuisTabState extends State<_TuisTab> {
   }
 }
 
+
 class _KampusPage extends StatefulWidget {
   const _KampusPage();
 
@@ -310,8 +311,7 @@ class _KampusPage extends StatefulWidget {
 }
 
 class _KampusPageState extends State<_KampusPage> {
-  bool _laaiKampusse = true;
-  bool _laaiStatus = false;
+  bool _laai = true;
   String? _fout;
   List<KampusDto> _kampusse = [];
   KampusDto? _gekoseKampus;
@@ -320,45 +320,46 @@ class _KampusPageState extends State<_KampusPage> {
   @override
   void initState() {
     super.initState();
-    _laaiKampusLys();
+    _laaiKampusse();
   }
 
-  Future<void> _laaiKampusLys() async {
+  Future<void> _laaiKampusse() async {
     setState(() {
-      _laaiKampusse = true;
+      _laai = true;
       _fout = null;
     });
 
     try {
-      final result = await MoonApi.fetchWagteKampusse();
+      final kampusse = await MoonApi.fetchOpsigterKampusse();
 
       if (!mounted) return;
 
       setState(() {
-        _kampusse = result.where((k) => k.kampusId != null).toList();
-        _gekoseKampus = _kampusse.isNotEmpty ? _kampusse.first : null;
-        _laaiKampusse = false;
+        _kampusse = kampusse;
+        _gekoseKampus = kampusse.isNotEmpty ? kampusse.first : null;
       });
 
       if (_gekoseKampus?.kampusId != null) {
-        await _laaiKampusStatus();
+        await _laaiStatus(_gekoseKampus!.kampusId!);
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _laai = false;
+        });
       }
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _fout = e.toString().replaceFirst('Exception: ', '');
-        _laaiKampusse = false;
+        _laai = false;
       });
     }
   }
 
-  Future<void> _laaiKampusStatus() async {
-    final kampusId = _gekoseKampus?.kampusId;
-    if (kampusId == null) return;
-
+  Future<void> _laaiStatus(int kampusId) async {
     setState(() {
-      _laaiStatus = true;
+      _laai = true;
       _fout = null;
     });
 
@@ -369,60 +370,69 @@ class _KampusPageState extends State<_KampusPage> {
 
       setState(() {
         _status = result;
-        _laaiStatus = false;
+        _laai = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _fout = e.toString().replaceFirst('Exception: ', '');
-        _laaiStatus = false;
+        _laai = false;
       });
     }
   }
 
-  String _waarde(List<String> sleutels) {
-    if (_laaiStatus) return '—';
+  List<Map<String, dynamic>> _lys(String key) {
+    final raw = _status[key];
 
-    for (final sleutel in sleutels) {
-      final waarde = _status[sleutel];
-      if (waarde != null) return waarde.toString();
+    if (raw is List) {
+      return raw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
     }
 
-    return '0';
+    return [];
+  }
+
+  int _telRol(List<Map<String, dynamic>> lys, String rol) {
+    return lys.where((item) {
+      final r = item['Rol_Naam']?.toString().toLowerCase() ?? '';
+      return r == rol.toLowerCase();
+    }).length;
+  }
+
+  String _naamVan(Map<String, dynamic> item) {
+    final naam = item['GEB_Naam']?.toString() ?? '';
+    final van = item['GEB_Van']?.toString() ?? '';
+    final rol = item['Rol_Naam']?.toString() ?? '';
+    final fullName = '$naam $van'.trim();
+
+    if (fullName.isEmpty && rol.isEmpty) return 'Onbekende persoon';
+    if (rol.isEmpty) return fullName;
+    return '$fullName · $rol';
+  }
+
+  String _detail(Map<String, dynamic> item) {
+    final rigting = item['Rigting']?.toString() ?? '';
+    final metode = item['Metode']?.toString() ?? '';
+    final tyd = item['Tydstempel']?.toString() ?? '';
+
+    final kortTyd = tyd.length >= 16 ? tyd.substring(11, 16) : tyd;
+
+    return [rigting, metode, kortTyd]
+        .where((v) => v.trim().isNotEmpty)
+        .join(' · ');
   }
 
   @override
   Widget build(BuildContext context) {
-    final studenteIn = _waarde([
-      'students_in',
-      'studente_in',
-      'Studente_IN',
-      'students_on_campus',
-      'studente_op_kampus',
-    ]);
+    final scannedIn = _lys('scanned_in');
+    final scannedOut = _lys('scanned_out');
 
-    final studenteUit = _waarde([
-      'students_out',
-      'studente_out',
-      'studente_uit',
-      'Studente_UIT',
-    ]);
-
-    final personeelIn = _waarde([
-      'personnel_in',
-      'personeel_in',
-      'Personeel_IN',
-      'personnel_on_campus',
-      'personeel_op_kampus',
-    ]);
-
-    final personeelUit = _waarde([
-      'personnel_out',
-      'personeel_out',
-      'personeel_uit',
-      'Personeel_UIT',
-    ]);
+    final studenteIn = _telRol(scannedIn, 'Student');
+    final personeelIn = _telRol(scannedIn, 'Personeel');
+    final studenteOut = _telRol(scannedOut, 'Student');
+    final personeelOut = _telRol(scannedOut, 'Personeel');
 
     return Scaffold(
       backgroundColor: kBg,
@@ -436,7 +446,13 @@ class _KampusPageState extends State<_KampusPage> {
             ),
             Expanded(
               child: RefreshIndicator(
-                onRefresh: _laaiKampusStatus,
+                onRefresh: () async {
+                  if (_gekoseKampus?.kampusId != null) {
+                    await _laaiStatus(_gekoseKampus!.kampusId!);
+                  } else {
+                    await _laaiKampusse();
+                  }
+                },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
@@ -449,69 +465,77 @@ class _KampusPageState extends State<_KampusPage> {
                           children: [
                             const _SectionTitle('KIES KAMPUS'),
                             const SizedBox(height: 12),
-                            if (_laaiKampusse)
-                              const Center(child: CircularProgressIndicator())
-                            else if (_kampusse.isEmpty)
-                              Text(
-                                'Geen kampusse gevind nie',
-                                style: GoogleFonts.inter(color: kText2, fontSize: 13),
-                              )
-                            else
-                              DropdownButtonFormField<KampusDto>(
+                            DropdownButtonHideUnderline(
+                              child: DropdownButton<KampusDto>(
                                 value: _gekoseKampus,
                                 isExpanded: true,
                                 dropdownColor: const Color(0xFF111827),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: const Color(0x14FFFFFF),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: kAccent),
+                                iconEnabledColor: kAccent,
+                                hint: Text(
+                                  'Kies kampus',
+                                  style: GoogleFonts.inter(
+                                    color: kTextMuted,
+                                    fontSize: 13,
                                   ),
                                 ),
-                                items: _kampusse
-                                    .map(
-                                      (kampus) => DropdownMenuItem<KampusDto>(
-                                        value: kampus,
-                                        child: Text(
-                                          kampus.naam,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(color: kText1, fontSize: 13),
-                                        ),
+                                items: _kampusse.map((kampus) {
+                                  return DropdownMenuItem<KampusDto>(
+                                    value: kampus,
+                                    child: Text(
+                                      kampus.naam,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        color: kText1,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) async {
-                                  if (value == null) return;
-                                  setState(() => _gekoseKampus = value);
-                                  await _laaiKampusStatus();
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (kampus) {
+                                  if (kampus == null) return;
+
+                                  setState(() {
+                                    _gekoseKampus = kampus;
+                                  });
+
+                                  if (kampus.kampusId != null) {
+                                    _laaiStatus(kampus.kampusId!);
+                                  }
                                 },
                               ),
+                            ),
                           ],
                         ),
                       ),
 
                       if (_fout != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         GlassCard(
                           padding: const EdgeInsets.all(12),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.orange,
+                                size: 22,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'Kampusdata kon nie laai nie: $_fout',
-                                  style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                                  _fout!,
+                                  style: GoogleFonts.inter(
+                                    color: kText2,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                               IconButton(
-                                onPressed: _laaiKampusStatus,
-                                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                                onPressed: _laaiKampusse,
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
+                                  color: kAccent,
+                                ),
                               ),
                             ],
                           ),
@@ -524,19 +548,19 @@ class _KampusPageState extends State<_KampusPage> {
                         children: [
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'STUDENTE IN',
-                              value: studenteIn,
-                              subtitle: 'Op kampus',
+                              label: 'STUDENTE',
+                              value: _laai ? '—' : '$studenteIn',
+                              subtitle: 'In kampus',
                               icon: Icons.school_rounded,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'STUDENTE UIT',
-                              value: studenteUit,
-                              subtitle: 'Nie op kampus',
-                              icon: Icons.logout_rounded,
+                              label: 'PERSONEEL',
+                              value: _laai ? '—' : '$personeelIn',
+                              subtitle: 'In kampus',
+                              icon: Icons.badge_rounded,
                             ),
                           ),
                         ],
@@ -548,18 +572,18 @@ class _KampusPageState extends State<_KampusPage> {
                         children: [
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'PERSONEEL IN',
-                              value: personeelIn,
-                              subtitle: 'Op kampus',
-                              icon: Icons.badge_rounded,
+                              label: 'STUDENTE UIT',
+                              value: _laai ? '—' : '$studenteOut',
+                              subtitle: 'Uit kampus',
+                              icon: Icons.logout_rounded,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'PERSONEEL UIT',
-                              value: personeelUit,
-                              subtitle: 'Nie op kampus',
+                              label: 'PERS. UIT',
+                              value: _laai ? '—' : '$personeelOut',
+                              subtitle: 'Uit kampus',
                               icon: Icons.exit_to_app_rounded,
                             ),
                           ),
@@ -567,20 +591,41 @@ class _KampusPageState extends State<_KampusPage> {
                       ),
 
                       const SizedBox(height: 14),
-                      const _InfoGlassCard(
-                        title: 'AKTIEWE BEWEGING',
-                        name: 'Kampusdata opgedateer',
-                        detail: 'Kies ’n kampus bo om die regstreekse syfers te sien.',
-                        icon: Icons.timeline_rounded,
+
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('AKTIEWE BEWEGING'),
+                            const SizedBox(height: 12),
+                            if (_laai)
+                              const Center(child: CircularProgressIndicator())
+                            else if (scannedIn.isEmpty)
+                              const _MiniLogRow(
+                                name: 'Geen aktiewe beweging',
+                                detail: 'Kampus beweging sal hier verskyn.',
+                                icon: Icons.timeline_rounded,
+                              )
+                            else
+                              Column(
+                                children: scannedIn.take(6).map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _MiniLogRow(
+                                      name: _naamVan(item),
+                                      detail: _detail(item),
+                                      icon: Icons.login_rounded,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
                       ),
+
                       const SizedBox(height: 14),
-                      const _InfoGlassCard(
-                        title: 'LAASTE TOEGANGSLOGS',
-                        name: 'Geen toegangslogs',
-                        detail: 'Toegangslogs sal hier vertoon word.',
-                        icon: Icons.info_outline,
-                      ),
-                      const SizedBox(height: 14),
+
                       GlassCard(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -588,9 +633,21 @@ class _KampusPageState extends State<_KampusPage> {
                           children: [
                             const _SectionTitle('AKSIES'),
                             const SizedBox(height: 12),
-                            _QuickActionRow(label: 'Soek persoon op kampus', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                            _QuickActionRow(
+                              label: 'Soek persoon op kampus',
+                              icon: Icons.search_rounded,
+                              onTap: () => _showComingSoon(context),
+                            ),
                             const _ThinDivider(),
-                            _QuickActionRow(label: 'Verfris kampusdata', icon: Icons.refresh_rounded, onTap: _laaiKampusStatus),
+                            _QuickActionRow(
+                              label: 'Verfris kampusdata',
+                              icon: Icons.refresh_rounded,
+                              onTap: () {
+                                if (_gekoseKampus?.kampusId != null) {
+                                  _laaiStatus(_gekoseKampus!.kampusId!);
+                                }
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -606,6 +663,8 @@ class _KampusPageState extends State<_KampusPage> {
   }
 }
 
+
+
 class _KoshuisPage extends StatefulWidget {
   const _KoshuisPage();
 
@@ -614,8 +673,7 @@ class _KoshuisPage extends StatefulWidget {
 }
 
 class _KoshuisPageState extends State<_KoshuisPage> {
-  bool _laaiKoshuise = true;
-  bool _laaiStatus = false;
+  bool _laai = true;
   String? _fout;
   List<KoshuisDto> _koshuise = [];
   KoshuisDto? _gekoseKoshuis;
@@ -624,45 +682,46 @@ class _KoshuisPageState extends State<_KoshuisPage> {
   @override
   void initState() {
     super.initState();
-    _laaiKoshuisLys();
+    _laaiKoshuise();
   }
 
-  Future<void> _laaiKoshuisLys() async {
+  Future<void> _laaiKoshuise() async {
     setState(() {
-      _laaiKoshuise = true;
+      _laai = true;
       _fout = null;
     });
 
     try {
-      final result = await MoonApi.fetchKoshuise();
+      final koshuise = await MoonApi.fetchKoshuise();
 
       if (!mounted) return;
 
       setState(() {
-        _koshuise = result.where((k) => k.koshuisId != null).toList();
-        _gekoseKoshuis = _koshuise.isNotEmpty ? _koshuise.first : null;
-        _laaiKoshuise = false;
+        _koshuise = koshuise;
+        _gekoseKoshuis = koshuise.isNotEmpty ? koshuise.first : null;
       });
 
       if (_gekoseKoshuis?.koshuisId != null) {
-        await _laaiKoshuisStatus();
+        await _laaiStatus(_gekoseKoshuis!.koshuisId!);
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _laai = false;
+        });
       }
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _fout = e.toString().replaceFirst('Exception: ', '');
-        _laaiKoshuise = false;
+        _laai = false;
       });
     }
   }
 
-  Future<void> _laaiKoshuisStatus() async {
-    final koshuisId = _gekoseKoshuis?.koshuisId;
-    if (koshuisId == null) return;
-
+  Future<void> _laaiStatus(int koshuisId) async {
     setState(() {
-      _laaiStatus = true;
+      _laai = true;
       _fout = null;
     });
 
@@ -673,59 +732,113 @@ class _KoshuisPageState extends State<_KoshuisPage> {
 
       setState(() {
         _status = result;
-        _laaiStatus = false;
+        _laai = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
         _fout = e.toString().replaceFirst('Exception: ', '');
-        _laaiStatus = false;
+        _laai = false;
       });
     }
   }
 
-  String _waarde(List<String> sleutels) {
-    if (_laaiStatus) return '—';
+  List<Map<String, dynamic>> _lys(String key) {
+    final raw = _status[key];
 
-    for (final sleutel in sleutels) {
-      final waarde = _status[sleutel];
-      if (waarde != null) return waarde.toString();
+    if (raw is List) {
+      return raw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
     }
 
-    return '0';
+    return [];
+  }
+
+  int _intValue(List<String> keys) {
+    for (final key in keys) {
+      final value = _status[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value != null) {
+        final parsed = int.tryParse(value.toString());
+        if (parsed != null) return parsed;
+      }
+    }
+    return 0;
+  }
+
+  String _naamVan(Map<String, dynamic> item) {
+    final naam = item['GEB_Naam']?.toString() ??
+        item['naam']?.toString() ??
+        item['Naam']?.toString() ??
+        '';
+    final van = item['GEB_Van']?.toString() ??
+        item['van']?.toString() ??
+        item['Van']?.toString() ??
+        '';
+    final rol = item['Rol_Naam']?.toString() ??
+        item['rol']?.toString() ??
+        item['Rol']?.toString() ??
+        '';
+
+    final fullName = '$naam $van'.trim();
+
+    if (fullName.isEmpty && rol.isEmpty) return 'Onbekende persoon';
+    if (rol.isEmpty) return fullName;
+    return '$fullName · $rol';
+  }
+
+  String _detail(Map<String, dynamic> item) {
+    final rigting = item['Rigting']?.toString() ??
+        item['rigting']?.toString() ??
+        '';
+    final metode = item['Metode']?.toString() ??
+        item['metode']?.toString() ??
+        '';
+    final tyd = item['Tydstempel']?.toString() ??
+        item['tyd']?.toString() ??
+        item['timestamp']?.toString() ??
+        '';
+
+    final kortTyd = tyd.length >= 16 ? tyd.substring(11, 16) : tyd;
+
+    return [rigting, metode, kortTyd]
+        .where((v) => v.trim().isNotEmpty)
+        .join(' · ');
   }
 
   @override
   Widget build(BuildContext context) {
-    final studenteIn = _waarde([
+    final scannedIn = _lys('scanned_in');
+    final scannedOut = _lys('scanned_out');
+
+    final inCount = _intValue([
+      'scanned_in_count',
       'students_in',
       'studente_in',
       'inwoners_in',
       'current_residents',
       'huidige_inwoners',
-      'residents',
-      'inwoners',
     ]);
-
-    final studenteUit = _waarde([
+    final outCount = _intValue([
+      'scanned_out_count',
       'students_out',
       'studente_out',
-      'studente_uit',
-      'inwoners_uit',
+      'inwoners_out',
     ]);
-
-    final kapasiteit = _waarde([
+    final kapasiteit = _intValue([
       'capacity',
       'kapasiteit',
-      'koshuis_capacity',
+      'KOS_Kapasiteit',
+      'Kapasiteit',
     ]);
-
-    final inwoners = _waarde([
+    final inwoners = _intValue([
       'current_residents',
-      'huidige_inwoners',
       'residents',
       'inwoners',
+      'huidige_inwoners',
     ]);
 
     return Scaffold(
@@ -733,10 +846,20 @@ class _KoshuisPageState extends State<_KoshuisPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Koshuis', subtitle: 'Koshuis oorsig', showBack: true),
+            const AppScreenHeader(
+              title: 'Koshuis',
+              subtitle: 'Koshuis oorsig',
+              showBack: true,
+            ),
             Expanded(
               child: RefreshIndicator(
-                onRefresh: _laaiKoshuisStatus,
+                onRefresh: () async {
+                  if (_gekoseKoshuis?.koshuisId != null) {
+                    await _laaiStatus(_gekoseKoshuis!.koshuisId!);
+                  } else {
+                    await _laaiKoshuise();
+                  }
+                },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
@@ -749,69 +872,77 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                           children: [
                             const _SectionTitle('KIES KOSHUIS'),
                             const SizedBox(height: 12),
-                            if (_laaiKoshuise)
-                              const Center(child: CircularProgressIndicator())
-                            else if (_koshuise.isEmpty)
-                              Text(
-                                'Geen koshuise gevind nie',
-                                style: GoogleFonts.inter(color: kText2, fontSize: 13),
-                              )
-                            else
-                              DropdownButtonFormField<KoshuisDto>(
+                            DropdownButtonHideUnderline(
+                              child: DropdownButton<KoshuisDto>(
                                 value: _gekoseKoshuis,
                                 isExpanded: true,
                                 dropdownColor: const Color(0xFF111827),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: const Color(0x14FFFFFF),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: kAccent),
+                                iconEnabledColor: kAccent,
+                                hint: Text(
+                                  _laai ? 'Laai koshuise...' : 'Kies koshuis',
+                                  style: GoogleFonts.inter(
+                                    color: kTextMuted,
+                                    fontSize: 13,
                                   ),
                                 ),
-                                items: _koshuise
-                                    .map(
-                                      (koshuis) => DropdownMenuItem<KoshuisDto>(
-                                        value: koshuis,
-                                        child: Text(
-                                          koshuis.naam,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(color: kText1, fontSize: 13),
-                                        ),
+                                items: _koshuise.map((koshuis) {
+                                  return DropdownMenuItem<KoshuisDto>(
+                                    value: koshuis,
+                                    child: Text(
+                                      koshuis.naam,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        color: kText1,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) async {
-                                  if (value == null) return;
-                                  setState(() => _gekoseKoshuis = value);
-                                  await _laaiKoshuisStatus();
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (koshuis) {
+                                  if (koshuis == null) return;
+
+                                  setState(() {
+                                    _gekoseKoshuis = koshuis;
+                                  });
+
+                                  if (koshuis.koshuisId != null) {
+                                    _laaiStatus(koshuis.koshuisId!);
+                                  }
                                 },
                               ),
+                            ),
                           ],
                         ),
                       ),
 
                       if (_fout != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         GlassCard(
                           padding: const EdgeInsets.all(12),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.orange,
+                                size: 22,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'Koshuisdata kon nie laai nie: $_fout',
-                                  style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                                  _fout!,
+                                  style: GoogleFonts.inter(
+                                    color: kText2,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                               IconButton(
-                                onPressed: _laaiKoshuisStatus,
-                                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+                                onPressed: _laaiKoshuise,
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
+                                  color: kAccent,
+                                ),
                               ),
                             ],
                           ),
@@ -824,8 +955,8 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                         children: [
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'STUDENTE IN',
-                              value: studenteIn,
+                              label: 'INWONERS',
+                              value: _laai ? '—' : '${inCount == 0 && scannedIn.isNotEmpty ? scannedIn.length : inCount}',
                               subtitle: 'In koshuis',
                               icon: Icons.bed_rounded,
                             ),
@@ -833,8 +964,8 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'STUDENTE UIT',
-                              value: studenteUit,
+                              label: 'UIT',
+                              value: _laai ? '—' : '${outCount == 0 && scannedOut.isNotEmpty ? scannedOut.length : outCount}',
                               subtitle: 'Uit koshuis',
                               icon: Icons.logout_rounded,
                             ),
@@ -849,28 +980,59 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                           Expanded(
                             child: _OpsigterMetricCard(
                               label: 'KAPASITEIT',
-                              value: kapasiteit,
-                              subtitle: 'Maksimum',
+                              value: _laai ? '—' : '$kapasiteit',
+                              subtitle: 'Totale plekke',
                               icon: Icons.apartment_rounded,
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'INWONERS',
-                              value: inwoners,
-                              subtitle: 'Huidig',
-                              icon: Icons.groups_rounded,
+                              label: 'HUIDIG',
+                              value: _laai ? '—' : '$inwoners',
+                              subtitle: 'Inwoners',
+                              icon: Icons.people_rounded,
                             ),
                           ),
                         ],
                       ),
 
                       const SizedBox(height: 14),
-                      const _InfoGlassCard(title: 'KOSHUIS STATUS', name: 'Koshuisdata opgedateer', detail: 'Kies ’n koshuis bo om die regstreekse syfers te sien.', icon: Icons.check_circle),
+
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle('KOSHUIS STATUS'),
+                            const SizedBox(height: 12),
+                            if (_laai)
+                              const Center(child: CircularProgressIndicator())
+                            else if (scannedIn.isEmpty)
+                              const _MiniLogRow(
+                                name: 'Geen aktiewe inwoners',
+                                detail: 'Koshuis beweging sal hier verskyn.',
+                                icon: Icons.check_circle,
+                              )
+                            else
+                              Column(
+                                children: scannedIn.take(6).map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _MiniLogRow(
+                                      name: _naamVan(item),
+                                      detail: _detail(item),
+                                      icon: Icons.login_rounded,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
+                      ),
+
                       const SizedBox(height: 14),
-                      const _InfoGlassCard(title: 'LAASTE AKTIWITEIT', name: 'Geen aktiwiteit', detail: 'Koshuis logs sal hier verskyn.', icon: Icons.history),
-                      const SizedBox(height: 14),
+
                       GlassCard(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -878,9 +1040,21 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                           children: [
                             const _SectionTitle('AKSIES'),
                             const SizedBox(height: 12),
-                            _QuickActionRow(label: 'Soek inwoner', icon: Icons.search_rounded, onTap: () => _showComingSoon(context)),
+                            _QuickActionRow(
+                              label: 'Soek inwoner',
+                              icon: Icons.search_rounded,
+                              onTap: () => _showComingSoon(context),
+                            ),
                             const _ThinDivider(),
-                            _QuickActionRow(label: 'Verfris koshuisdata', icon: Icons.refresh_rounded, onTap: _laaiKoshuisStatus),
+                            _QuickActionRow(
+                              label: 'Verfris koshuisdata',
+                              icon: Icons.refresh_rounded,
+                              onTap: () {
+                                if (_gekoseKoshuis?.koshuisId != null) {
+                                  _laaiStatus(_gekoseKoshuis!.koshuisId!);
+                                }
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -895,6 +1069,7 @@ class _KoshuisPageState extends State<_KoshuisPage> {
     );
   }
 }
+
 
 class _EventsPage extends StatelessWidget {
   const _EventsPage();
