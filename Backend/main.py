@@ -1849,51 +1849,85 @@ def wagte_profile_verify(
         },
     )
     
+class WagteProfileDeclineRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    metode: str = "QR"
+
+
 @app.post("/wagte/profile/decline")
 def decline_profile_access(
-    data: dict,
+    data: WagteProfileDeclineRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
 ):
-    gebruiker_id = data.get("gebruiker_id")
-    kampus_id = data.get("kampus_id")
-    metode = data.get("metode", "QR")
-
-    if not gebruiker_id or not kampus_id:
-        raise HTTPException(status_code=400, detail="Gebruiker en kampus is verpligtend")
-
-    main_gate = (
-        db.query(Lokasie)
-        .filter(
-            Lokasie.Kampus_ID == kampus_id,
-            Lokasie.LOK_Tipe == "Kampus",
+    if data.metode not in ["NFC", "QR", "HANDMATIG"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Metode moet NFC, QR of HANDMATIG wees",
         )
-        .first()
-    )
 
-    if not main_gate:
-        raise HTTPException(status_code=404, detail="Geen kampus hek gevind nie")
+    gebruiker = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == data.gebruiker_id,
+        models.Gebruikers.Is_Aktief == True,
+    ).first()
 
-    log = ToegangLog(
-        Gebruiker_ID=gebruiker_id,
-        Lokasie_ID=main_gate.Lokasie_ID,
-        Rigting="GEWEIER",
-        Metode=metode,
+    if not gebruiker:
+        raise HTTPException(
+            status_code=404,
+            detail="Gebruiker nie gevind of nie aktief nie",
+        )
+
+    kampus = db.query(models.Kampus).filter(
+        models.Kampus.Kampus_ID == data.kampus_id
+    ).first()
+
+    if not kampus:
+        raise HTTPException(
+            status_code=404,
+            detail="Kampus nie gevind nie",
+        )
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Kampus_ID == data.kampus_id,
+        models.Lokasie.LOK_Tipe == "Kampus",
+    ).first()
+
+    if not lokasie:
+        raise HTTPException(
+            status_code=404,
+            detail="Geen kampus-lokasie vir hierdie kampus gevind nie",
+        )
+
+    log = models.ToegangsLogs(
+        Gebruiker_ID=data.gebruiker_id,
+        Lokasie_ID=lokasie.Lokasie_ID,
+        NFC_Tags_ID=None,
+        TOE_Rigting="GEWEIER",
+        TOE_Metode=data.metode,
+        TOE_Auto_Uitgecheck=False,
     )
 
     db.add(log)
     db.commit()
     db.refresh(log)
 
-    return {
-        "sukses": True,
-        "data": {
+    return schemas.APIResponse(
+        sukses=True,
+        data={
             "message": "Toegang geweier",
             "log_id": log.Log_ID,
-            "rigting": "GEWEIER",
+            "gebruiker_id": gebruiker.Gebruiker_ID,
+            "naam": gebruiker.GEB_Naam,
+            "van": gebruiker.GEB_Van,
+            "rigting": log.TOE_Rigting,
+            "metode": log.TOE_Metode,
+            "kampus_id": kampus.Kampus_ID,
+            "kampus": kampus.KAM_Naam,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "lokasie": lokasie.LOK_Naam,
+            "tyd": log.TOE_Tydstempel.isoformat(),
         },
-        "fout": None,
-    }
+    )
     
 
 @app.get("/me")
