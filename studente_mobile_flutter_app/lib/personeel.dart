@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'profile_page.dart';
 import 'moon_api.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class PersoneelHomePage extends StatefulWidget {
   const PersoneelHomePage({super.key});
@@ -42,14 +43,16 @@ class _PersoneelHomePageState extends State<PersoneelHomePage> {
             ),
             Expanded(
               child: _selectedIndex == 0
-                  ? const _TuisTab()
-                  : _selectedIndex == 2
+              ? const _TuisTab()
+              : _selectedIndex == 2
+                  ? const _SaamryTab()
+                  : _selectedIndex == 3
                       ? const _VisitorsTab()
                       : const _ProfielTab(),
-            ),
-          ],
-        ),
-      ),
+                      ),
+                    ],
+                  ),
+                ),
       bottomNavigationBar: _PersoneelNavBar(
         selectedIndex: _selectedIndex,
         onTap: _onNavTap,
@@ -530,7 +533,8 @@ class _PersoneelNavBar extends StatelessWidget {
     const items = [
       _NavItem(icon: Icons.home_rounded, label: 'Tuis'),
       _NavItem(icon: Icons.nfc_rounded, label: 'Kampus'),
-      _NavItem(icon: Icons.person_add_alt_1_rounded, label: 'Visitors'),
+      _NavItem(icon: Icons.directions_car_rounded, label: 'Saamry'),
+      _NavItem(icon: Icons.person_add_alt_1_rounded, label: 'Besoekers'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
@@ -597,17 +601,62 @@ class _NavItem {
 }
 
 // ─── Kampus Inskandering ──────────────────────────────────────────────────────
-class PersoneelKampusInskanderingPage extends StatelessWidget {
+class PersoneelKampusInskanderingPage extends StatefulWidget {
   const PersoneelKampusInskanderingPage({super.key});
 
   @override
+  State<PersoneelKampusInskanderingPage> createState() =>
+      _PersoneelKampusInskanderingPageState();
+}
+
+class _PersoneelKampusInskanderingPageState
+    extends State<PersoneelKampusInskanderingPage> {
+  bool _loading = true;
+  String? _personeelNommer;
+  String _status = 'Laai personeel profiel...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = MoonApi.myProfile ?? await MoonApi.getMyProfile();
+
+      setState(() {
+        _personeelNommer =
+            profile['personeel_nommer']?.toString() ??
+            profile['PER_Nommer']?.toString() ??
+            profile['per_nommer']?.toString() ??
+            profile['Personeel_Nommer']?.toString();
+
+        _loading = false;
+        _status = 'Hou jou foon teen die skandeerder';
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _status = 'Kon nie personeel nommer laai nie';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final nommer = _personeelNommer ?? 'Onbekend';
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
+            const AppScreenHeader(
               title: 'Kampus Skandering',
               subtitle: 'Personeel',
               showBack: true,
@@ -615,64 +664,76 @@ class PersoneelKampusInskanderingPage extends StatelessWidget {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        GlassCard(
-                          padding: const EdgeInsets.all(12),
-                          radius: 12,
-                          child: Column(
+                child: GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(
+                    child: _loading
+                        ? const CircularProgressIndicator()
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.nfc, color: kAccent, size: 24),
-                              const SizedBox(height: 4),
-                              Text('NFC',
-                                  style: GoogleFonts.inter(
-                                      color: kAccent,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700)),
+                              const Icon(
+                                Icons.nfc,
+                                color: kAccent,
+                                size: 72,
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                'Personeelnommer',
+                                style: GoogleFonts.inter(
+                                  color: kTextMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                nommer,
+                                style: GoogleFonts.inter(
+                                  color: kText1,
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                _status,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  color: kText2,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              GlassCard(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Alternatiewe QR-Kode',
+                                      style: GoogleFonts.inter(
+                                        color: kTextMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      color: Colors.white,
+                                      padding: const EdgeInsets.all(10),
+                                      child: QrImageView(
+                                        data: nommer,
+                                        version: QrVersions.auto,
+                                        size: 170,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        const NfcStatusBadge(),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        GradientActionButton(
-                          label: 'Saam Ry',
-                          onTap: () {},
-                          width: 120,
-                          height: 40,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(child: GlassSearchRow()),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Expanded(child: GlassCard(child: SizedBox.expand())),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GradientActionButton(
-                            label: 'Skandeer In',
-                            onTap: () {},
-                            height: 44,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlineActionButton(
-                          label: 'Terug',
-                          onTap: () => Navigator.pop(context),
-                          width: 100,
-                          height: 44,
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
