@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOON — My Klasse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Personeel toegang: slegs Personeel-rol (gate in main.js) -->
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+    <a href="personeel.html" class="active">My Klasse</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
+  </nav>
+
+  <main class="page" id="personeel-page">
+    <!-- Top controls: klas select links, gekose datum regs -->
+    <section class="top-controls space-between" aria-label="Opsies">
+      <div class="control-group">
+        <label class="field-label" for="klas-select">Kies Klas</label>
+        <select class="glass-select" id="klas-select" name="klas-select" style="width:260px"></select>
+      </div>
+      <div class="control-group">
+        <span class="field-label">Gekose Datum</span>
+        <span id="dash-datum" style="font-size:14px;font-weight:600">--</span>
+      </div>
+    </section>
+
+    <!-- Two-panel layout soos kampus.html -->
+    <section class="panels">
+      <!-- Links: bywoning dashboard -->
+      <article class="glass-card panel" aria-label="Bywoning Dashboard">
+        <h2>Klas Bywoning</h2>
+        <div class="dashboard-grid">
+          <div class="card" id="dash-in-count">Ingeskandeer: --</div>
+          <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
+          <div class="card" id="dash-total-count">Totaal studente: --</div>
+          <div class="card" id="dash-percent-count">Bywoning: --</div>
+          <div class="card wide" id="dash-in-card" style="flex-direction:column;align-items:stretch">
+            <strong>Studente ingeskandeer</strong>
+            <div id="dash-in-list" class="admin-list" style="margin-top:8px"></div>
+          </div>
+          <div class="card wide" id="dash-out-card" style="flex-direction:column;align-items:stretch">
+            <strong>Studente nie ingeskandeer</strong>
+            <div id="dash-out-list" class="admin-list" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Regs: kalender + klasregister -->
+      <article class="glass-card panel" aria-label="Kalender en Klasregister">
+        <h2>Kalender</h2>
+        <div class="kalender">
+          <div class="kalender-header">
+            <button class="btn-outline btn-sm" id="kal-prev" type="button" aria-label="Vorige maand">&larr;</button>
+            <div class="kalender-title" id="kal-title">--</div>
+            <button class="btn-outline btn-sm" id="kal-next" type="button" aria-label="Volgende maand">&rarr;</button>
+          </div>
+          <div class="kalender-grid" id="kal-grid"></div>
+        </div>
+
+        <h2 style="margin-top:14px">Klasregister</h2>
+        <div class="list-search">
+          <input class="glass-input" type="search" id="roster-search"
+                 aria-label="Soek student" placeholder="Soek student...">
+        </div>
+        <div id="roster-list" class="admin-list" aria-label="Klasregister lys"></div>
+      </article>
+    </section>
+  </main>
+
+  <div class="action-bar">
+    <button class="btn-outline" type="button"
+            onclick="window.location.href='home.html'">← Terug</button>
+  </div>
+
+  <script src="main.js"></script>
+  <script src="personeel.js"></script>
+</body>
+</html>
