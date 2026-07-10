@@ -1,46 +1,49 @@
 /**
- * koshuis.js — logic for koshuis.html only.
+ * koshuis.js — Hierdie lêer beheer die Koshuis-bladsy (koshuis.html).
  *
- * Depends on:
- *   - main.js (must run first: loads website_api_calls.js → window.MoonApi)
- *   - HTML ids: data-select, list-search, data-list, dash-* dashboard cards.
+ * Wat dit doen, in eenvoudige woorde:
+ *   - Laai die lys van koshuise in die keuselys bo-aan die bladsy.
+ *   - Wys op die paneelbord hoeveel studente in- en uitgeteken is,
+ *     en hoeveel inwoners die koshuis het teenoor sy kapasiteit.
+ *   - Wys aan die regterkant 'n soekbare lys van die gekose koshuis se studente.
+ *   - Gaan haal vanself elke paar sekondes vars inligting by die bediener.
  *
- * Features:
- *   - Load koshuise into the page dropdown from GET /koshuise.
- *   - Live dashboard via GET /koshuise/{id}/status (30s polling):
- *     scanned-in/out counts + lists and inwoners/kapasiteit card.
- *   - Right panel: searchable list of studente gekoppel aan die gekose koshuis.
+ * Dit het main.js nodig (wat eerste moet laai) om met die bediener te praat.
  */
 
+// Alles word in een blok toegedraai sodat die veranderlikes nie met ander lêers bots nie.
 (function () {
-  // ----- Cached DOM nodes (null-safe checks before use) -----
+  // ----- Kry die belangrike dele van die bladsy en hou hulle byderhand -----
   const listSearch = document.getElementById('list-search');
   const dataList = document.getElementById('data-list');
   const dataSelect = document.getElementById('data-select');
 
-  // ----- Module state -----
-  var currentKoshuisId = null;
-  var pollingInterval = null;
-  var alleStudente = null; // cache of GET /gebruikers students so dropdown changes re-render locally
+  // ----- Waardes wat die bladsy onthou terwyl dit oop is -----
+  var currentKoshuisId = null;  // Watter koshuis is nou gekies
+  var pollingInterval = null;   // Die "horlosie" wat die paneelbord gereeld opdateer
+  var alleStudente = null;      // Al die studente word een keer gelaai en hier gebêre
 
   /**
-   * Creates an individual glass-card for a user.
-   * subtitle is shown under the name (e.g. student number or email).
-   * rolNaam is displayed as a role-badge.
+   * Hierdie funksie bou 'n klein kaartjie vir een persoon.
+   * Die kaartjie wys die naam, 'n reël daaronder (bv. studentenommer of e-pos)
+   * en 'n klein kenteken met die persoon se rol.
    */
   function createUserCard(user, subtitle, rolNaam) {
     var card = document.createElement('div');
     card.className = 'user-card';
+    // Stoor die naam en van as soekwoorde sodat die soekblokkie die kaartjie kan vind
     card.dataset.search = ((user.GEB_Naam || '') + ' ' + (user.GEB_Van || '') + ' ' + (subtitle || '')).toLowerCase();
 
     var infoDiv = document.createElement('div');
     infoDiv.className = 'admin-user-info';
 
+    // Sit die persoon se naam en van op die kaartjie
     var nameDiv = document.createElement('div');
     nameDiv.className = 'admin-user-name';
     nameDiv.textContent = (user.GEB_Naam || '') + ' ' + (user.GEB_Van || '');
     infoDiv.appendChild(nameDiv);
 
+    // Sit die tweede reël (bv. nommer of e-pos) onder die naam
     var subDiv = document.createElement('div');
     subDiv.className = 'admin-user-email';
     subDiv.textContent = subtitle || '';
@@ -48,6 +51,7 @@
 
     card.appendChild(infoDiv);
 
+    // As die persoon 'n rol het, wys dit as 'n klein kenteken
     if (rolNaam) {
       var rolesDiv = document.createElement('div');
       rolesDiv.className = 'admin-user-roles';
@@ -62,12 +66,13 @@
   }
 
   /**
-   * Renders an array of user objects into a container div as individual cards.
-   * Shows a placeholder card if the array is empty.
+   * Hierdie funksie neem 'n lys van mense en sit vir elkeen 'n kaartjie in 'n houer op die bladsy.
+   * As die lys leeg is, wys dit die gegewe "leeg" boodskap.
    */
   function renderUserList(container, users, emptyMessage) {
     if (!container) return;
     container.innerHTML = '';
+    // As daar niemand in die lys is nie, wys 'n "leeg" boodskap
     if (!users || users.length === 0) {
       var empty = document.createElement('div');
       empty.className = 'user-card';
@@ -81,6 +86,7 @@
       container.appendChild(empty);
       return;
     }
+    // Maak vir elke persoon 'n kaartjie en sit dit in die houer
     users.forEach(function (u) {
       var subtitle = u.STU_Nommer || u.GEB_Epos || u.Rol_Naam || '';
       container.appendChild(createUserCard(u, subtitle, u.Rol_Naam || 'Student'));
@@ -88,14 +94,16 @@
   }
 
   /**
-   * Fetch all gebruikers once and cache the studente.
-   * The right-panel list is re-rendered from this cache per gekose koshuis.
+   * Hierdie funksie laai al die gebruikers vanaf die bediener (net een keer)
+   * en bêre net die studente. Die lys aan die regterkant word later hieruit gebou.
    */
   async function loadStudenteCache() {
     if (!window.MoonApi) return;
 
+    // Vra die bediener vir al die gebruikers
     var json = await window.MoonApi.fetchGebruikers();
 
+    // As iets verkeerd gegaan het, wys 'n foutboodskap in die lys
     if (!json || !json.sukses || !Array.isArray(json.data)) {
       if (dataList) {
         dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie gebruikers laai nie.</div></div></div>';
@@ -103,6 +111,7 @@
       return;
     }
 
+    // Hou net die studente en bêre hulle vir later gebruik
     alleStudente = json.data.filter(function (g) {
       return g.Rol_Naam === 'Student';
     });
@@ -111,13 +120,14 @@
   }
 
   /**
-   * Render the right-panel list: studente whose Koshuis_ID matches the
-   * currently selected koshuis. Waits until both the cache and the
-   * dropdown selection are available.
+   * Hierdie funksie wys aan die regterkant net die studente
+   * wat aan die gekose koshuis behoort. Dit wag totdat die studente
+   * gelaai is én 'n koshuis gekies is.
    */
   function renderKoshuisStudente() {
     if (!dataList || alleStudente === null || currentKoshuisId === null) return;
 
+    // Hou net die studente wie se koshuis dieselfde is as die gekose koshuis
     var studente = alleStudente.filter(function (g) {
       return Number(g.Koshuis_ID) === Number(currentKoshuisId);
     });
@@ -127,18 +137,20 @@
   }
 
   /**
-   * Fetch live scan status for a specific koshuis and update dashboard cards.
-   * Does NOT touch the right-panel list.
+   * Hierdie funksie vra die bediener wie tans in- en uitgeteken is by 'n koshuis,
+   * en werk dan die tellings, inwoner-kaart en lyste op die paneelbord by.
    */
   async function refreshDashboard(koshuisId) {
     if (!koshuisId || !window.MoonApi) return;
 
+    // Vra die bediener vir die nuutste in/uit-inligting van hierdie koshuis
     var json = await window.MoonApi.fetchKoshuisStatus(koshuisId);
 
     var inCount = document.getElementById('dash-student-in-count');
     var outCount = document.getElementById('dash-student-out-count');
     var kapasiteitCard = document.getElementById('dash-kapasiteit-card');
 
+    // As die bediener nie geantwoord het nie, wys strepies in plaas van getalle
     if (!json || !json.sukses || !json.data) {
       if (inCount) inCount.textContent = 'Studente ingeteken: --';
       if (outCount) outCount.textContent = 'Studente uitgeteken: --';
@@ -148,27 +160,31 @@
 
     var data = json.data;
 
+    // Werk die telling-blokkies en die inwoner-kaart op die paneelbord by
     if (inCount) inCount.textContent = 'Studente ingeteken: ' + data.scanned_in_count;
     if (outCount) outCount.textContent = 'Studente uitgeteken: ' + data.scanned_out_count;
     if (kapasiteitCard) {
       kapasiteitCard.textContent = 'Inwoners: ' + data.inwoner_count + ' / ' + data.KOS_Kapasiteit;
     }
 
+    // Werk die twee naamlyste (ingeteken en uitgeteken) op die paneelbord by
     renderUserList(document.getElementById('dash-student-in-list'), data.scanned_in || [], 'Geen studente nie');
     renderUserList(document.getElementById('dash-student-out-list'), data.scanned_out || [], 'Geen studente nie');
   }
 
   /**
-   * Load koshuise from GET /koshuise into the page-level #data-select dropdown.
-   * After loading, auto-selects the first koshuis and triggers the first dashboard refresh.
+   * Hierdie funksie laai al die koshuise vanaf die bediener in die keuselys bo-aan die bladsy.
+   * Dit kies dan vanself die eerste koshuis en laai daardie koshuis se paneelbord en studente.
    */
   async function loadKoshuisDropdown() {
     if (!dataSelect || !window.MoonApi) return;
 
+    // Vra die bediener vir die lys van koshuise
     var json = await window.MoonApi.fetchKoshuise();
 
     if (!json || !json.sukses || !Array.isArray(json.data)) return;
 
+    // Sit elke koshuis as 'n keuse in die keuselys
     dataSelect.innerHTML = '';
     json.data.forEach(function (k) {
       var opt = document.createElement('option');
@@ -177,6 +193,7 @@
       dataSelect.appendChild(opt);
     });
 
+    // Kies vanself die eerste koshuis en begin die paneelbord opdateer
     if (json.data.length > 0) {
       currentKoshuisId = json.data[0].Koshuis_ID;
       refreshDashboard(currentKoshuisId);
@@ -186,8 +203,8 @@
   }
 
   /**
-   * Start a 30-second polling interval for the given koshuis ID.
-   * Clears any existing interval first so only one is active at a time.
+   * Hierdie funksie laat die paneelbord vanself elke 5 sekondes vars inligting gaan haal.
+   * Dit stop eers enige ou "horlosie" sodat daar net een op 'n slag loop.
    */
   function startPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
@@ -196,24 +213,27 @@
     }, 5000);
   }
 
-  /** Hide list rows that do not contain the search text. */
+  // Hierdie funksie steek studente-kaartjies weg wat nie by die soekwoord pas nie.
   function applyListFilter() {
     if (!listSearch || !dataList) return;
     var query = listSearch.value.trim().toLowerCase();
     var rows = dataList.querySelectorAll('.user-card');
 
+    // Gaan deur elke kaartjie: wys dit net as die soekwoord daarin voorkom
     rows.forEach(function (row) {
       var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
       row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
     });
   }
 
-  // ----- Wire list filter -----
+  // ----- Koppel die soekblokkie aan sy funksie -----
+  // As die gebruiker in die soekblokkie tik, filtreer die studente-lys.
   if (listSearch) {
     listSearch.addEventListener('input', applyListFilter);
   }
 
-  // ----- Wire koshuis dropdown -----
+  // ----- Koppel die koshuis-keuselys -----
+  // As die gebruiker 'n ander koshuis kies, laai daardie koshuis se paneelbord en studente.
   if (dataSelect) {
     dataSelect.addEventListener('change', function () {
       currentKoshuisId = Number(dataSelect.value);
@@ -223,9 +243,9 @@
     });
   }
 
-  // After full DOM (and MoonApi script) are ready, bootstrap the page
+  // Wanneer die bladsy klaar gelaai het, begin alles: laai die keuselys en die studente.
   document.addEventListener('DOMContentLoaded', function () {
-    loadKoshuisDropdown();   // populate #data-select + trigger first dashboard refresh
-    loadStudenteCache();     // cache studente for the right-panel list
+    loadKoshuisDropdown();   // vul die keuselys bo-aan die bladsy en laai die paneelbord
+    loadStudenteCache();     // laai en bêre die studente vir die lys aan die regterkant
   });
 })();

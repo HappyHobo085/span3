@@ -1,5 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- personeel.html — Die "My Klasse" bladsy vir personeel: wys klasbywoning,
+     'n kalender en die klasregister. Die logika sit in personeel.js. -->
+<!-- Kop-gedeelte: bladsy-titel, lettertipe en die styl-lêer word hier gelaai -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +13,7 @@
 </head>
 <body>
   <!-- Personeel toegang: slegs Personeel-rol (gate in main.js) -->
+  <!-- Navigasie-balk bo-aan: skakels na die ander bladsye en die Teken Uit knoppie -->
   <nav class="navbar">
     <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
     <a href="home.html">Tuis</a>
@@ -22,8 +26,10 @@
     </div>
   </nav>
 
+  <!-- Hoof-inhoud van die bladsy -->
   <main class="page" id="personeel-page">
     <!-- Top controls: klas select links, gekose datum regs -->
+    <!-- Boonste beheer: kies 'n klas en sien watter datum tans gekies is -->
     <section class="top-controls space-between" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="klas-select">Kies Klas</label>
@@ -36,10 +42,12 @@
     </section>
 
     <!-- Two-panel layout soos kampus.html -->
+    <!-- Twee panele langs mekaar: links die bywoning, regs die kalender en klaslys -->
     <section class="panels">
       <!-- Links: bywoning dashboard -->
       <article class="glass-card panel" aria-label="Bywoning Dashboard">
         <h2>Klas Bywoning</h2>
+        <!-- Tellings en lyste: wie het ingeskandeer en wie nie -->
         <div class="dashboard-grid">
           <div class="card" id="dash-in-count">Ingeskandeer: --</div>
           <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
@@ -59,6 +67,7 @@
       <!-- Regs: kalender + klasregister -->
       <article class="glass-card panel" aria-label="Kalender en Klasregister">
         <h2>Kalender</h2>
+        <!-- Kalender: klik op 'n dag om daardie dag se bywoning te sien -->
         <div class="kalender">
           <div class="kalender-header">
             <button class="btn-outline btn-sm" id="kal-prev" type="button" aria-label="Vorige maand">&larr;</button>
@@ -68,6 +77,7 @@
           <div class="kalender-grid" id="kal-grid"></div>
         </div>
 
+        <!-- Klasregister: volle klaslys met 'n soekblokkie -->
         <h2 style="margin-top:14px">Klasregister</h2>
         <div class="list-search">
           <input class="glass-input" type="search" id="roster-search"
@@ -78,11 +88,13 @@
     </section>
   </main>
 
+  <!-- Knoppie onderaan om terug te gaan na die tuisblad -->
   <div class="action-bar">
     <button class="btn-outline" type="button"
             onclick="window.location.href='home.html'">← Terug</button>
   </div>
 
+  <!-- Skripte: main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
   <script src="main.js"></script>
   <script src="personeel.js"></script>
 </body>

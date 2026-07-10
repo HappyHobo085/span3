@@ -1,5 +1,10 @@
 <!DOCTYPE html>
+<!--
+  home.html — Tuisblad: wys 'n opsomming van die stelsel (kampusse, koshuise
+  en gebeure) en 'n lys van die nuutste stelsel-opdaterings.
+-->
 <html lang="en">
+<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +14,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Navigasie-balk: skakels na die ander blaaie en die "Teken Uit" knoppie -->
   <nav class="navbar">
     <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
     <a href="home.html" class="active">Tuis</a>
@@ -20,7 +26,9 @@
     </div>
   </nav>
 
+  <!-- Hoofinhoud van die tuisblad -->
   <main class="page" id="home-page">
+    <!-- Opsomming-blokkies: hoeveel kampusse, koshuise en gebeure daar is -->
     <div class="stat-grid" aria-label="Opsomming">
       <div class="glass-card stat-card">
         <div class="stat-label">Kampusse</div>
@@ -42,6 +50,7 @@
       </div>
     </div>
 
+    <!-- Lys van die nuutste stelsel-opdaterings -->
     <div class="glass-card" style="padding:20px">
       <div class="section-label">Stelsel Opdaterings</div>
       <ul class="updates-list" aria-label="Stelsel Opdaterings">
@@ -52,6 +61,7 @@
     </div>
   </main>
 
+  <!-- Skrip: kyk of die gebruiker ingeteken is en laat die "Teken Uit" knoppie werk -->
   <script src="main.js"></script>
 </body>
 </html>

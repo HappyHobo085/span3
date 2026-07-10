@@ -1,5 +1,10 @@
 <!DOCTYPE html>
+<!--
+  events.html — Events-blad: wys die besonderhede van gebeure (events)
+  en 'n lys waarin 'n mens vir 'n student kan soek.
+-->
 <html lang="en">
+<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +14,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Navigasie-balk: skakels na die ander blaaie -->
   <nav class="navbar">
     <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
     <a href="home.html">Tuis</a>
@@ -17,12 +23,15 @@
     <a href="events.html" class="active">Events</a>
   </nav>
 
+  <!-- Hoofinhoud van die events-blad -->
   <main class="page" id="home-page">
     <section class="panels">
+      <!-- Paneel met die besonderhede van die gebeure -->
       <article class="glass-card panel" aria-label="Events Details">
         <h2>Events Details</h2>
       </article>
 
+      <!-- Paneel met die lys en 'n soek-veld om 'n student te vind -->
       <article class="glass-card panel" aria-label="Lys">
         <h2>Lys</h2>
         <div class="list-search">
@@ -34,15 +43,19 @@
     </section>
   </main>
 
+  <!-- Terug-knoppie onderaan die blad: stuur die gebruiker terug na die tuisblad -->
   <div class="action-bar">
     <button class="btn-outline" type="button"
             onclick="window.location.href='home.html'">← Terug</button>
   </div>
 
+  <!-- Skrip: laat die soek-veld werk sodat die lys gefiltreer kan word -->
   <script>
+    // Hierdie funksie begin dadelik en maak die soek-veld reg
     (function () {
       const listSearch = document.getElementById('list-search');
       const dataList   = document.getElementById('data-list');
+      // Hierdie funksie steek lys-items weg wat nie by die soekwoord pas nie
       function applyListFilter() {
         if (!listSearch || !dataList) return;
         const query = listSearch.value.trim().toLowerCase();
@@ -50,9 +63,11 @@
           li.hidden = query !== '' && !(li.textContent || '').trim().toLowerCase().includes(query);
         });
       }
+      // Elke keer as die gebruiker in die soek-veld tik, word die lys weer gefiltreer
       if (listSearch) listSearch.addEventListener('input', applyListFilter);
     })();
   </script>
+  <!-- Skrip: kyk of die gebruiker ingeteken is -->
   <script src="main.js"></script>
 </body>
 </html>

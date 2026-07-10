@@ -1,19 +1,28 @@
 <!DOCTYPE html>
 <!--
+  index.html — Beginblad: stuur die gebruiker dadelik aan na die inteken-blad (login.html).
+  Twee maniere word gebruik: die meta-reël (werk selfs sonder JavaScript)
+  en die skrip (is vinniger in baie blaaiers).
+-->
+<!--
   Webwerf — landing / redirect page.
   Sends the browser to login.html immediately so users never stay on this empty page.
   Two methods are used: meta refresh (works even if JavaScript is off) and script (faster in many browsers).
 -->
 <html>
 
+<!-- Kop: die twee maniere om die gebruiker na die inteken-blad te stuur -->
 <head>
+    <!-- Meta-reël: stuur die blaaier dadelik na login.html (werk sonder JavaScript) -->
     <meta http-equiv="refresh" content="0; url=login.html">
+    <!-- Skrip: stuur die gebruiker met JavaScript na die inteken-blad -->
     <script type="text/javascript">
         window.location.href = "login.html";
     </script>
     <title>Redirecting...</title>
 </head>
 
+<!-- Lyf: 'n skakel vir as die aanstuur nie vanself werk nie -->
 <body>
     If you are not redirected, <a href="login.html">click here to login</a>.
 </body>

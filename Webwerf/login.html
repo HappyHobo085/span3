@@ -1,5 +1,10 @@
 <!DOCTYPE html>
+<!--
+  login.html — Inteken-blad: hier tik die gebruiker sy/haar e-pos en wagwoord in
+  om by die MOON kampus-stelsel in te teken.
+-->
 <html lang="en">
+<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,19 +14,24 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Inteken-afdeling: die logo en die inteken-vorm -->
   <section id="login-page" aria-label="Login page">
     <div class="login-container">
+      <!-- Logo en naam van die stelsel -->
       <div class="login-logo">
         <img src="assets/MOON.png" alt="MOON" class="login-logo-img">
         <div class="login-logo-sub">Kampus Bestuur Stelsel</div>
       </div>
+      <!-- Inteken-vorm: e-pos, wagwoord en die "Teken In" knoppie -->
       <div class="glass-card login-card">
         <form id="login-form">
+          <!-- Veld vir die e-pos adres -->
           <div class="field">
             <label class="field-label" for="email">E-pos</label>
             <input class="glass-input" type="email" id="email" name="email"
                    placeholder="Voer u e-pos in" required>
           </div>
+          <!-- Veld vir die wagwoord -->
           <div class="field">
             <label class="field-label" for="password">Wagwoord</label>
             <input class="glass-input" type="password" id="password" name="password"
@@ -32,6 +42,7 @@
       </div>
     </div>
   </section>
+  <!-- Skrip: die kode wat die inteken laat werk -->
   <script src="login.js"></script>
 </body>
 </html>

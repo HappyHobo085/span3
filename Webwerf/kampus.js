@@ -1,19 +1,18 @@
 /**
- * kampus.js — logic for kampus.html only.
+ * kampus.js — Hierdie lêer beheer die Kampus-bladsy (kampus.html).
  *
- * Depends on:
- *   - main.js (must run first: loads website_api_calls.js → window.MoonApi)
- *   - HTML ids: list-search, data-list, modal fields, overlay, buttons.
+ * Wat dit doen, in eenvoudige woorde:
+ *   - Laai die lys van kampusse in die keuselys bo-aan die bladsy.
+ *   - Wys op die paneelbord hoeveel studente en personeel in- en uitgeteken is.
+ *   - Wys lyste van studente en personeel wat mens kan deursoek.
+ *   - Laat die gebruiker 'n nuwe klaskamer skep deur 'n klein venster (modal).
  *
- * Features:
- *   - Filter student list as you type.
- *   - Open/close “new class” modal (including click on backdrop).
- *   - Load campuses into dropdown from GET /kampusse.
- *   - POST new class via MoonApi.createKlas.
+ * Dit het main.js nodig (wat eerste moet laai) om met die bediener te praat.
  */
 
+// Alles word in een blok toegedraai sodat die veranderlikes nie met ander lêers bots nie.
 (function () {
-  // ----- Cached DOM nodes (null-safe checks before use) -----
+  // ----- Kry die belangrike dele van die bladsy en hou hulle byderhand -----
   const listSearch = document.getElementById('list-search');
   const dataList = document.getElementById('data-list');
   const openClassModalButton = document.getElementById('open-class-modal');
@@ -25,28 +24,31 @@
   const classNfcTag = document.getElementById('class-nfc-tag');
   const dataSelect = document.getElementById('data-select');
 
-  // ----- Module state -----
-  var currentKampusId = null;
-  var pollingInterval = null;
+  // ----- Waardes wat die bladsy onthou terwyl dit oop is -----
+  var currentKampusId = null;   // Watter kampus is nou gekies
+  var pollingInterval = null;   // Die "horlosie" wat die paneelbord gereeld opdateer
 
   /**
-   * Creates an individual glass-card for a user.
-   * subtitle is shown under the name (e.g. student number or email).
-   * rolNaam is displayed as a role-badge.
+   * Hierdie funksie bou 'n klein kaartjie vir een persoon.
+   * Die kaartjie wys die naam, 'n reël daaronder (bv. studentenommer of e-pos)
+   * en 'n klein kenteken met die persoon se rol (Student of Personeel).
    */
   function createUserCard(user, subtitle, rolNaam) {
     var card = document.createElement('div');
     card.className = 'user-card';
+    // Stoor die naam en van as soekwoorde sodat die soekblokkie die kaartjie kan vind
     card.dataset.search = ((user.GEB_Naam || '') + ' ' + (user.GEB_Van || '') + ' ' + (subtitle || '')).toLowerCase();
 
     var infoDiv = document.createElement('div');
     infoDiv.className = 'admin-user-info';
 
+    // Sit die persoon se naam en van op die kaartjie
     var nameDiv = document.createElement('div');
     nameDiv.className = 'admin-user-name';
     nameDiv.textContent = (user.GEB_Naam || '') + ' ' + (user.GEB_Van || '');
     infoDiv.appendChild(nameDiv);
 
+    // Sit die tweede reël (bv. nommer of e-pos) onder die naam
     var subDiv = document.createElement('div');
     subDiv.className = 'admin-user-email';
     subDiv.textContent = subtitle || '';
@@ -54,6 +56,7 @@
 
     card.appendChild(infoDiv);
 
+    // As die persoon 'n rol het, wys dit as 'n klein kenteken
     if (rolNaam) {
       var rolesDiv = document.createElement('div');
       rolesDiv.className = 'admin-user-roles';
@@ -68,12 +71,13 @@
   }
 
   /**
-   * Renders an array of user objects into a container div as individual cards.
-   * Shows a placeholder card if the array is empty.
+   * Hierdie funksie neem 'n lys van mense en sit vir elkeen 'n kaartjie in 'n houer op die bladsy.
+   * As die lys leeg is, wys dit 'n boodskap dat daar geen gebruikers is nie.
    */
   function renderUserList(container, users) {
     if (!container) return;
     container.innerHTML = '';
+    // As daar niemand in die lys is nie, wys 'n "leeg" boodskap
     if (!users || users.length === 0) {
       var empty = document.createElement('div');
       empty.className = 'user-card';
@@ -87,6 +91,7 @@
       container.appendChild(empty);
       return;
     }
+    // Maak vir elke persoon 'n kaartjie en sit dit in die houer
     users.forEach(function (u) {
       var rolNaam = u.Rol_Naam || '';
       container.appendChild(createUserCard(u, u.GEB_Epos || rolNaam, rolNaam));
@@ -94,15 +99,16 @@
   }
 
   /**
-   * Fetch all gebruikers once and populate the constant right-panel lists.
-   * Students → #data-list. Personeel → #personeel-list.
-   * Never called again after initial page load.
+   * Hierdie funksie laai al die gebruikers vanaf die bediener (net een keer).
+   * Studente gaan na die studente-lys en personeel na die personeel-lys aan die regterkant.
    */
   async function loadGebruikersLys() {
     if (!window.MoonApi) return;
 
+    // Vra die bediener vir al die gebruikers
     var json = await window.MoonApi.fetchGebruikers();
 
+    // As iets verkeerd gegaan het, wys 'n foutboodskap in albei lyste
     if (!json || !json.sukses || !Array.isArray(json.data)) {
       if (dataList) {
         dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie gebruikers laai nie.</div></div></div>';
@@ -114,15 +120,17 @@
       return;
     }
 
+    // Skei die studente uit die volle lys uit
     var students = json.data.filter(function (g) {
       return g.Rol_Naam === 'Student';
     });
 
+    // Skei die personeel uit die volle lys uit
     var personeel = json.data.filter(function (g) {
       return g.Rol_Naam === 'Personeel';
     });
 
-    // Render student list
+    // Sit die studente se kaartjies in die studente-lys
     if (dataList) {
       dataList.innerHTML = '';
       if (students.length === 0) {
@@ -135,7 +143,7 @@
       }
     }
 
-    // Render personeel list
+    // Sit die personeel se kaartjies in die personeel-lys
     var personeelList = document.getElementById('personeel-list');
     if (personeelList) {
       personeelList.innerHTML = '';
@@ -151,16 +159,16 @@
   }
 
   /**
-   * Fetch live scan status for a specific campus and update dashboard cards.
-   * Does NOT touch the right-panel lists.
-   * Splits scanned_in / scanned_out by Rol_Naam to separate students from personeel.
+   * Hierdie funksie vra die bediener wie tans in- en uitgeteken is by 'n kampus,
+   * en werk dan die tellings en lyste op die paneelbord by.
    */
   async function refreshDashboard(kampusId) {
     if (!kampusId || !window.MoonApi) return;
 
+    // Vra die bediener vir die nuutste in/uit-inligting van hierdie kampus
     var json = await window.MoonApi.fetchKampusStatus(kampusId);
 
-    // Helper to reset counts to '--' on error
+    // Klein hulpfunksie: as iets fout gaan, wys strepies in plaas van getalle
     function resetCounts() {
       ['dash-student-in-count', 'dash-student-out-count',
        'dash-personeel-in-count', 'dash-personeel-out-count'].forEach(function (id) {
@@ -169,6 +177,7 @@
       });
     }
 
+    // As die bediener nie geantwoord het nie, wys strepies en stop hier
     if (!json || !json.sukses || !json.data) {
       resetCounts();
       return;
@@ -176,6 +185,7 @@
 
     var data = json.data;
 
+    // Verdeel die mense wat in en uit is tussen studente en personeel
     var studentIn = (data.scanned_in || []).filter(function (u) {
       return u.Rol_Naam === 'Student';
     });
@@ -189,7 +199,7 @@
       return u.Rol_Naam === 'Personeel';
     });
 
-    // Update count cards
+    // Werk die vier telling-blokkies op die paneelbord by
     var stuInCount = document.getElementById('dash-student-in-count');
     var stuOutCount = document.getElementById('dash-student-out-count');
     var perInCount = document.getElementById('dash-personeel-in-count');
@@ -200,7 +210,7 @@
     if (perInCount) perInCount.textContent = 'Personeel ingeteken: ' + personeelIn.length;
     if (perOutCount) perOutCount.textContent = 'Personeel uitgeteken: ' + personeelOut.length;
 
-    // Update lists
+    // Werk die vier naamlyste op die paneelbord by
     renderUserList(document.getElementById('dash-student-in-list'), studentIn);
     renderUserList(document.getElementById('dash-student-out-list'), studentOut);
     renderUserList(document.getElementById('dash-personeel-in-list'), personeelIn);
@@ -208,16 +218,18 @@
   }
 
   /**
-   * Load campuses from GET /kampusse into the page-level #data-select dropdown.
-   * After loading, auto-selects the first campus and triggers the first dashboard refresh.
+   * Hierdie funksie laai al die kampusse vanaf die bediener in die keuselys bo-aan die bladsy.
+   * Dit kies dan vanself die eerste kampus en laai daardie kampus se paneelbord.
    */
   async function loadPageKampusDropdown() {
     if (!dataSelect || !window.MoonApi) return;
 
+    // Vra die bediener vir die lys van kampusse
     var json = await window.MoonApi.fetchKampusse();
 
     if (!json || !json.sukses || !Array.isArray(json.data)) return;
 
+    // Sit elke kampus as 'n keuse in die keuselys
     dataSelect.innerHTML = '';
     json.data.forEach(function (k) {
       var opt = document.createElement('option');
@@ -226,6 +238,7 @@
       dataSelect.appendChild(opt);
     });
 
+    // Kies vanself die eerste kampus en begin die paneelbord opdateer
     if (json.data.length > 0) {
       currentKampusId = json.data[0].Kampus_ID;
       refreshDashboard(currentKampusId);
@@ -234,8 +247,8 @@
   }
 
   /**
-   * Start a 30-second polling interval for the given campus ID.
-   * Clears any existing interval first so only one is active at a time.
+   * Hierdie funksie laat die paneelbord vanself elke 5 sekondes vars inligting gaan haal.
+   * Dit stop eers enige ou "horlosie" sodat daar net een op 'n slag loop.
    */
   function startPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
@@ -244,19 +257,20 @@
     }, 5000);
   }
 
-  /** Hide list rows that do not contain the search text. */
+  // Hierdie funksie steek studente-kaartjies weg wat nie by die soekwoord pas nie.
   function applyListFilter() {
     if (!listSearch || !dataList) return;
     var query = listSearch.value.trim().toLowerCase();
     var rows = dataList.querySelectorAll('.user-card');
 
+    // Gaan deur elke kaartjie: wys dit net as die soekwoord daarin voorkom
     rows.forEach(function (row) {
       var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
       row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
     });
   }
 
-  /** Hide personeel rows that do not contain the search text. */
+  // Hierdie funksie steek personeel-kaartjies weg wat nie by die soekwoord pas nie.
   function applyPersoneelFilter() {
     var bottomSearch = document.getElementById('bottom-search');
     var personeelList = document.getElementById('personeel-list');
@@ -264,20 +278,21 @@
     var query = bottomSearch.value.trim().toLowerCase();
     var rows = personeelList.querySelectorAll('.user-card');
 
+    // Gaan deur elke kaartjie: wys dit net as die soekwoord daarin voorkom
     rows.forEach(function (row) {
       var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
       row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
     });
   }
 
-  /** Show modal: CSS class .open + accessibility flag. */
+  // Hierdie funksie maak die "nuwe klas" venster oop op die skerm.
   function openClassModal() {
     if (!classModalOverlay) return;
     classModalOverlay.classList.add('open');
     classModalOverlay.setAttribute('aria-hidden', 'false');
   }
 
-  /** Hide modal and mark hidden for screen readers. */
+  // Hierdie funksie maak die "nuwe klas" venster weer toe.
   function closeClassModal() {
     if (!classModalOverlay) return;
     classModalOverlay.classList.remove('open');
@@ -285,17 +300,19 @@
   }
 
   /**
-   * Laai kampusse vanaf API en vul die dropdown (IDs uit databasis).
-   * Fetches campuses from the API and fills the dropdown (database IDs).
+   * Hierdie funksie laai die kampusse vanaf die bediener
+   * en sit hulle in die kampus-keuselys binne die "nuwe klas" venster.
    */
   async function loadKampusDropdown() {
   if (!classKampus || !window.MoonApi) return;
 
+  // Vra die bediener vir die lys van kampusse
   const json = await window.MoonApi.fetchKampusse();
 
   if (json && json.sukses && Array.isArray(json.data)) {
     classKampus.innerHTML = '<option value="">Kies kampus...</option>';
 
+    // Sit elke kampus as 'n keuse in die keuselys
     json.data.forEach(function (k) {
       const opt = document.createElement('option');
       opt.value = String(k.Kampus_ID);
@@ -306,18 +323,20 @@
 }
 
   /**
-   * Neem vormdata en roep MoonApi.createKlas aan (POST /klasse via website_api_calls.js).
-   * Reads modal fields, validates, POSTs new class, shows alerts for success/errors.
+   * Hierdie funksie lees die vorm in die venster, maak seker alles is ingevul,
+   * en stuur dan die nuwe klaskamer na die bediener om gestoor te word.
    */
   async function submitNewClass() {
   const roomName = classRoomName ? classRoomName.value.trim() : '';
   const kampusId = classKampus ? Number(classKampus.value) : null;
 
+  // Maak seker die gebruiker het 'n naam en 'n kampus gekies
   if (!roomName || !kampusId) {
     alert('Voltooi asseblief die klaskamer naam en kampus.');
     return;
   }
 
+  // Stuur die nuwe klas se inligting na die bediener
   const json = await window.MoonApi.createKlas({
     LOK_Naam: roomName,
     LOK_Tipe: "Klaskamer",
@@ -326,6 +345,7 @@
     NFC_Tipe: "Lokasie"
   });
 
+  // Wys of dit gewerk het, en maak die venster skoon en toe as dit reg is
   if (json && json.sukses) {
     alert('Klas suksesvol gestoor. UID: ' + json.data.nfc_tag.NFC_UID);
     closeClassModal();
@@ -336,17 +356,20 @@
   }
 }
 
-  // ----- Wire list filter -----
+  // ----- Koppel die soekblokkies aan hulle funksies -----
+  // As die gebruiker in die studente-soekblokkie tik, filtreer die studente-lys.
   if (listSearch) {
     listSearch.addEventListener('input', applyListFilter);
   }
 
+  // As die gebruiker in die onderste soekblokkie tik, filtreer die personeel-lys.
   var bottomSearch = document.getElementById('bottom-search');
   if (bottomSearch) {
     bottomSearch.addEventListener('input', applyPersoneelFilter);
   }
 
-  // ----- Wire campus dropdown -----
+  // ----- Koppel die kampus-keuselys -----
+  // As die gebruiker 'n ander kampus kies, laai daardie kampus se paneelbord.
   if (dataSelect) {
     dataSelect.addEventListener('change', function () {
       currentKampusId = Number(dataSelect.value);
@@ -355,16 +378,18 @@
     });
   }
 
-  // ----- Modal open / close -----
+  // ----- Knoppies wat die venster oopmaak en toemaak -----
+  // As die gebruiker die "maak oop" knoppie druk, wys die venster.
   if (openClassModalButton) {
     openClassModalButton.addEventListener('click', openClassModal);
   }
 
+  // As die gebruiker die "maak toe" knoppie druk, steek die venster weg.
   if (closeClassModalButton) {
     closeClassModalButton.addEventListener('click', closeClassModal);
   }
 
-  // Click dark area outside the white dialog → close
+  // As die gebruiker buite die wit venster op die donker agtergrond klik, maak die venster toe.
   if (classModalOverlay) {
     classModalOverlay.addEventListener('click', function (event) {
       if (event.target === classModalOverlay) {
@@ -373,17 +398,18 @@
     });
   }
 
-  // ----- Submit new class from modal -----
+  // ----- Stuur die nuwe klas wanneer die knoppie gedruk word -----
+  // As die gebruiker die "skep klas" knoppie druk, stoor die nuwe klas.
   if (createClassButton) {
     createClassButton.addEventListener('click', function () {
       submitNewClass();
     });
   }
 
-  // After full DOM (and MoonApi script) are ready, bootstrap the page
+  // Wanneer die bladsy klaar gelaai het, begin alles: laai die keuselyste en die naamlyste.
   document.addEventListener('DOMContentLoaded', function () {
-    loadKampusDropdown();       // populate modal class-kampus dropdown (existing)
-    loadPageKampusDropdown();   // populate #data-select + trigger first dashboard refresh
-    loadGebruikersLys();        // populate constant student + personeel right-panel lists
+    loadKampusDropdown();       // vul die kampus-keuselys in die "nuwe klas" venster
+    loadPageKampusDropdown();   // vul die keuselys bo-aan die bladsy en laai die paneelbord
+    loadGebruikersLys();        // vul die studente- en personeel-lyste aan die regterkant
   });
 })();

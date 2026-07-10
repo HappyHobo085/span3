@@ -1,3 +1,7 @@
+// personeel.js — Hierdie lêer beheer die "My Klasse" bladsy vir personeel.
+// Dit wys watter studente op 'n gekose dag by die klas ingeskandeer het,
+// 'n kalender om die dag te kies, en die volle klaslys met 'n soekblokkie.
+// Let wel: al die klasdata hier is voorbeeld-data (nie regte data nie).
 /**
  * personeel.js — logic for personeel.html only.
  *
@@ -14,8 +18,11 @@
  *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list.
  */
 
+// Al die kode loop binne een omhulsel sodat die veranderlikes hier
+// nie met die res van die webwerf deurmekaar raak nie.
 (function () {
   // ----- Mock klasse met klasregisters (demo data) -----
+  // Voorbeeld-klasse met hul studente wat net vir die demo gebruik word.
   var MOCK_KLASSE = [
     {
       id: 'WIS114',
@@ -71,6 +78,8 @@
   ];
 
   // ----- Cached DOM nodes (null-safe checks before use) -----
+  // Kry al die dele van die bladsy (keuselys, lyste, knoppies, ens.)
+  // een keer, sodat ons hulle later maklik kan gebruik.
   var klasSelect = document.getElementById('klas-select');
   var dashDatum = document.getElementById('dash-datum');
   var dashInCount = document.getElementById('dash-in-count');
@@ -87,6 +96,8 @@
   var rosterList = document.getElementById('roster-list');
 
   // ----- Module state -----
+  // Onthou watter klas en dag tans gekies is, en watter maand
+  // die kalender op die oomblik wys.
   var vandag = new Date();
   vandag.setHours(0, 0, 0, 0);
 
@@ -101,6 +112,8 @@
 
   // ----- Deterministiese "random" (seed = klas + datum) -----
 
+  // Hierdie funksie verander 'n stuk teks in 'n vaste getal.
+  // Dieselfde teks gee altyd dieselfde getal.
   /** djb2-agtige string hash → 32-bit unsigned int. */
   function hashString(str) {
     var h = 5381;
@@ -110,6 +123,8 @@
     return h;
   }
 
+  // Hierdie funksie maak 'n "toevalsgetal-maker" wat vir dieselfde
+  // begingetal altyd dieselfde reeks getalle gee.
   /** mulberry32 PRNG — klein, vinnig, deterministies vir 'n gegewe seed. */
   function mulberry32(seed) {
     return function () {
@@ -121,6 +136,7 @@
     };
   }
 
+  // Hierdie funksie skryf 'n datum as teks in die vorm JJJJ-MM-DD.
   function isoDate(d) {
     var m = String(d.getMonth() + 1);
     var dd = String(d.getDate());
@@ -129,10 +145,13 @@
     return d.getFullYear() + '-' + m + '-' + dd;
   }
 
+  // Hierdie funksie skryf 'n datum mooi leesbaar uit, bv. "10 Julie 2026".
   function formatDatum(d) {
     return d.getDate() + ' ' + MAANDE[d.getMonth()] + ' ' + d.getFullYear();
   }
 
+  // Hierdie funksie kyk of 'n dag 'n klasdag is: Maandag tot Vrydag,
+  // en nie 'n dag in die toekoms nie.
   /** Klasdae: weeksdae (Ma–Vr) wat nie in die toekoms lê nie. */
   function isKlasdag(d) {
     var dag = d.getDay(); // 0 = Sondag ... 6 = Saterdag
@@ -144,6 +163,8 @@
    * Return null as daar geen klasdata is nie (naweek / toekoms), anders
    * { ingeskandeer: [{ student, tyd }], nieIngeskandeer: [student] }.
    */
+  // Hierdie funksie werk uit watter studente op 'n dag ingeskandeer het
+  // en watter nie (voorbeeld-data, nie regte skanderings nie).
   function kryBywoning(klas, datum) {
     if (!isKlasdag(datum)) return null;
 
@@ -151,6 +172,8 @@
     var ingeskandeer = [];
     var nieIngeskandeer = [];
 
+    // Vir elke student: omtrent 78% kans dat hy/sy ingeskandeer het,
+    // met 'n tyd kort na 08:00; anders gaan die student op die afwesig-lys.
     klas.studente.forEach(function (s) {
       if (rand() < 0.78) {
         var minuut = Math.floor(rand() * 25);
@@ -167,6 +190,8 @@
   }
 
   // ----- Kaartjies (selfde markup as kampus.js user cards) -----
+  // Hierdie funksie bou 'n klein kaartjie met 'n student se naam en
+  // ekstra inligting, wat in die lyste gewys word.
   function createStudentCard(student, subtitle) {
     var card = document.createElement('div');
     card.className = 'user-card';
@@ -189,6 +214,7 @@
     return card;
   }
 
+  // Hierdie funksie wys 'n boodskap in 'n lys as daar niks is om te wys nie.
   function renderLeegBoodskap(container, boodskap) {
     container.innerHTML = '';
     var empty = document.createElement('div');
@@ -204,12 +230,15 @@
   }
 
   // ----- Dashboard rendering -----
+  // Hierdie funksie teken die bywoningspaneel: die tellings bo-aan en die
+  // twee lyste (ingeskandeer / nie ingeskandeer) vir die gekose dag.
   function renderDashboard() {
     var bywoning = kryBywoning(currentKlas, selectedDate);
 
     if (dashDatum) dashDatum.textContent = formatDatum(selectedDate);
     if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: ' + currentKlas.studente.length;
 
+    // Geen klasdata (naweek of toekoms): wys strepies en 'n boodskap.
     if (!bywoning) {
       if (dashInCount) dashInCount.textContent = 'Ingeskandeer: --';
       if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: --';
@@ -219,6 +248,7 @@
       return;
     }
 
+    // Werk uit watter persentasie van die klas ingeskandeer het.
     var totaal = currentKlas.studente.length;
     var persent = totaal > 0 ? Math.round((bywoning.ingeskandeer.length / totaal) * 100) : 0;
 
@@ -226,6 +256,7 @@
     if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: ' + bywoning.nieIngeskandeer.length;
     if (dashPercentCount) dashPercentCount.textContent = 'Bywoning: ' + persent + '%';
 
+    // Vul die lys van studente wat wel ingeskandeer het.
     if (dashInList) {
       dashInList.innerHTML = '';
       if (bywoning.ingeskandeer.length === 0) {
@@ -239,6 +270,7 @@
       }
     }
 
+    // Vul die lys van studente wat nie ingeskandeer het nie.
     if (dashOutList) {
       dashOutList.innerHTML = '';
       if (bywoning.nieIngeskandeer.length === 0) {
@@ -252,12 +284,14 @@
   }
 
   // ----- Kalender rendering -----
+  // Hierdie funksie kyk of twee datums op dieselfde dag val.
   function sameDay(a, b) {
     return a.getFullYear() === b.getFullYear() &&
            a.getMonth() === b.getMonth() &&
            a.getDate() === b.getDate();
   }
 
+  // Hierdie funksie teken die kalender vir die maand wat tans gewys word.
   function renderKalender() {
     if (!kalGrid || !kalTitle) return;
 
@@ -272,16 +306,20 @@
       kalGrid.appendChild(cell);
     });
 
+    // Werk uit op watter weeksdag die maand begin en hoeveel dae dit het.
     var eerste = new Date(displayYear, displayMonth, 1);
     var offset = (eerste.getDay() + 6) % 7; // Maandag in die eerste kolom
     var daeInMaand = new Date(displayYear, displayMonth + 1, 0).getDate();
 
+    // Sit leë blokkies in totdat ons by die eerste dag van die maand kom.
     for (var i = 0; i < offset; i++) {
       var leeg = document.createElement('div');
       leeg.className = 'kalender-dag kalender-dag--leeg';
       kalGrid.appendChild(leeg);
     }
 
+    // Maak 'n knoppie vir elke dag van die maand en merk vandag,
+    // die gekose dag en klasdae met hul eie kleure.
     for (var d = 1; d <= daeInMaand; d++) {
       (function (dagNommer) {
         var datum = new Date(displayYear, displayMonth, dagNommer);
@@ -295,6 +333,8 @@
         if (sameDay(datum, selectedDate)) cell.classList.add('kalender-dag--gekies');
         if (isKlasdag(datum)) cell.classList.add('kalender-dag--klasdag');
 
+        // As jy op 'n dag klik, word daardie dag gekies en die bladsy
+        // word oorgeteken met daardie dag se bywoning.
         cell.addEventListener('click', function () {
           selectedDate = datum;
           renderKalender();
@@ -307,6 +347,7 @@
   }
 
   // ----- Klasregister (regterpaneel-lys) -----
+  // Hierdie funksie wys die volle klaslys van die gekose klas.
   function renderRoster() {
     if (!rosterList) return;
     rosterList.innerHTML = '';
@@ -316,6 +357,8 @@
     applyRosterFilter();
   }
 
+  // Hierdie funksie steek studente in die klaslys weg wat nie by die
+  // soekwoord pas nie.
   /** Hide roster rows that do not contain the search text. */
   function applyRosterFilter() {
     if (!rosterSearch || !rosterList) return;
@@ -329,6 +372,7 @@
   }
 
   // ----- Klas dropdown -----
+  // Hierdie funksie vul die "Kies Klas" keuselys met al die klasse.
   function populateKlasSelect() {
     if (!klasSelect) return;
     klasSelect.innerHTML = '';
@@ -341,6 +385,7 @@
   }
 
   // ----- Event wiring -----
+  // As die gebruiker 'n ander klas kies, wys die nuwe klas se data.
   if (klasSelect) {
     klasSelect.addEventListener('change', function () {
       var gekies = MOCK_KLASSE.filter(function (k) {
@@ -352,6 +397,7 @@
     });
   }
 
+  // Die pyltjie-knoppie wat die kalender een maand terug vat.
   if (kalPrev) {
     kalPrev.addEventListener('click', function () {
       displayMonth--;
@@ -363,6 +409,7 @@
     });
   }
 
+  // Die pyltjie-knoppie wat die kalender een maand vorentoe vat.
   if (kalNext) {
     kalNext.addEventListener('click', function () {
       displayMonth++;
@@ -374,11 +421,13 @@
     });
   }
 
+  // Elke keer as die gebruiker in die soekblokkie tik, word die lys gefiltreer.
   if (rosterSearch) {
     rosterSearch.addEventListener('input', applyRosterFilter);
   }
 
   // ----- Bootstrap -----
+  // Sodra die bladsy klaar gelaai het, word alles die eerste keer geteken.
   document.addEventListener('DOMContentLoaded', function () {
     populateKlasSelect();
     renderKalender();

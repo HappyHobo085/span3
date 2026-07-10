@@ -1,5 +1,7 @@
+<!-- koshuis.html — Die Koshuis-bladsy. Wys wie tans by die koshuis in- en uitgeteken is, hoeveel inwoners daar is, en 'n soekbare lys van die koshuis se studente. -->
 <!DOCTYPE html>
 <html lang="en">
+<!-- Kop van die bladsy: titel, lettertipes en stylblad -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +11,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Navigasiebalk: skakels na die ander bladsye van die webwerf -->
   <nav class="navbar">
     <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
     <a href="home.html">Tuis</a>
@@ -17,7 +20,9 @@
     <a href="events.html">Events</a>
   </nav>
 
+  <!-- Hoofdeel van die bladsy -->
   <main class="page" id="home-page">
+    <!-- Boonste beheer: keuselys om 'n koshuis te kies (word deur koshuis.js ingevul) -->
     <section class="top-controls" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="data-select">Kies Koshuis</label>
@@ -25,19 +30,23 @@
       </div>
     </section>
 
-    <!-- Two-panel layout -->
+    <!-- Twee panele langs mekaar: paneelbord links, studente-lys regs -->
     <section class="panels">
-      <!-- Left: live dashboard -->
+      <!-- Linkerkant: paneelbord met tellings en naamlyste (word deur koshuis.js ingevul) -->
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
+          <!-- Blokkies wat wys hoeveel studente in- en uitgeteken is -->
           <div class="card" id="dash-student-in-count">Studente ingeteken: --</div>
           <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
+          <!-- Blokkie wat wys hoeveel inwoners die koshuis het teenoor sy kapasiteit -->
           <div class="card wide" id="dash-kapasiteit-card">Inwoners: -- / --</div>
+          <!-- Lys van studente wat tans ingeteken is -->
           <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
             <strong>Studente tans ingeteken</strong>
             <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
           </div>
+          <!-- Lys van studente wat uitgeteken is -->
           <div class="card wide" id="dash-student-out-card" style="flex-direction:column;align-items:stretch">
             <strong>Studente uitgeteken</strong>
             <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
@@ -45,23 +54,27 @@
         </div>
       </article>
 
-      <!-- Right: searchable list of the koshuis se studente -->
+      <!-- Regterkant: soekbare lys van die koshuis se studente -->
       <article class="glass-card panel" aria-label="Lys">
         <h2>Lys</h2>
+        <!-- Soekblokkie vir die studente-lys -->
         <div class="list-search">
           <input class="glass-input" type="search" id="list-search"
                  aria-label="Soek in Lys" placeholder="Soek student...">
         </div>
+        <!-- Hier word die studente se kaartjies gewys -->
         <div id="data-list" class="admin-list" aria-label="Student lys"></div>
       </article>
     </section>
   </main>
 
+  <!-- Onderste balk met 'n knoppie om terug te gaan na die tuisblad -->
   <div class="action-bar">
     <button class="btn-outline" type="button"
             onclick="window.location.href='home.html'">← Terug</button>
   </div>
 
+  <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
   <script src="koshuis.js"></script>

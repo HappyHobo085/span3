@@ -1,5 +1,12 @@
 <!DOCTYPE html>
+<!--
+  admin.html — Die Admin-bladsy van die MOON kampus-toegangstelsel.
+  Hier kan die administrateur gebruikers, kampusse, lokale en koshuise
+  bestuur: nuwes skep, bestaandes wysig, en oues verwyder.
+  Die logika (wat gebeur as jy klik) sit in admin.js.
+-->
 <html lang="en">
+<!-- Kop-gedeelte: die bladsy se titel, lettertipes en stylblad -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +17,7 @@
 </head>
 <body>
   <!-- Admin toegang: slegs admins -->
+  <!-- Navigasie-balk: skakels na die ander bladsye en die "Teken Uit" knoppie -->
   <nav class="navbar">
     <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
     <a href="home.html">Tuis</a>
@@ -22,8 +30,11 @@
     </div>
   </nav>
 
+  <!-- Hoof-inhoud van die Admin-bladsy -->
   <main class="page" id="admin-page">
     <!-- Action bar top -->
+    <!-- Aksie-knoppies bo-aan: skep 'n nuwe gebruiker, kampus, lokaal of koshuis -->
+
     <section class="top-controls space-between" aria-label="Admin aksies">
       <div class="control-group" style="flex-direction:row;gap:10px">
         <button class="btn-primary" id="open-create-user-modal" type="button">+ Skep Gebruiker</button>
@@ -39,7 +50,9 @@
 
     <!-- Two-column grid: Gebruikers|Lokale on row 1, Kampusse|Koshuise on row 2
          so that Kampusse en Koshuise op dieselfde horisontale vlak lê -->
+    <!-- Panele met die lyste: elke paneel het 'n soekveld en 'n lys -->
     <section class="panels">
+      <!-- Paneel 1: Lys van alle gebruikers, met soek en rol-filter -->
       <article class="glass-card panel" aria-label="Gebruikers">
         <h2>Gebruikers</h2>
         <div class="list-search" style="display:flex;gap:8px">
@@ -54,6 +67,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
+      <!-- Paneel 2: Lys van alle lokale (klaskamers), met soek en kampus-filter -->
       <article class="glass-card panel" aria-label="Lokale">
         <h2>Lokale</h2>
         <div class="list-search" style="display:flex;gap:8px">
@@ -68,6 +82,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
+      <!-- Paneel 3: Lys van alle kampusse, met 'n soekveld -->
       <article class="glass-card panel" aria-label="Kampusse">
         <h2>Kampusse</h2>
         <div class="list-search">
@@ -78,6 +93,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
+      <!-- Paneel 4: Lys van alle koshuise, met 'n soekveld -->
       <article class="glass-card panel" aria-label="Koshuise">
         <h2>Koshuise</h2>
         <div class="list-search">
@@ -88,6 +104,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
+      <!-- Paneel 5: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
       <article class="glass-card panel" aria-label="Outo-Uitskandering">
         <h2>Outo-Uitskandering</h2>
         <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">
@@ -109,13 +126,17 @@
     </section>
   </main>
 
+  <!-- Balk onderaan met 'n "Terug" knoppie na die tuisblad -->
   <div class="action-bar">
     <button class="btn-outline" type="button"
             onclick="window.location.href='home.html'">← Terug</button>
     <span></span>
   </div>
 
+  <!-- Modale vensters: hulle is weggesteek totdat 'n knoppie hulle oopmaak -->
+
   <!-- Modal 1: Skep Gebruiker -->
+  <!-- Venster met die vorm om 'n gebruiker te skep of te wysig -->
   <div id="createUserModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
       <h3 id="create-user-title">Skep Gebruiker</h3>
@@ -173,6 +194,7 @@
   </div>
 
   <!-- Modal 2: Bestuur Rolle -->
+  <!-- Venster om 'n gebruiker se rolle by te voeg of te verwyder -->
   <div id="roleModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
       <h3 id="role-modal-title">Bestuur Rolle — <span id="role-modal-user-name">Gebruiker</span></h3>
@@ -198,6 +220,7 @@
   </div>
 
   <!-- Modal 3: Verander Wagwoord -->
+  <!-- Venster om 'n gebruiker se wagwoord te verander -->
   <div id="passwordModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
       <h3 id="password-modal-title">Verander Wagwoord — <span id="password-modal-user-name">Gebruiker</span></h3>
@@ -217,6 +240,7 @@
   </div>
 
   <!-- Modal 4: Skep Kampus -->
+  <!-- Venster met die vorm om 'n kampus te skep of te wysig -->
   <div id="createKampusModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-kampus-title">
       <h3 id="create-kampus-title">Skep Kampus</h3>
@@ -234,6 +258,7 @@
   </div>
 
   <!-- Modal 5: Skep Koshuis -->
+  <!-- Venster met die vorm om 'n koshuis te skep of te wysig -->
   <div id="createKoshuisModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-koshuis-title">
       <h3 id="create-koshuis-title">Skep Koshuis</h3>
@@ -265,6 +290,7 @@
   </div>
 
     <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
+  <!-- Venster met die vorm om 'n lokaal (klaskamer) te skep of te wysig -->
   <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
       <h3 id="class-modal-title">Skep nuwe klas</h3>
@@ -287,6 +313,9 @@
     </div>
   </div>
 
+  <!-- Skripte: die kode wat die bladsy laat werk -->
+  <!-- website_api_calls.js praat met die bediener, main.js is gedeelde kode,
+       en admin.js beheer hierdie spesifieke bladsy -->
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
   <script src="admin.js"></script>
