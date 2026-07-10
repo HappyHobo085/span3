@@ -110,17 +110,21 @@ class _TuisTabState extends State<_TuisTab> {
   }
 
   String _formatTime(dynamic value) {
-    if (value == null) return 'Geen scan';
+  if (value == null) return 'Geen scan';
 
-    try {
-      final dt = DateTime.parse(value.toString());
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '$h:$m';
-    } catch (_) {
-      return value.toString();
-    }
+  try {
+    final dt = DateTime.parse(value.toString()).add(
+      const Duration(hours: 2),
+    );
+
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+
+    return '$h:$m';
+  } catch (_) {
+    return value.toString();
   }
+}
 
   @override
   Widget build(BuildContext context) {

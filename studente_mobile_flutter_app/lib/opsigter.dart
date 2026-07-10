@@ -413,16 +413,31 @@ class _KampusPageState extends State<_KampusPage> {
   }
 
   String _detail(Map<String, dynamic> item) {
-    final rigting = item['Rigting']?.toString() ?? '';
-    final metode = item['Metode']?.toString() ?? '';
-    final tyd = item['Tydstempel']?.toString() ?? '';
+  final rigting = item['Rigting']?.toString() ?? '';
+  final metode = item['Metode']?.toString() ?? '';
+  final tyd = item['Tydstempel']?.toString() ?? '';
 
-    final kortTyd = tyd.length >= 16 ? tyd.substring(11, 16) : tyd;
+  String kortTyd = '';
 
-    return [rigting, metode, kortTyd]
-        .where((v) => v.trim().isNotEmpty)
-        .join(' · ');
+  if (tyd.isNotEmpty) {
+    try {
+      final dt = DateTime.parse(tyd).add(
+        const Duration(hours: 2),
+      );
+
+      final uur = dt.hour.toString().padLeft(2, '0');
+      final minuut = dt.minute.toString().padLeft(2, '0');
+
+      kortTyd = '$uur:$minuut';
+    } catch (_) {
+      kortTyd = tyd.length >= 16 ? tyd.substring(11, 16) : tyd;
+    }
   }
+
+  return [rigting, metode, kortTyd]
+      .where((v) => v.trim().isNotEmpty)
+      .join(' · ');
+}
 
   @override
   Widget build(BuildContext context) {
