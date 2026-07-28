@@ -558,3 +558,30 @@ class FunksieBesoeker(FunksieBesoekerBase):
     class Config:
         from_attributes = True
 
+
+# --- Inline Request Models (extracted from main.py) ---
+
+class StudentKlasScanRequest(BaseModel):
+    nfc_uid: str
+    rigting: str = "IN"
+
+class WagteStudentScanRequest(BaseModel):
+    student_nom_or_id: str
+    lokasie_id: int
+    rigting: str   # IN / UIT
+    metode: str    # NFC / QR
+
+class WagteProfileScanRequest(BaseModel):
+    scan_kode: str
+
+class WagteProfileVerifyRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    rigting: str
+    metode: str
+
+class WagteProfileDeclineRequest(BaseModel):
+    gebruiker_id: int
+    kampus_id: int
+    metode: str = "QR"
+
