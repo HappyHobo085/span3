@@ -360,6 +360,104 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     );
   }
 
+  Future<void> _openManualEntry() async {
+    if (_loading) return;
+
+    FocusScope.of(context).unfocus();
+    final manualController = TextEditingController();
+
+    final nommer = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF111827),
+          title: const Text(
+            'Handmatige Invoer',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            controller: manualController,
+            autofocus: true,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.done,
+            style: GoogleFonts.inter(color: kText1),
+            decoration: InputDecoration(
+              labelText: 'Student-, personeel- of ID-nommer',
+              labelStyle: GoogleFonts.inter(color: kTextMuted),
+              hintText: 'Tik die nommer hier',
+              hintStyle: GoogleFonts.inter(color: kTextMuted),
+              filled: true,
+              fillColor: Colors.white10,
+              prefixIcon: const Icon(
+                Icons.badge_outlined,
+                color: kTextMuted,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Colors.white24),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Colors.white24),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: kAccent),
+              ),
+            ),
+            onSubmitted: (value) {
+              final clean = value.trim();
+              if (clean.isNotEmpty) {
+                Navigator.pop(dialogContext, clean);
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Kanselleer'),
+            ),
+            TextButton(
+              onPressed: () {
+                final clean = manualController.text.trim();
+
+                if (clean.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Tik eers ’n nommer in'),
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(dialogContext, clean);
+              },
+              child: const Text(
+                'Soek Profiel',
+                style: TextStyle(color: kAccent),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    manualController.dispose();
+
+    if (!mounted) return;
+
+    if (nommer == null || nommer.trim().isEmpty) {
+      FocusScope.of(context).requestFocus(_scannerFocusNode);
+      return;
+    }
+
+    await _submitScan(
+      nommer: nommer,
+      metode: 'HANDMATIG',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -433,6 +531,16 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                       icon: '📡',
                       borderColor: const Color(0x3300C2FF),
                       onTap: _loading ? () {} : _scanStudentNfc,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GlassTapPanel(
+                      label: _loading ? 'Besig...' : 'Tik Nommer Handmatig',
+                      subtitle: 'Student / Personeel / ID',
+                      icon: '⌨️',
+                      borderColor: const Color(0x33FFB020),
+                      onTap: _loading ? () {} : _openManualEntry,
                     ),
                   ],
                 ),
