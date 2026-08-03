@@ -363,92 +363,24 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   Future<void> _openManualEntry() async {
     if (_loading) return;
 
+    // Verwyder fokus eers van die versteekte QR-skandeerderveld.
+    _scannerFocusNode.unfocus();
     FocusScope.of(context).unfocus();
-    final manualController = TextEditingController();
 
     final nommer = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF111827),
-          title: const Text(
-            'Handmatige Invoer',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: TextField(
-            controller: manualController,
-            autofocus: true,
-            keyboardType: TextInputType.text,
-            textInputAction: TextInputAction.done,
-            style: GoogleFonts.inter(color: kText1),
-            decoration: InputDecoration(
-              labelText: 'Student-, personeel- of ID-nommer',
-              labelStyle: GoogleFonts.inter(color: kTextMuted),
-              hintText: 'Tik die nommer hier',
-              hintStyle: GoogleFonts.inter(color: kTextMuted),
-              filled: true,
-              fillColor: Colors.white10,
-              prefixIcon: const Icon(
-                Icons.badge_outlined,
-                color: kTextMuted,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Colors.white24),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Colors.white24),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: kAccent),
-              ),
-            ),
-            onSubmitted: (value) {
-              final clean = value.trim();
-              if (clean.isNotEmpty) {
-                Navigator.pop(dialogContext, clean);
-              }
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Kanselleer'),
-            ),
-            TextButton(
-              onPressed: () {
-                final clean = manualController.text.trim();
-
-                if (clean.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Tik eers ’n nommer in'),
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(dialogContext, clean);
-              },
-              child: const Text(
-                'Soek Profiel',
-                style: TextStyle(color: kAccent),
-              ),
-            ),
-          ],
-        );
-      },
+      builder: (_) => const _ManualEntryDialog(),
     );
-
-    manualController.dispose();
 
     if (!mounted) return;
 
     if (nommer == null || nommer.trim().isEmpty) {
-      FocusScope.of(context).requestFocus(_scannerFocusNode);
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) {
+          FocusScope.of(context).requestFocus(_scannerFocusNode);
+        }
+      });
       return;
     }
 
@@ -549,6 +481,118 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+class _ManualEntryDialog extends StatefulWidget {
+  const _ManualEntryDialog();
+
+  @override
+  State<_ManualEntryDialog> createState() => _ManualEntryDialogState();
+}
+
+class _ManualEntryDialogState extends State<_ManualEntryDialog> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final clean = _controller.text.trim();
+
+    if (clean.isEmpty) {
+      setState(() {
+        _errorText = 'Tik eers ’n nommer in';
+      });
+      _focusNode.requestFocus();
+      return;
+    }
+
+    Navigator.of(context).pop(clean);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF111827),
+      title: const Text(
+        'Handmatige Invoer',
+        style: TextStyle(color: Colors.white),
+      ),
+      content: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        keyboardType: TextInputType.text,
+        textInputAction: TextInputAction.done,
+        autocorrect: false,
+        enableSuggestions: false,
+        style: GoogleFonts.inter(color: kText1),
+        decoration: InputDecoration(
+          labelText: 'Student-, personeel- of ID-nommer',
+          labelStyle: GoogleFonts.inter(color: kTextMuted),
+          hintText: 'Tik die nommer hier',
+          hintStyle: GoogleFonts.inter(color: kTextMuted),
+          errorText: _errorText,
+          filled: true,
+          fillColor: Colors.white10,
+          prefixIcon: const Icon(
+            Icons.badge_outlined,
+            color: kTextMuted,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.white24),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.white24),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: kAccent),
+          ),
+        ),
+        onChanged: (_) {
+          if (_errorText != null) {
+            setState(() {
+              _errorText = null;
+            });
+          }
+        },
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Kanselleer'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text(
+            'Soek Profiel',
+            style: TextStyle(color: kAccent),
+          ),
+        ),
+      ],
     );
   }
 }
