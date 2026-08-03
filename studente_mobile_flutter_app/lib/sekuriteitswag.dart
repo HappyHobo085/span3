@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'dart:convert';
+import 'dart:async';
 
 // VERVANG NET die hele _KampusSkandeerPageState class met hierdie:
 class SekuriteitswagHomePage extends StatefulWidget {
@@ -210,17 +211,61 @@ class KampusSkandeerPage extends StatefulWidget {
   State<KampusSkandeerPage> createState() => _KampusSkandeerPageState();
 }
 class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
-  final TextEditingController _studentController = TextEditingController();
+  // Die MT90 se QR-skandeerder werk soos 'n fisiese sleutelbord.
+  // Hierdie versteekte veld bly gefokus om QR-kodes outomaties te ontvang.
+  final TextEditingController _scannerController = TextEditingController();
   final FocusNode _scannerFocusNode = FocusNode();
 
+  // Sigbare veld heel bo vir handmatige invoer.
+  final TextEditingController _manualController = TextEditingController();
+  final FocusNode _manualFocusNode = FocusNode();
+
+  Timer? _qrDebounce;
   bool _loading = false;
-  String _status = 'Klik Scan QR of scan NFC';
+  bool _nfcSessionActive = false;
+  bool _nfcAvailable = false;
+  String _status = 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
+
+  @override
+  void initState() {
+    super.initState();
+
+    _manualFocusNode.addListener(() {
+      if (!_manualFocusNode.hasFocus && !_loading) {
+        _focusQrScanner();
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _focusQrScanner();
+      await _startNfcListening();
+    });
+  }
 
   @override
   void dispose() {
-    _studentController.dispose();
+    _qrDebounce?.cancel();
+
+    // Moenie dispose vertraag deur hier te await nie.
+    if (_nfcSessionActive) {
+      NfcManager.instance.stopSession().catchError((_) {});
+    }
+
+    _scannerController.dispose();
     _scannerFocusNode.dispose();
+    _manualController.dispose();
+    _manualFocusNode.dispose();
     super.dispose();
+  }
+
+  void _focusQrScanner() {
+    if (!mounted || _loading || _manualFocusNode.hasFocus) return;
+
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted || _loading || _manualFocusNode.hasFocus) return;
+      _scannerFocusNode.requestFocus();
+    });
   }
 
   String _readNdefText(NfcTag tag) {
@@ -233,14 +278,90 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
       if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
           String.fromCharCodes(record.type) == 'T') {
         final payload = record.payload;
+
         if (payload.isNotEmpty) {
           final languageCodeLength = payload.first & 0x3F;
-          value = utf8.decode(payload.sublist(1 + languageCodeLength)).trim();
+          value = utf8
+              .decode(payload.sublist(1 + languageCodeLength))
+              .trim();
         }
       }
     }
 
     return value;
+  }
+
+  Future<void> _startNfcListening() async {
+    if (!mounted || _loading || _nfcSessionActive) return;
+
+    try {
+      final available = await NfcManager.instance.isAvailable();
+
+      if (!mounted) return;
+
+      setState(() {
+        _nfcAvailable = available;
+      });
+
+      if (!available) return;
+
+      _nfcSessionActive = true;
+
+      await NfcManager.instance.startSession(
+        onDiscovered: (tag) async {
+          if (_loading) return;
+
+          final nommer = _readNdefText(tag);
+          debugPrint('NOMMER GELEES VIA NFC = [$nommer]');
+
+          await _stopNfcListening();
+
+          if (!mounted) return;
+
+          if (nommer.trim().isEmpty) {
+            setState(() {
+              _status = 'NFC-tag bevat nie ’n leesbare nommer nie';
+            });
+            await _resumeAutomaticListening();
+            return;
+          }
+
+          await _submitScan(
+            nommer: nommer,
+            metode: 'NFC',
+          );
+        },
+      );
+    } catch (e) {
+      _nfcSessionActive = false;
+
+      if (!mounted) return;
+
+      setState(() {
+        _nfcAvailable = false;
+        _status = 'QR en handmatige invoer gereed – NFC is nie beskikbaar nie';
+      });
+    }
+  }
+
+  Future<void> _stopNfcListening() async {
+    if (!_nfcSessionActive) return;
+
+    try {
+      await NfcManager.instance.stopSession();
+    } catch (_) {
+      // Die sessie kan reeds deur Android gestop wees.
+    } finally {
+      _nfcSessionActive = false;
+    }
+  }
+
+  Future<void> _resumeAutomaticListening() async {
+    if (!mounted) return;
+
+    _scannerController.clear();
+    _focusQrScanner();
+    await _startNfcListening();
   }
 
   Future<void> _submitScan({
@@ -249,14 +370,24 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   }) async {
     final cleanNommer = nommer.trim();
 
-    if (cleanNommer.isEmpty) {
-      setState(() => _status = 'Geen nommer gelees nie');
-      return;
-    }
+    if (cleanNommer.isEmpty || _loading) return;
+
+    _qrDebounce?.cancel();
+    await _stopNfcListening();
+
+    if (!mounted) return;
+
+    _scannerFocusNode.unfocus();
+    _manualFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
 
     setState(() {
       _loading = true;
-      _status = 'Profiel laai...';
+      _status = metode == 'NFC'
+          ? 'NFC gelees – profiel laai...'
+          : metode == 'QR'
+              ? 'QR gelees – profiel laai...'
+              : 'Nommer ingevoer – profiel laai...';
     });
 
     try {
@@ -264,10 +395,14 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
       if (!mounted) return;
 
+      _scannerController.clear();
+      if (metode == 'HANDMATIG') {
+        _manualController.clear();
+      }
+
       setState(() {
         _loading = false;
-        _studentController.clear();
-        _status = 'Profiel gevind';
+        _status = 'Profiel gevind via $metode';
       });
 
       final verified = await Navigator.push<bool>(
@@ -286,11 +421,11 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
       setState(() {
         _status = verified == true
-            ? 'Scan suksesvol'
-            : 'Gereed vir volgende scan';
+            ? '$metode suksesvol verwerk'
+            : 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
       });
 
-      FocusScope.of(context).requestFocus(_scannerFocusNode);
+      await _resumeAutomaticListening();
     } catch (e) {
       if (!mounted) return;
 
@@ -301,57 +436,37 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         _status = msg;
       });
 
-      FocusScope.of(context).requestFocus(_scannerFocusNode);
+      await _resumeAutomaticListening();
     }
   }
 
-  void _startQrScan() {
-    setState(() {
-      _studentController.clear();
-      _status = 'Scan QR nou...';
-    });
+  // Sommige skandeerders stuur die hele waarde in een slag;
+  // ander stuur karakters vinnig een vir een. Die kort debounce hanteer albei.
+  void _handleQrChanged(String value) {
+    if (_loading || _manualFocusNode.hasFocus) return;
 
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        FocusScope.of(context).requestFocus(_scannerFocusNode);
+    final clean = value.trim();
+    _qrDebounce?.cancel();
+
+    if (clean.isEmpty) return;
+
+    _qrDebounce = Timer(const Duration(milliseconds: 160), () {
+      if (!mounted || _loading || _manualFocusNode.hasFocus) return;
+
+      final latest = _scannerController.text.trim();
+      if (latest.isNotEmpty) {
+        _submitScan(
+          nommer: latest,
+          metode: 'QR',
+        );
       }
     });
   }
 
-  Future<void> _scanStudentNfc() async {
-    setState(() {
-      _loading = true;
-      _status = 'Hou student/personeel se tag teen MT90...';
-    });
+  void _handleQrSubmitted(String value) {
+    _qrDebounce?.cancel();
 
-    try {
-      await NfcManager.instance.startSession(
-        onDiscovered: (tag) async {
-          final nommer = _readNdefText(tag);
-          debugPrint('NOMMER GELEES VIA NFC = [$nommer]');
-
-          await NfcManager.instance.stopSession();
-
-          if (!mounted) return;
-
-          await _submitScan(
-            nommer: nommer,
-            metode: 'NFC',
-          );
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _status = 'NFC fout: $e';
-      });
-    }
-  }
-
-  void _handleScannerInput(String value) {
     final clean = value.trim();
-
     if (clean.isEmpty || _loading) return;
 
     _submitScan(
@@ -360,32 +475,21 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     );
   }
 
-  Future<void> _openManualEntry() async {
-    if (_loading) return;
+  Future<void> _submitManual() async {
+    final clean = _manualController.text.trim();
 
-    // Verwyder fokus eers van die versteekte QR-skandeerderveld.
-    _scannerFocusNode.unfocus();
-    FocusScope.of(context).unfocus();
-
-    final nommer = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _ManualEntryDialog(),
-    );
-
-    if (!mounted) return;
-
-    if (nommer == null || nommer.trim().isEmpty) {
-      Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted) {
-          FocusScope.of(context).requestFocus(_scannerFocusNode);
-        }
-      });
+    if (clean.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tik eers ’n student-, personeel- of ID-nommer in'),
+        ),
+      );
+      _manualFocusNode.requestFocus();
       return;
     }
 
     await _submitScan(
-      nommer: nommer,
+      nommer: clean,
       metode: 'HANDMATIG',
     );
   }
@@ -408,71 +512,125 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    TextField(
-                      controller: _studentController,
-                      focusNode: _scannerFocusNode,
-                      autofocus: true,
-                      keyboardType: TextInputType.none,
-                      showCursor: false,
-                      style: const TextStyle(color: Colors.transparent),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isCollapsed: true,
-                        contentPadding: EdgeInsets.zero,
+                    // Versteekte veld wat die MT90 se QR-skandeerder opvang.
+                    SizedBox(
+                      height: 1,
+                      width: 1,
+                      child: TextField(
+                        controller: _scannerController,
+                        focusNode: _scannerFocusNode,
+                        autofocus: true,
+                        keyboardType: TextInputType.none,
+                        showCursor: false,
+                        enableInteractiveSelection: false,
+                        style: const TextStyle(
+                          color: Colors.transparent,
+                          fontSize: 1,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isCollapsed: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: _handleQrChanged,
+                        onSubmitted: _handleQrSubmitted,
                       ),
-                      onChanged: _handleScannerInput,
-                      onSubmitted: _handleScannerInput,
                     ),
 
+                    // Die enigste sigbare invoerbalk – vir worst-case handmatige invoer.
                     GlassCard(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: TextField(
+                        controller: _manualController,
+                        focusNode: _manualFocusNode,
+                        enabled: !_loading,
+                        keyboardType: TextInputType.text,
+                        textInputAction: TextInputAction.search,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        style: GoogleFonts.inter(color: kText1),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Tik nommer handmatig...',
+                          hintStyle: GoogleFonts.inter(color: kTextMuted),
+                          prefixIcon: const Icon(
+                            Icons.keyboard_alt_outlined,
+                            color: kTextMuted,
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Soek profiel',
+                            onPressed: _loading ? null : _submitManual,
+                            icon: const Icon(
+                              Icons.search_rounded,
+                              color: kAccent,
+                            ),
+                          ),
+                        ),
+                        onTap: () {
+                          _scannerFocusNode.unfocus();
+                        },
+                        onSubmitted: (_) => _submitManual(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    GlassCard(
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
                           const Icon(
-                            Icons.qr_code_scanner,
+                            Icons.document_scanner_outlined,
                             color: kAccent,
-                            size: 54,
+                            size: 58,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
-                            _status,
+                            _loading ? 'Besig...' : _status,
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
                               color: kText1,
                               fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _nfcAvailable
+                                ? 'QR en NFC word outomaties opgetel'
+                                : 'QR word outomaties opgetel',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _AutoScanBadge(
+                                icon: Icons.qr_code_scanner_rounded,
+                                label: 'QR GEREED',
+                                active: !_loading,
+                              ),
+                              _AutoScanBadge(
+                                icon: Icons.nfc_rounded,
+                                label: _nfcAvailable
+                                    ? 'NFC GEREED'
+                                    : 'NFC AF',
+                                active: _nfcAvailable && !_loading,
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    GradientActionButton(
-                      label: _loading ? 'Besig...' : 'Skandeer QR',
-                      onTap: _loading ? () {} : _startQrScan,
-                      height: 52,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    GlassTapPanel(
-                      label: _loading ? 'Besig...' : 'Skandeer NFC',
-                      subtitle: 'Student / Personeel',
-                      icon: '📡',
-                      borderColor: const Color(0x3300C2FF),
-                      onTap: _loading ? () {} : _scanStudentNfc,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    GlassTapPanel(
-                      label: _loading ? 'Besig...' : 'Tik Nommer Handmatig',
-                      subtitle: 'Student / Personeel / ID',
-                      icon: '⌨️',
-                      borderColor: const Color(0x33FFB020),
-                      onTap: _loading ? () {} : _openManualEntry,
                     ),
                   ],
                 ),
@@ -485,114 +643,48 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   }
 }
 
+class _AutoScanBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
 
-class _ManualEntryDialog extends StatefulWidget {
-  const _ManualEntryDialog();
-
-  @override
-  State<_ManualEntryDialog> createState() => _ManualEntryDialogState();
-}
-
-class _ManualEntryDialogState extends State<_ManualEntryDialog> {
-  final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNode.requestFocus();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final clean = _controller.text.trim();
-
-    if (clean.isEmpty) {
-      setState(() {
-        _errorText = 'Tik eers ’n nommer in';
-      });
-      _focusNode.requestFocus();
-      return;
-    }
-
-    Navigator.of(context).pop(clean);
-  }
+  const _AutoScanBadge({
+    required this.icon,
+    required this.label,
+    required this.active,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF111827),
-      title: const Text(
-        'Handmatige Invoer',
-        style: TextStyle(color: Colors.white),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: active ? Colors.green.withOpacity(0.12) : Colors.white10,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active ? Colors.green.withOpacity(0.45) : Colors.white24,
+        ),
       ),
-      content: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        keyboardType: TextInputType.text,
-        textInputAction: TextInputAction.done,
-        autocorrect: false,
-        enableSuggestions: false,
-        style: GoogleFonts.inter(color: kText1),
-        decoration: InputDecoration(
-          labelText: 'Student-, personeel- of ID-nommer',
-          labelStyle: GoogleFonts.inter(color: kTextMuted),
-          hintText: 'Tik die nommer hier',
-          hintStyle: GoogleFonts.inter(color: kTextMuted),
-          errorText: _errorText,
-          filled: true,
-          fillColor: Colors.white10,
-          prefixIcon: const Icon(
-            Icons.badge_outlined,
-            color: kTextMuted,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: active ? Colors.green : kTextMuted,
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.white24),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: active ? Colors.green : kTextMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.white24),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: kAccent),
-          ),
-        ),
-        onChanged: (_) {
-          if (_errorText != null) {
-            setState(() {
-              _errorText = null;
-            });
-          }
-        },
-        onSubmitted: (_) => _submit(),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Kanselleer'),
-        ),
-        TextButton(
-          onPressed: _submit,
-          child: const Text(
-            'Soek Profiel',
-            style: TextStyle(color: kAccent),
-          ),
-        ),
-      ],
     );
   }
 }
