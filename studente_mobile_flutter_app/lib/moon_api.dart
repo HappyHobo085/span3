@@ -330,6 +330,85 @@ class SaamryStatusDto {
   }
 }
 
+
+
+class BesoekerUitnodigingDto {
+  final int uitnodigingId;
+  final String naam;
+  final String van;
+  final String selfoon;
+  final String rede;
+  final String otp;
+  final String status;
+  final DateTime geskepOp;
+  final DateTime vervalOp;
+  final DateTime? besluitOp;
+  final int gasheerId;
+  final String gasheerNaam;
+  final String? gasheerSelfoon;
+  final int? kampusId;
+  final String? kampusNaam;
+
+  BesoekerUitnodigingDto({
+    required this.uitnodigingId,
+    required this.naam,
+    required this.van,
+    required this.selfoon,
+    required this.rede,
+    required this.otp,
+    required this.status,
+    required this.geskepOp,
+    required this.vervalOp,
+    this.besluitOp,
+    required this.gasheerId,
+    required this.gasheerNaam,
+    this.gasheerSelfoon,
+    this.kampusId,
+    this.kampusNaam,
+  });
+
+  factory BesoekerUitnodigingDto.fromJson(Map<String, dynamic> json) {
+    final gasheerRaw = json['gasheer'];
+    final gasheer = gasheerRaw is Map
+        ? Map<String, dynamic>.from(gasheerRaw)
+        : <String, dynamic>{};
+
+    final kampusRaw = json['kampus'];
+    final kampus = kampusRaw is Map
+        ? Map<String, dynamic>.from(kampusRaw)
+        : <String, dynamic>{};
+
+    return BesoekerUitnodigingDto(
+      uitnodigingId: (json['uitnodiging_id'] as num).toInt(),
+      naam: json['naam']?.toString() ?? '',
+      van: json['van']?.toString() ?? '',
+      selfoon: json['selfoon']?.toString() ?? '',
+      rede: json['rede']?.toString() ?? 'Besoek',
+      otp: json['otp']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'HANGEND',
+      geskepOp: DateTime.parse(json['geskep_op'].toString()).toLocal(),
+      vervalOp: DateTime.parse(json['verval_op'].toString()).toLocal(),
+      besluitOp: json['besluit_op'] == null
+          ? null
+          : DateTime.parse(json['besluit_op'].toString()).toLocal(),
+      gasheerId: (gasheer['gebruiker_id'] as num?)?.toInt() ?? 0,
+      gasheerNaam: gasheer['volle_naam']?.toString() ?? '',
+      gasheerSelfoon: gasheer['selfoon']?.toString(),
+      kampusId: (kampus['kampus_id'] as num?)?.toInt(),
+      kampusNaam: kampus['naam']?.toString(),
+    );
+  }
+
+  String get volleNaam => '$naam $van'.trim();
+
+  bool get isHangend =>
+      status == 'HANGEND' && DateTime.now().isBefore(vervalOp);
+
+  bool get isVerstreke =>
+      status == 'VERVAL' ||
+      (status == 'HANGEND' && !DateTime.now().isBefore(vervalOp));
+}
+
 class MoonApi {
   MoonApi._();
 
@@ -1123,6 +1202,149 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
       headers: _saamryHeaders(),
     );
     _decodeSaamryResponse(response);
+  }
+
+
+  /// -------------------------
+  /// Besoeker OTP-uitnodigings
+  /// -------------------------
+
+  static Map<String, String> _besoekerHeaders({bool jsonBody = false}) {
+    return {
+      if (jsonBody) 'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    };
+  }
+
+  static dynamic _decodeBesoekerResponse(http.Response response) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception(
+        'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        decoded is! Map ||
+        decoded['sukses'] != true) {
+      final message = decoded is Map
+          ? (decoded['fout'] ??
+              decoded['detail'] ??
+              'Besoeker-versoek het misluk')
+          : 'Besoeker-versoek het misluk';
+      throw Exception(message.toString());
+    }
+
+    return decoded['data'];
+  }
+
+  static Future<BesoekerUitnodigingDto> createVisitorInvite({
+    required String naam,
+    required String van,
+    required String selfoon,
+    String? rede,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/besoekers/uitnodigings'),
+      headers: _besoekerHeaders(jsonBody: true),
+      body: jsonEncode({
+        'naam': naam.trim(),
+        'van': van.trim(),
+        'selfoon': selfoon.trim(),
+        'rede': rede?.trim(),
+      }),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return BesoekerUitnodigingDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<List<BesoekerUitnodigingDto>> fetchMyVisitorInvites() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/besoekers/uitnodigings/my'),
+      headers: _besoekerHeaders(),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return ((data as List?) ?? const [])
+        .map(
+          (e) => BesoekerUitnodigingDto.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+  }
+
+  static Future<BesoekerUitnodigingDto> cancelVisitorInvite(
+    int uitnodigingId,
+  ) async {
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/besoekers/uitnodigings/$uitnodigingId/kanselleer',
+      ),
+      headers: _besoekerHeaders(),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return BesoekerUitnodigingDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<BesoekerUitnodigingDto> verifyVisitorOtp(String otp) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/besoekers/verifieer'),
+      headers: _besoekerHeaders(jsonBody: true),
+      body: jsonEncode({'otp': otp.trim()}),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return BesoekerUitnodigingDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<BesoekerUitnodigingDto> allowVisitorEntry({
+    required int uitnodigingId,
+    required int kampusId,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/besoekers/uitnodigings/$uitnodigingId/toelaat',
+      ),
+      headers: _besoekerHeaders(jsonBody: true),
+      body: jsonEncode({'kampus_id': kampusId}),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return BesoekerUitnodigingDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<BesoekerUitnodigingDto> denyVisitorEntry({
+    required int uitnodigingId,
+    required int kampusId,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        '$baseUrl/besoekers/uitnodigings/$uitnodigingId/weier',
+      ),
+      headers: _besoekerHeaders(jsonBody: true),
+      body: jsonEncode({'kampus_id': kampusId}),
+    );
+
+    final data = _decodeBesoekerResponse(response);
+    return BesoekerUitnodigingDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
   }
 
 }

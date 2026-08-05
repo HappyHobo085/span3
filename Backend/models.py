@@ -287,3 +287,40 @@ class SaamryGroepLid(Base):
         ),
     )
 
+
+
+# --- BESOEKER OTP UITNODIGINGS ---
+
+class BesoekerUitnodiging(Base):
+    __tablename__ = 'besoeker_uitnodiging'
+
+    Uitnodiging_ID   = Column(Integer, primary_key=True, index=True)
+    Gasheer_ID       = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    BES_Naam         = Column(String(100), nullable=False)
+    BES_Van          = Column(String(100), nullable=False)
+    BES_Selfoon_Nr   = Column(String(20), nullable=False)
+    BES_Rede         = Column(String(250), nullable=False, default='Besoek')
+    BES_OTP          = Column(String(6), nullable=False)
+    # Dieselfde as BES_OTP terwyl die uitnodiging aktief is.
+    # Word NULL wanneer dit gebruik, geweier, gekanselleer of verval het.
+    # PostgreSQL laat verskeie NULL-waardes in 'n UNIQUE kolom toe, sodat
+    # ses-syfer OTP's later veilig hergebruik kan word.
+    BES_Aktief_Sleutel = Column(String(6), nullable=True, unique=True)
+    BES_Status       = Column(String(20), nullable=False, default='HANGEND')
+    BES_Geskep_Op    = Column(DateTime, default=datetime.utcnow, nullable=False)
+    BES_Verval_Op    = Column(DateTime, nullable=False)
+    BES_Besluit_Op   = Column(DateTime, nullable=True)
+    Verwerk_Deur_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
+    Kampus_ID        = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
+
+    gasheer = relationship('Gebruikers', foreign_keys=[Gasheer_ID])
+    verwerk_deur = relationship('Gebruikers', foreign_keys=[Verwerk_Deur_ID])
+    kampus = relationship('Kampus', foreign_keys=[Kampus_ID])
+
+    __table_args__ = (
+        CheckConstraint(
+            '"BES_Status" IN (\'HANGEND\', \'TOEGELAAT\', \'GEWEIER\', '
+            '\'GEKANSELLEER\', \'VERVAL\')',
+            name='ck_besoeker_uitnodiging_status',
+        ),
+    )

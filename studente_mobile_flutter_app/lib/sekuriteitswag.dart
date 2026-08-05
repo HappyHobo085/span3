@@ -160,10 +160,23 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                             icon: '👤',
                             borderColor: const Color(0x3300C2FF),
                             onTap: () {
+                              if (_gekoseKampus == null ||
+                                  _gekoseKampus!.kampusId == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Kies eers ’n kampus'),
+                                  ),
+                                );
+                                return;
+                              }
+
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const VisitorVerifyPage(),
+                                  builder: (_) => VisitorVerifyPage(
+                                    kampusId: _gekoseKampus!.kampusId!,
+                                    kampusNaam: _gekoseKampus!.naam,
+                                  ),
                                 ),
                               );
                             },
@@ -1189,7 +1202,14 @@ class _OnverwagteBesoekerPageState extends State<OnverwagteBesoekerPage> {
 }
 
 class VisitorVerifyPage extends StatefulWidget {
-  const VisitorVerifyPage({super.key});
+  final int kampusId;
+  final String kampusNaam;
+
+  const VisitorVerifyPage({
+    super.key,
+    required this.kampusId,
+    required this.kampusNaam,
+  });
 
   @override
   State<VisitorVerifyPage> createState() => _VisitorVerifyPageState();
@@ -1198,7 +1218,10 @@ class VisitorVerifyPage extends StatefulWidget {
 class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
   final TextEditingController _otpController = TextEditingController();
 
-  bool _verified = false;
+  bool _loading = false;
+  bool _decisionLoading = false;
+  BesoekerUitnodigingDto? _invite;
+  String? _error;
 
   @override
   void dispose() {
@@ -1206,53 +1229,218 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     super.dispose();
   }
 
-  void _verifyOtp() {
-    if (_otpController.text.trim().isEmpty) {
+  String _formatDateTime(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$day/$month/${value.year} $hour:$minute';
+  }
+
+  Future<void> _verifyOtp() async {
+    if (_loading || _decisionLoading) return;
+
+    final otp = _otpController.text.trim();
+
+    if (otp.length != 6 || int.tryParse(otp) == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tik eers die OTP in')),
+        const SnackBar(content: Text('OTP moet presies 6 syfers wees')),
       );
       return;
     }
 
+    FocusScope.of(context).unfocus();
+
     setState(() {
-      _verified = true;
+      _loading = true;
+      _invite = null;
+      _error = null;
+    });
+
+    try {
+      final invite = await MoonApi.verifyVisitorOtp(otp);
+
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _invite = invite;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<bool> _confirmDecision({
+    required String title,
+    required String message,
+    required String action,
+    required Color actionColor,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF111827),
+            title: Text(
+              title,
+              style: const TextStyle(color: Colors.white),
+            ),
+            content: Text(
+              message,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Kanselleer'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(
+                  action,
+                  style: TextStyle(color: actionColor),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _allowEntry() async {
+    final invite = _invite;
+    if (invite == null || _decisionLoading) return;
+
+    final confirmed = await _confirmDecision(
+      title: 'Laat Toegang Toe',
+      message:
+          'Laat ${invite.volleNaam} toegang toe by ${widget.kampusNaam}?',
+      action: 'Laat Toe',
+      actionColor: Colors.green,
+    );
+    if (!confirmed) return;
+
+    setState(() => _decisionLoading = true);
+
+    try {
+      final updated = await MoonApi.allowVisitorEntry(
+        uitnodigingId: invite.uitnodigingId,
+        kampusId: widget.kampusId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _decisionLoading = false;
+        _invite = updated;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Besoekertoegang toegestaan'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _decisionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _denyEntry() async {
+    final invite = _invite;
+    if (invite == null || _decisionLoading) return;
+
+    final confirmed = await _confirmDecision(
+      title: 'Weier Toegang',
+      message:
+          'Weier ${invite.volleNaam} se toegang by ${widget.kampusNaam}?',
+      action: 'Weier',
+      actionColor: Colors.red,
+    );
+    if (!confirmed) return;
+
+    setState(() => _decisionLoading = true);
+
+    try {
+      final updated = await MoonApi.denyVisitorEntry(
+        uitnodigingId: invite.uitnodigingId,
+        kampusId: widget.kampusId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _decisionLoading = false;
+        _invite = updated;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Besoekertoegang geweier'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _decisionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  void _nextVisitor() {
+    setState(() {
+      _invite = null;
+      _error = null;
+      _otpController.clear();
     });
   }
 
-  void _allowEntry() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Colors.green,
-        content: Text(
-          'Toegang toegestaan',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  void _denyEntry() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Colors.red,
-        content: Text(
-          'Toegang geweier',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
-    );
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'TOEGELAAT':
+        return Colors.green;
+      case 'GEWEIER':
+        return Colors.red;
+      case 'VERVAL':
+      case 'GEKANSELLEER':
+        return kTextMuted;
+      default:
+        return Colors.orange;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final invite = _invite;
+    final pending = invite?.status == 'HANGEND';
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(
+            AppScreenHeader(
               title: 'Besoeker OTP',
-              subtitle: 'Verifieer besoeker',
+              subtitle: widget.kampusNaam,
               showBack: true,
             ),
             Expanded(
@@ -1277,7 +1465,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                           const SizedBox(height: 14),
                           GlassInput(
                             controller: _otpController,
-                            hintText: 'Tik besoeker OTP',
+                            hintText: 'Tik 6-syfer besoeker OTP',
                             keyboardType: TextInputType.number,
                             prefixIcon: const Icon(
                               Icons.password_rounded,
@@ -1287,114 +1475,172 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                           ),
                           const SizedBox(height: 16),
                           GradientActionButton(
-                            label: 'Verifieer OTP',
-                            onTap: _verifyOtp,
+                            label: _loading ? 'VERIFIEER...' : 'VERIFIEER OTP',
+                            onTap: _loading ? () {} : _verifyOtp,
                             height: 50,
                           ),
                         ],
                       ),
                     ),
 
-                    if (_verified) ...[
-                      const SizedBox(height: 18),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.red.withOpacity(0.6)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: Colors.red,
+                              size: 42,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                color: Colors.red,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
+                    if (invite != null) ...[
+                      const SizedBox(height: 18),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.14),
+                          color: _statusColor(invite.status).withOpacity(0.12),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.green,
+                            color: _statusColor(invite.status),
                             width: 1.5,
                           ),
                         ),
                         child: Column(
                           children: [
-                            const Icon(
-                              Icons.verified_rounded,
-                              color: Colors.green,
-                              size: 60,
+                            Icon(
+                              pending
+                                  ? Icons.verified_user_outlined
+                                  : invite.status == 'TOEGELAAT'
+                                      ? Icons.check_circle_rounded
+                                      : Icons.cancel_rounded,
+                              color: _statusColor(invite.status),
+                              size: 58,
                             ),
-
                             const SizedBox(height: 12),
-
                             Text(
-                              'GELDIGE BESOEKER',
+                              pending
+                                  ? 'GELDIGE BESOEKER'
+                                  : invite.status,
                               style: GoogleFonts.inter(
-                                color: Colors.green,
+                                color: _statusColor(invite.status),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.1,
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
                             Text(
-                              'Connor Smith',
+                              invite.volleNaam,
+                              textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 color: kText1,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-
                             const SizedBox(height: 4),
-
                             Text(
-                              'Genooi deur Steven Nel',
+                              'Genooi deur ${invite.gasheerNaam}',
+                              textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 color: kTextMuted,
                                 fontSize: 13,
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
                             GlassCard(
                               padding: const EdgeInsets.all(14),
                               child: Column(
                                 children: [
                                   _VisitorInfoRow(
+                                    label: 'Selfoon',
+                                    value: invite.selfoon,
+                                  ),
+                                  const _VisitorDivider(),
+                                  _VisitorInfoRow(
                                     label: 'Rede',
-                                    value: 'Vergadering',
+                                    value: invite.rede,
                                   ),
                                   const _VisitorDivider(),
                                   _VisitorInfoRow(
                                     label: 'OTP',
-                                    value: _otpController.text.trim(),
+                                    value: invite.otp,
                                   ),
                                   const _VisitorDivider(),
-                                  const _VisitorInfoRow(
+                                  _VisitorInfoRow(
+                                    label: 'Verval',
+                                    value: _formatDateTime(invite.vervalOp),
+                                  ),
+                                  const _VisitorDivider(),
+                                  _VisitorInfoRow(
                                     label: 'Status',
-                                    value: 'Hangend',
+                                    value: invite.status,
                                   ),
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 18),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: GradientActionButton(
-                                    label: 'Laat Toegang Toe',
-                                    onTap: _allowEntry,
-                                    height: 48,
+                            if (pending)
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  SizedBox(
+                                    width: 150,
+                                    child: GradientActionButton(
+                                      label: _decisionLoading
+                                          ? 'BESIG...'
+                                          : 'LAAT TOE',
+                                      onTap: _decisionLoading
+                                          ? () {}
+                                          : _allowEntry,
+                                      height: 48,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlineActionButton(
-                                    label: 'Weier Toegang',
-                                    onTap: _denyEntry,
-                                    height: 48,
+                                  SizedBox(
+                                    width: 150,
+                                    child: OutlineActionButton(
+                                      label: _decisionLoading
+                                          ? 'BESIG...'
+                                          : 'WEIER',
+                                      onTap: _decisionLoading
+                                          ? () {}
+                                          : _denyEntry,
+                                      height: 48,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              )
+                            else
+                              OutlineActionButton(
+                                label: 'Volgende Besoeker',
+                                onTap: _nextVisitor,
+                                height: 48,
+                              ),
                           ],
                         ),
                       ),

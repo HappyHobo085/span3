@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
@@ -1659,8 +1661,18 @@ class _VisitorsTabState extends State<_VisitorsTab> {
   final TextEditingController _selfoonController = TextEditingController();
   final TextEditingController _redeController = TextEditingController();
 
-  String? _otp;
-  final List<Map<String, String>> _invites = [];
+  bool _loading = true;
+  bool _creating = false;
+  String? _error;
+  int? _busyInviteId;
+  BesoekerUitnodigingDto? _latestInvite;
+  List<BesoekerUitnodigingDto> _invites = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvites();
+  }
 
   @override
   void dispose() {
@@ -1671,7 +1683,30 @@ class _VisitorsTabState extends State<_VisitorsTab> {
     super.dispose();
   }
 
-  void _generateOtp() {
+  Future<void> _loadInvites() async {
+    try {
+      final invites = await MoonApi.fetchMyVisitorInvites();
+
+      if (!mounted) return;
+
+      setState(() {
+        _invites = invites;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _createInvite() async {
+    if (_creating) return;
+
     final naam = _naamController.text.trim();
     final van = _vanController.text.trim();
     final selfoon = _selfoonController.text.trim();
@@ -1684,242 +1719,578 @@ class _VisitorsTabState extends State<_VisitorsTab> {
       return;
     }
 
-    final generated = DateTime.now()
-        .millisecondsSinceEpoch
-        .toString()
-        .substring(7, 13);
+    setState(() => _creating = true);
 
-    setState(() {
-      _otp = generated;
-      _invites.insert(0, {
-        'naam': '$naam $van',
-        'selfoon': selfoon,
-        'rede': rede.isEmpty ? 'Besoek' : rede,
-        'otp': generated,
-        'status': 'Hangend',
+    try {
+      final invite = await MoonApi.createVisitorInvite(
+        naam: naam,
+        van: van,
+        selfoon: selfoon,
+        rede: rede.isEmpty ? 'Besoek' : rede,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _creating = false;
+        _latestInvite = invite;
+        _invites = [
+          invite,
+          ..._invites.where(
+            (item) => item.uitnodigingId != invite.uitnodigingId,
+          ),
+        ];
+        _naamController.clear();
+        _vanController.clear();
+        _selfoonController.clear();
+        _redeController.clear();
       });
 
-      _naamController.clear();
-      _vanController.clear();
-      _selfoonController.clear();
-      _redeController.clear();
-    });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Besoeker-uitnodiging is geskep'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _creating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copyOtp(BesoekerUitnodigingDto invite) async {
+    await Clipboard.setData(ClipboardData(text: invite.otp));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('OTP is gekopieer')),
+    );
+  }
+
+  Future<void> _shareInvite(
+    BuildContext shareContext,
+    BesoekerUitnodigingDto invite,
+  ) async {
+    final text = [
+      'MOON Besoeker-uitnodiging',
+      'Besoeker: ${invite.volleNaam}',
+      'OTP: ${invite.otp}',
+      'Geldig tot: ${_formatDateTime(invite.vervalOp)}',
+      'Wys hierdie OTP by kampussekuriteit.',
+    ].join('
+');
+
+    final renderBox = shareContext.findRenderObject() as RenderBox?;
+
+    await SharePlus.instance.share(
+      ShareParams(
+        text: text,
+        subject: 'MOON Besoeker OTP',
+        sharePositionOrigin: renderBox == null
+            ? null
+            : renderBox.localToGlobal(Offset.zero) & renderBox.size,
+      ),
+    );
+  }
+
+  Future<void> _cancelInvite(BesoekerUitnodigingDto invite) async {
+    if (_busyInviteId != null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text(
+          'Kanselleer uitnodiging',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Kanselleer ${invite.volleNaam} se OTP ${invite.otp}?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Nee'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Kanselleer OTP',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _busyInviteId = invite.uitnodigingId);
+
+    try {
+      final updated = await MoonApi.cancelVisitorInvite(
+        invite.uitnodigingId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _busyInviteId = null;
+        _invites = _invites
+            .map(
+              (item) => item.uitnodigingId == updated.uitnodigingId
+                  ? updated
+                  : item,
+            )
+            .toList();
+
+        if (_latestInvite?.uitnodigingId == updated.uitnodigingId) {
+          _latestInvite = updated;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _busyInviteId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  String _formatDateTime(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$day/$month/${value.year} $hour:$minute';
+  }
+
+  String _statusLabel(BesoekerUitnodigingDto invite) {
+    if (invite.isVerstreke) return 'VERVAL';
+    switch (invite.status) {
+      case 'TOEGELAAT':
+        return 'TOEGELAAT';
+      case 'GEWEIER':
+        return 'GEWEIER';
+      case 'GEKANSELLEER':
+        return 'GEKANSELLEER';
+      default:
+        return 'HANGEND';
+    }
+  }
+
+  Color _statusColor(BesoekerUitnodigingDto invite) {
+    final status = _statusLabel(invite);
+    switch (status) {
+      case 'TOEGELAAT':
+        return Colors.green;
+      case 'GEWEIER':
+      case 'GEKANSELLEER':
+        return Colors.red;
+      case 'VERVAL':
+        return kTextMuted;
+      default:
+        return Colors.orange;
+    }
+  }
+
+  Widget _inviteCard(BesoekerUitnodigingDto invite) {
+    final pending = invite.isHangend;
+    final busy = _busyInviteId == invite.uitnodigingId;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassCard(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: kAccent,
+                  size: 26,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        invite.volleNaam,
+                        style: GoogleFonts.inter(
+                          color: kText1,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        invite.rede,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _statusLabel(invite),
+                  style: GoogleFonts.inter(
+                    color: _statusColor(invite),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              children: [
+                Text(
+                  'OTP ${invite.otp}',
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+                Text(
+                  pending
+                      ? 'Verval ${_formatDateTime(invite.vervalOp)}'
+                      : 'Geskep ${_formatDateTime(invite.geskepOp)}',
+                  style: GoogleFonts.inter(
+                    color: kText2,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+            if (pending) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _copyOtp(invite),
+                    icon: const Icon(Icons.copy_rounded, size: 17),
+                    label: const Text('Kopieer'),
+                  ),
+                  Builder(
+                    builder: (shareContext) => TextButton.icon(
+                      onPressed: () => _shareInvite(shareContext, invite),
+                      icon: const Icon(Icons.share_rounded, size: 17),
+                      label: const Text('Deel'),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: busy ? null : () => _cancelInvite(invite),
+                    icon: const Icon(
+                      Icons.cancel_outlined,
+                      size: 17,
+                      color: Colors.red,
+                    ),
+                    label: Text(
+                      busy ? 'Besig...' : 'Kanselleer',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Besoeker',
-            style: GoogleFonts.inter(
-              color: kText1,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Nooi ’n besoeker kampus toe en genereer ’n OTP.',
-            style: GoogleFonts.inter(
-              color: kTextMuted,
-              fontSize: 12,
-            ),
-          ),
+    final activeCount = _invites.where((item) => item.isHangend).length;
 
-          const SizedBox(height: 18),
-
-          GlassCard(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Genooide besoeker',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                GlassInput(
-                  controller: _naamController,
-                  hintText: 'Naam',
-                  prefixIcon: const Icon(Icons.person, color: kTextMuted, size: 18),
-                ),
-
-                const SizedBox(height: 10),
-
-                GlassInput(
-                  controller: _vanController,
-                  hintText: 'Van',
-                  prefixIcon: const Icon(Icons.person_outline, color: kTextMuted, size: 18),
-                ),
-
-                const SizedBox(height: 10),
-
-                GlassInput(
-                  controller: _selfoonController,
-                  hintText: 'Selfoonnommer',
-                  keyboardType: TextInputType.phone,
-                  prefixIcon: const Icon(Icons.phone, color: kTextMuted, size: 18),
-                ),
-
-                const SizedBox(height: 10),
-
-                GlassInput(
-                  controller: _redeController,
-                  hintText: 'Rede vir besoek',
-                  prefixIcon: const Icon(Icons.description_outlined, color: kTextMuted, size: 18),
-                ),
-
-                const SizedBox(height: 16),
-
-                GradientActionButton(
-                  label: 'Genereer OTP',
-                  onTap: _generateOtp,
-                  height: 50,
-                ),
-              ],
-            ),
-          ),
-
-          if (_otp != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green, width: 1.5),
+    return RefreshIndicator(
+      onRefresh: _loadInvites,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Besoekers',
+              style: GoogleFonts.inter(
+                color: kText1,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Nooi ’n besoeker en deel ’n eenmalige 6-syfer OTP.',
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$activeCount van 5 aktiewe OTP’s',
+              style: GoogleFonts.inter(
+                color: activeCount >= 5 ? Colors.orange : kText2,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            GlassCard(
+              padding: const EdgeInsets.all(18),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 44),
-                  const SizedBox(height: 8),
                   Text(
-                    'Uitnodiging geskep',
+                    'NOOI BESOEKER',
                     style: GoogleFonts.inter(
-                      color: Colors.green,
-                      fontSize: 13,
+                      color: kTextMuted,
+                      fontSize: 9,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
                     ),
                   ),
                   const SizedBox(height: 14),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      _otp!,
-                      style: GoogleFonts.inter(
-                        color: kText1,
-                        fontSize: 38,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 6,
-                      ),
+                  GlassInput(
+                    controller: _naamController,
+                    hintText: 'Naam',
+                    prefixIcon: const Icon(
+                      Icons.person,
+                      color: kTextMuted,
+                      size: 18,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Deel OTP met besoeker',
-                    style: GoogleFonts.inter(
-                      color: kText2,
-                      fontSize: 12,
+                  const SizedBox(height: 10),
+                  GlassInput(
+                    controller: _vanController,
+                    hintText: 'Van',
+                    prefixIcon: const Icon(
+                      Icons.person_outline,
+                      color: kTextMuted,
+                      size: 18,
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  GlassInput(
+                    controller: _selfoonController,
+                    hintText: 'Selfoonnommer',
+                    keyboardType: TextInputType.phone,
+                    prefixIcon: const Icon(
+                      Icons.phone,
+                      color: kTextMuted,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GlassInput(
+                    controller: _redeController,
+                    hintText: 'Rede vir besoek',
+                    prefixIcon: const Icon(
+                      Icons.description_outlined,
+                      color: kTextMuted,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GradientActionButton(
+                    label: _creating
+                        ? 'OTP WORD GESKEP...'
+                        : activeCount >= 5
+                            ? 'MAKSIMUM 5 AKTIEWE OTP’S'
+                            : 'GENEREER OTP',
+                    onTap: _creating || activeCount >= 5
+                        ? () {}
+                        : _createInvite,
+                    height: 50,
                   ),
                 ],
               ),
             ),
-          ],
 
-          const SizedBox(height: 16),
-
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'My uitnodigings',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
+            if (_latestInvite != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: _latestInvite!.isHangend
+                      ? Colors.green.withOpacity(0.14)
+                      : Colors.white10,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _latestInvite!.isHangend
+                        ? Colors.green
+                        : Colors.white24,
+                    width: 1.5,
                   ),
                 ),
-
-                const SizedBox(height: 12),
-
-                if (_invites.isEmpty)
-                  Text(
-                    'Geen besoekers genooi nie',
-                    style: GoogleFonts.inter(
-                      color: kText2,
-                      fontSize: 13,
+                child: Column(
+                  children: [
+                    Icon(
+                      _latestInvite!.isHangend
+                          ? Icons.check_circle
+                          : Icons.info_outline,
+                      color: _latestInvite!.isHangend
+                          ? Colors.green
+                          : kTextMuted,
+                      size: 44,
                     ),
-                  )
-                else
-                  Column(
-                    children: _invites.map((invite) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.person_add_alt_1_rounded,
-                              color: kAccent,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    invite['naam']!,
-                                    style: GoogleFonts.inter(
-                                      color: kText1,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${invite['rede']} · OTP ${invite['otp']}',
-                                    style: GoogleFonts.inter(
-                                      color: kTextMuted,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              invite['status']!,
-                              style: GoogleFonts.inter(
-                                color: Colors.orange,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                    const SizedBox(height: 8),
+                    Text(
+                      _latestInvite!.isHangend
+                          ? 'UITNODIGING GESKEP'
+                          : _statusLabel(_latestInvite!),
+                      style: GoogleFonts.inter(
+                        color: _latestInvite!.isHangend
+                            ? Colors.green
+                            : _statusColor(_latestInvite!),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _latestInvite!.otp,
+                        style: GoogleFonts.inter(
+                          color: kText1,
+                          fontSize: 38,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 6,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Geldig tot ${_formatDateTime(_latestInvite!.vervalOp)}',
+                      style: GoogleFonts.inter(
+                        color: kText2,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (_latestInvite!.isHangend) ...[
+                      const SizedBox(height: 14),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _copyOtp(_latestInvite!),
+                            icon: const Icon(Icons.copy_rounded),
+                            label: const Text('Kopieer OTP'),
+                          ),
+                          Builder(
+                            builder: (shareContext) => TextButton.icon(
+                              onPressed: () => _shareInvite(
+                                shareContext,
+                                _latestInvite!,
+                              ),
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('Deel OTP'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MY UITNODIGINGS',
+                    style: GoogleFonts.inter(
+                      color: kTextMuted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                    ),
                   ),
-              ],
+                  const SizedBox(height: 12),
+                  if (_loading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(18),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_error != null)
+                    Column(
+                      children: [
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlineActionButton(
+                          label: 'Probeer Weer',
+                          onTap: _loadInvites,
+                          height: 44,
+                        ),
+                      ],
+                    )
+                  else if (_invites.isEmpty)
+                    Text(
+                      'Geen besoekers genooi nie',
+                      style: GoogleFonts.inter(
+                        color: kText2,
+                        fontSize: 13,
+                      ),
+                    )
+                  else
+                    Column(
+                      children: _invites
+                          .map(_inviteCard)
+                          .toList(),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

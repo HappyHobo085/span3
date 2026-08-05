@@ -111,3 +111,55 @@ def run_migrations(engine):
     except Exception as _migrasie_fout:
         print(f"Waarskuwing: migrasie 008 (Saamry) het misluk: {_migrasie_fout}")
 
+
+
+    # Migrasie 009: Besoeker-OTP uitnodigings
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS besoeker_uitnodiging (
+                    "Uitnodiging_ID" SERIAL PRIMARY KEY,
+                    "Gasheer_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "BES_Naam" VARCHAR(100) NOT NULL,
+                    "BES_Van" VARCHAR(100) NOT NULL,
+                    "BES_Selfoon_Nr" VARCHAR(20) NOT NULL,
+                    "BES_Rede" VARCHAR(250) NOT NULL DEFAULT 'Besoek',
+                    "BES_OTP" VARCHAR(6) NOT NULL,
+                    "BES_Aktief_Sleutel" VARCHAR(6) NULL,
+                    "BES_Status" VARCHAR(20) NOT NULL DEFAULT 'HANGEND',
+                    "BES_Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "BES_Verval_Op" TIMESTAMP NOT NULL,
+                    "BES_Besluit_Op" TIMESTAMP NULL,
+                    "Verwerk_Deur_ID" INT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Kampus_ID" INT NULL REFERENCES kampus("Kampus_ID"),
+                    CONSTRAINT ck_besoeker_uitnodiging_status
+                        CHECK ("BES_Status" IN (
+                            'HANGEND', 'TOEGELAAT', 'GEWEIER',
+                            'GEKANSELLEER', 'VERVAL'
+                        ))
+                )
+            """))
+
+            _conn.execute(text(
+                'CREATE UNIQUE INDEX IF NOT EXISTS '
+                'ux_besoeker_uitnodiging_aktief_sleutel '
+                'ON besoeker_uitnodiging ("BES_Aktief_Sleutel")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_besoeker_uitnodiging_gasheer '
+                'ON besoeker_uitnodiging ("Gasheer_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_besoeker_uitnodiging_status '
+                'ON besoeker_uitnodiging ("BES_Status")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_besoeker_uitnodiging_otp '
+                'ON besoeker_uitnodiging ("BES_OTP")'
+            ))
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 009 "
+            f"(Besoeker OTP-uitnodigings) het misluk: {_migrasie_fout}"
+        )

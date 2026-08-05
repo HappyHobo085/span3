@@ -14,7 +14,7 @@ from migrations import run_migrations
 
 from routers import (
     auth_routes, gebruikers, kampus, koshuis, lokasie,
-    nfc, wagte, student, dashboard, admin, saamry,
+    nfc, wagte, student, dashboard, admin, saamry, besoekers,
 )
 
 # Skep alle tabelle outomaties by opstart
@@ -79,6 +79,7 @@ app.include_router(student.router)
 app.include_router(dashboard.router)
 app.include_router(admin.router)
 app.include_router(saamry.router)
+app.include_router(besoekers.router)
 
 # --- Root ---
 

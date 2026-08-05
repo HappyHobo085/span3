@@ -602,3 +602,20 @@ class SaamryGroepCreate(BaseModel):
 class SaamryGroepNooiCreate(BaseModel):
     gebruiker_id: int
 
+
+
+# --- BESOEKER OTP SCHEMAS ---
+
+class BesoekerUitnodigingCreate(BaseModel):
+    naam: str
+    van: str
+    selfoon: str
+    rede: Optional[str] = None
+
+
+class BesoekerOtpVerifyRequest(BaseModel):
+    otp: str
+
+
+class BesoekerBesluitRequest(BaseModel):
+    kampus_id: int
