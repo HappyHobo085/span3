@@ -163,3 +163,73 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 009 "
             f"(Besoeker OTP-uitnodigings) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 010: Koppel toegangslogs aan Saamry-groep en bestuurder se heklog
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(
+                'ALTER TABLE toegangs_logs '
+                'ADD COLUMN IF NOT EXISTS "Saamry_Groep_ID" INT NULL'
+            ))
+            _conn.execute(text(
+                'ALTER TABLE toegangs_logs '
+                'ADD COLUMN IF NOT EXISTS "Saamry_Bestuurder_Log_ID" INT NULL'
+            ))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint c
+                        JOIN pg_attribute a
+                          ON a.attrelid = c.conrelid
+                         AND a.attnum = ANY(c.conkey)
+                        WHERE c.conrelid = 'toegangs_logs'::regclass
+                          AND c.contype = 'f'
+                          AND a.attname = 'Saamry_Groep_ID'
+                    ) THEN
+                        ALTER TABLE toegangs_logs
+                        ADD CONSTRAINT fk_toegangs_logs_saamry_groep
+                        FOREIGN KEY ("Saamry_Groep_ID")
+                        REFERENCES saamry_groep("Groep_ID");
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint c
+                        JOIN pg_attribute a
+                          ON a.attrelid = c.conrelid
+                         AND a.attnum = ANY(c.conkey)
+                        WHERE c.conrelid = 'toegangs_logs'::regclass
+                          AND c.contype = 'f'
+                          AND a.attname = 'Saamry_Bestuurder_Log_ID'
+                    ) THEN
+                        ALTER TABLE toegangs_logs
+                        ADD CONSTRAINT fk_toegangs_logs_saamry_bestuurder_log
+                        FOREIGN KEY ("Saamry_Bestuurder_Log_ID")
+                        REFERENCES toegangs_logs("Log_ID");
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_saamry_groep '
+                'ON toegangs_logs ("Saamry_Groep_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_saamry_bestuurder_log '
+                'ON toegangs_logs ("Saamry_Bestuurder_Log_ID")'
+            ))
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 010 "
+            f"(Saamry-hek toegangslogs) het misluk: {_migrasie_fout}"
+        )
+

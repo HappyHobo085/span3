@@ -721,3 +721,318 @@ def leave_group(
     db.commit()
 
     return schemas.APIResponse(sukses=True, data={"boodskap": "Jy het die groep verlaat"})
+
+# ---------------------------------------------------------------------------
+# Sekuriteitshek — bestuurder skandeer vir die hele voertuig
+# ---------------------------------------------------------------------------
+
+def _require_security_guard(
+    _allowed: bool = Depends(auth.check_sekuriteit),
+) -> None:
+    # auth.check_sekuriteit doen die werklike roltoets.
+    return None
+
+
+def _campus_gate_location(db: Session, kampus_id: int) -> models.Lokasie:
+    kampus = (
+        db.query(models.Kampus)
+        .filter(models.Kampus.Kampus_ID == kampus_id)
+        .first()
+    )
+    if not kampus:
+        raise HTTPException(status_code=404, detail="Kampus is nie gevind nie")
+
+    location = (
+        db.query(models.Lokasie)
+        .filter(
+            models.Lokasie.Kampus_ID == kampus_id,
+            models.Lokasie.LOK_Tipe == "Kampus",
+        )
+        .order_by(models.Lokasie.Lokasie_ID)
+        .first()
+    )
+
+    if location is None:
+        location = (
+            db.query(models.Lokasie)
+            .filter(models.Lokasie.Kampus_ID == kampus_id)
+            .order_by(models.Lokasie.Lokasie_ID)
+            .first()
+        )
+
+    if location is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Hierdie kampus het nog geen hek-lokasie nie",
+        )
+
+    return location
+
+
+def _latest_campus_log(
+    db: Session,
+    gebruiker_id: int,
+    kampus_id: int,
+) -> Optional[models.ToegangsLogs]:
+    return (
+        db.query(models.ToegangsLogs)
+        .join(
+            models.Lokasie,
+            models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
+        )
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == gebruiker_id,
+            models.Lokasie.Kampus_ID == kampus_id,
+            models.Lokasie.LOK_Tipe == "Kampus",
+        )
+        .order_by(
+            models.ToegangsLogs.TOE_Tydstempel.desc(),
+            models.ToegangsLogs.Log_ID.desc(),
+        )
+        .first()
+    )
+
+
+def _user_is_on_campus(
+    db: Session,
+    gebruiker_id: int,
+    kampus_id: int,
+) -> tuple[bool, Optional[models.ToegangsLogs]]:
+    latest = _latest_campus_log(db, gebruiker_id, kampus_id)
+    return (latest is not None and latest.TOE_Rigting == "IN", latest)
+
+
+def _accepted_gate_members(group: models.SaamryGroep) -> list[models.Gebruikers]:
+    members_by_id = {
+        member.gebruiker.Gebruiker_ID: member.gebruiker
+        for member in group.lede
+        if member.SAA_Status == "AANVAAR" and member.gebruiker is not None
+    }
+    members_by_id[group.Bestuurder_ID] = group.bestuurder
+
+    # Bestuurder eerste; daarna alfabeties vir 'n stabiele wag-skerm.
+    passengers = sorted(
+        (
+            user
+            for user_id, user in members_by_id.items()
+            if user_id != group.Bestuurder_ID
+        ),
+        key=lambda user: (user.GEB_Naam or "", user.GEB_Van or ""),
+    )
+    return [group.bestuurder, *passengers]
+
+
+@router.post("/wagte/hek/preview")
+def gate_group_preview(
+    payload: schemas.SaamryHekPreviewRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _security: None = Depends(_require_security_guard),
+):
+    rigting = payload.rigting.strip().upper()
+    if rigting not in ("IN", "UIT"):
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+
+    _campus_gate_location(db, payload.kampus_id)
+
+    group = (
+        db.query(models.SaamryGroep)
+        .filter(
+            models.SaamryGroep.Bestuurder_ID == payload.bestuurder_id,
+            models.SaamryGroep.SAA_Status == "AKTIEF",
+        )
+        .order_by(models.SaamryGroep.Groep_ID.desc())
+        .first()
+    )
+
+    if group is None:
+        return schemas.APIResponse(
+            sukses=True,
+            data={"has_group": False, "rede": "Geen aktiewe groep vir bestuurder nie"},
+        )
+
+    members = _accepted_gate_members(group)
+    if len(members) <= 1:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "has_group": False,
+                "rede": "Die groep het nog geen aanvaarde passasiers nie",
+            },
+        )
+
+    member_data = []
+    for user in members:
+        op_kampus, latest = _user_is_on_campus(
+            db,
+            user.Gebruiker_ID,
+            payload.kampus_id,
+        )
+        user_data = _user_dict(user)
+        user_data.update(
+            {
+                "is_bestuurder": user.Gebruiker_ID == group.Bestuurder_ID,
+                "op_kampus": op_kampus,
+                "laaste_rigting": latest.TOE_Rigting if latest else None,
+                "laaste_tyd": (
+                    latest.TOE_Tydstempel.isoformat() if latest else None
+                ),
+                "geselekteer": (
+                    user.Gebruiker_ID == group.Bestuurder_ID
+                    or (rigting == "IN" and not op_kampus)
+                    or (rigting == "UIT" and op_kampus)
+                ),
+            }
+        )
+        member_data.append(user_data)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "has_group": True,
+            "groep_id": group.Groep_ID,
+            "groep_naam": group.SAA_Naam,
+            "bestuurder_id": group.Bestuurder_ID,
+            "rigting": rigting,
+            "kampus_id": payload.kampus_id,
+            "lede": member_data,
+        },
+    )
+
+
+@router.post("/wagte/hek/bevestig")
+def confirm_group_at_gate(
+    payload: schemas.SaamryHekBevestigRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _security: None = Depends(_require_security_guard),
+):
+    rigting = payload.rigting.strip().upper()
+    metode = payload.metode.strip().upper()
+
+    if rigting not in ("IN", "UIT"):
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+    if metode not in ("QR", "NFC", "HANDMATIG"):
+        raise HTTPException(
+            status_code=400,
+            detail="Bestuurdermetode moet QR, NFC of HANDMATIG wees",
+        )
+
+    group = _get_group_or_404(db, payload.groep_id)
+    if group.SAA_Status != "AKTIEF":
+        raise HTTPException(status_code=409, detail="Die Saamrygroep is nie meer aktief nie")
+
+    gate_location = _campus_gate_location(db, payload.kampus_id)
+    accepted_users = _accepted_gate_members(group)
+    accepted_by_id = {user.Gebruiker_ID: user for user in accepted_users}
+
+    selected_ids = list(dict.fromkeys(payload.gebruiker_ids))
+    if group.Bestuurder_ID not in selected_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Die bestuurder moet altyd saam bevestig word",
+        )
+
+    invalid_ids = [user_id for user_id in selected_ids if user_id not in accepted_by_id]
+    if invalid_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Een of meer gekose persone behoort nie aan hierdie groep nie",
+        )
+
+    driver_on_campus, _ = _user_is_on_campus(
+        db,
+        group.Bestuurder_ID,
+        payload.kampus_id,
+    )
+    driver_already_matches = (rigting == "IN" and driver_on_campus) or (
+        rigting == "UIT" and not driver_on_campus
+    )
+    if driver_already_matches:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Die bestuurder is reeds op kampus"
+                if rigting == "IN"
+                else "Die bestuurder is reeds van kampus af"
+            ),
+        )
+
+    processed = []
+    skipped = []
+    driver_log = None
+
+    # Bestuurder eerste sodat passasiers na sy log kan verwys.
+    ordered_ids = [group.Bestuurder_ID] + [
+        user_id for user_id in selected_ids if user_id != group.Bestuurder_ID
+    ]
+
+    try:
+        for user_id in ordered_ids:
+            op_kampus, latest = _user_is_on_campus(db, user_id, payload.kampus_id)
+            state_matches = (rigting == "IN" and op_kampus) or (
+                rigting == "UIT" and not op_kampus
+            )
+
+            if state_matches:
+                skipped.append(
+                    {
+                        "gebruiker_id": user_id,
+                        "volle_naam": _user_dict(accepted_by_id[user_id])["volle_naam"],
+                        "rede": (
+                            "Reeds op kampus" if rigting == "IN" else "Reeds van kampus af"
+                        ),
+                    }
+                )
+                continue
+
+            is_driver = user_id == group.Bestuurder_ID
+            log = models.ToegangsLogs(
+                Gebruiker_ID=user_id,
+                Lokasie_ID=gate_location.Lokasie_ID,
+                TOE_Tydstempel=datetime.utcnow(),
+                TOE_Rigting=rigting,
+                TOE_Metode=metode if is_driver else "SAAMRY",
+                TOE_Auto_Uitgecheck=False,
+                Saamry_Groep_ID=group.Groep_ID,
+                Saamry_Bestuurder_Log_ID=(
+                    None if is_driver else driver_log.Log_ID if driver_log else None
+                ),
+            )
+            db.add(log)
+            db.flush()
+
+            if is_driver:
+                driver_log = log
+
+            processed.append(
+                {
+                    "log_id": log.Log_ID,
+                    "gebruiker_id": user_id,
+                    "volle_naam": _user_dict(accepted_by_id[user_id])["volle_naam"],
+                    "is_bestuurder": is_driver,
+                    "metode": log.TOE_Metode,
+                    "rigting": rigting,
+                }
+            )
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "groep_id": group.Groep_ID,
+            "rigting": rigting,
+            "verwerk_count": len(processed),
+            "oorgeslaan_count": len(skipped),
+            "verwerk": processed,
+            "oorgeslaan": skipped,
+            "boodskap": (
+                f"{len(processed)} persoon/persone is as {rigting} bevestig"
+            ),
+        },
+    )
+

@@ -603,6 +603,19 @@ class SaamryGroepNooiCreate(BaseModel):
     gebruiker_id: int
 
 
+class SaamryHekPreviewRequest(BaseModel):
+    bestuurder_id: int
+    kampus_id: int
+    rigting: str
+
+
+class SaamryHekBevestigRequest(BaseModel):
+    groep_id: int
+    kampus_id: int
+    rigting: str
+    metode: str
+    gebruiker_ids: List[int]
+
 
 # --- BESOEKER OTP SCHEMAS ---
 

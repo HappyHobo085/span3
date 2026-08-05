@@ -331,6 +331,96 @@ class SaamryStatusDto {
 }
 
 
+class SaamryGateMemberDto {
+  final int gebruikerId;
+  final String naam;
+  final String van;
+  final String volleNaam;
+  final String nommer;
+  final String rol;
+  final String? fotoUrl;
+  final bool isBestuurder;
+  final bool opKampus;
+  final String? laasteRigting;
+  final DateTime? laasteTyd;
+  final bool geselekteer;
+
+  SaamryGateMemberDto({
+    required this.gebruikerId,
+    required this.naam,
+    required this.van,
+    required this.volleNaam,
+    required this.nommer,
+    required this.rol,
+    this.fotoUrl,
+    required this.isBestuurder,
+    required this.opKampus,
+    this.laasteRigting,
+    this.laasteTyd,
+    required this.geselekteer,
+  });
+
+  factory SaamryGateMemberDto.fromJson(Map<String, dynamic> json) {
+    return SaamryGateMemberDto(
+      gebruikerId: (json['gebruiker_id'] as num).toInt(),
+      naam: json['naam']?.toString() ?? '',
+      van: json['van']?.toString() ?? '',
+      volleNaam: json['volle_naam']?.toString() ??
+          '${json['naam'] ?? ''} ${json['van'] ?? ''}'.trim(),
+      nommer: json['nommer']?.toString() ?? '',
+      rol: json['rol']?.toString() ?? '',
+      fotoUrl: json['foto_url']?.toString(),
+      isBestuurder: json['is_bestuurder'] == true,
+      opKampus: json['op_kampus'] == true,
+      laasteRigting: json['laaste_rigting']?.toString(),
+      laasteTyd: json['laaste_tyd'] == null
+          ? null
+          : DateTime.parse(json['laaste_tyd'].toString()).toLocal(),
+      geselekteer: json['geselekteer'] == true,
+    );
+  }
+}
+
+class SaamryGatePreviewDto {
+  final bool hasGroup;
+  final String? rede;
+  final int? groepId;
+  final String? groepNaam;
+  final int? bestuurderId;
+  final String rigting;
+  final int? kampusId;
+  final List<SaamryGateMemberDto> lede;
+
+  SaamryGatePreviewDto({
+    required this.hasGroup,
+    this.rede,
+    this.groepId,
+    this.groepNaam,
+    this.bestuurderId,
+    required this.rigting,
+    this.kampusId,
+    required this.lede,
+  });
+
+  factory SaamryGatePreviewDto.fromJson(Map<String, dynamic> json) {
+    return SaamryGatePreviewDto(
+      hasGroup: json['has_group'] == true,
+      rede: json['rede']?.toString(),
+      groepId: (json['groep_id'] as num?)?.toInt(),
+      groepNaam: json['groep_naam']?.toString(),
+      bestuurderId: (json['bestuurder_id'] as num?)?.toInt(),
+      rigting: json['rigting']?.toString() ?? 'IN',
+      kampusId: (json['kampus_id'] as num?)?.toInt(),
+      lede: ((json['lede'] as List?) ?? const [])
+          .map(
+            (item) => SaamryGateMemberDto.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
 
 class BesoekerUitnodigingDto {
   final int uitnodigingId;
@@ -1204,6 +1294,50 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     _decodeSaamryResponse(response);
   }
 
+
+  static Future<SaamryGatePreviewDto> wagteSaamryGatePreview({
+    required int bestuurderId,
+    required int kampusId,
+    required String rigting,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/wagte/hek/preview'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({
+        'bestuurder_id': bestuurderId,
+        'kampus_id': kampusId,
+        'rigting': rigting.trim().toUpperCase(),
+      }),
+    );
+
+    final data = _decodeSaamryResponse(response);
+    return SaamryGatePreviewDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<Map<String, dynamic>> wagteSaamryGateConfirm({
+    required int groepId,
+    required int kampusId,
+    required String rigting,
+    required String metode,
+    required List<int> gebruikerIds,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/wagte/hek/bevestig'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({
+        'groep_id': groepId,
+        'kampus_id': kampusId,
+        'rigting': rigting.trim().toUpperCase(),
+        'metode': metode.trim().toUpperCase(),
+        'gebruiker_ids': gebruikerIds,
+      }),
+    );
+
+    final data = _decodeSaamryResponse(response);
+    return Map<String, dynamic>.from(data as Map);
+  }
 
   /// -------------------------
   /// Besoeker OTP-uitnodigings

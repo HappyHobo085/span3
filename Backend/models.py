@@ -107,8 +107,10 @@ class ToegangsLogs(Base):
     Lokasie_ID          = Column(Integer,  ForeignKey('lokasie.Lokasie_ID'), nullable=False)
     TOE_Tydstempel      = Column(DateTime, default=datetime.utcnow, nullable=False)
     TOE_Rigting         = Column(String(16), nullable=False) # "IN" | "UIT"
-    TOE_Metode          = Column(String(32), nullable=False) # "NFC" | "HANDMATIG" | "QR"
+    TOE_Metode          = Column(String(32), nullable=False) # "NFC" | "HANDMATIG" | "QR" | "SAAMRY"
     TOE_Auto_Uitgecheck = Column(Boolean, nullable=False, default=False)
+    Saamry_Groep_ID     = Column(Integer, ForeignKey('saamry_groep.Groep_ID'), nullable=True)
+    Saamry_Bestuurder_Log_ID = Column(Integer, ForeignKey('toegangs_logs.Log_ID'), nullable=True)
 
     nfc_tag   = relationship("NFC_Tags",    back_populates="toegangs_logs")
     gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")

@@ -418,15 +418,32 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         _status = 'Profiel gevind via $metode';
       });
 
+      final saamryPreview = await MoonApi.wagteSaamryGatePreview(
+        bestuurderId: profile.gebruikerId,
+        kampusId: widget.kampusId,
+        rigting: profile.voorgesteldeRigting,
+      );
+
+      if (!mounted) return;
+
       final verified = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => WagteVerifyPage(
-            profile: profile,
-            kampusId: widget.kampusId,
-            kampusNaam: widget.kampusNaam,
-            metode: metode,
-          ),
+          builder: (_) => saamryPreview.hasGroup &&
+                  saamryPreview.groepId != null &&
+                  saamryPreview.lede.length > 1
+              ? WagteSaamryVerifyPage(
+                  preview: saamryPreview,
+                  kampusId: widget.kampusId,
+                  kampusNaam: widget.kampusNaam,
+                  metode: metode,
+                )
+              : WagteVerifyPage(
+                  profile: profile,
+                  kampusId: widget.kampusId,
+                  kampusNaam: widget.kampusNaam,
+                  metode: metode,
+                ),
         ),
       );
 
@@ -697,6 +714,560 @@ class _AutoScanBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class WagteSaamryVerifyPage extends StatefulWidget {
+  final SaamryGatePreviewDto preview;
+  final int kampusId;
+  final String kampusNaam;
+  final String metode;
+
+  const WagteSaamryVerifyPage({
+    super.key,
+    required this.preview,
+    required this.kampusId,
+    required this.kampusNaam,
+    required this.metode,
+  });
+
+  @override
+  State<WagteSaamryVerifyPage> createState() =>
+      _WagteSaamryVerifyPageState();
+}
+
+class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
+  late String _rigting;
+  final Set<int> _selectedIds = <int>{};
+  bool _loading = false;
+  bool _verified = false;
+  int _processedCount = 0;
+  int _skippedCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _rigting = widget.preview.rigting;
+    _applyDirectionDefaults();
+  }
+
+  SaamryGateMemberDto get _driver => widget.preview.lede.firstWhere(
+        (member) => member.isBestuurder,
+        orElse: () => widget.preview.lede.first,
+      );
+
+  void _applyDirectionDefaults() {
+    _selectedIds
+      ..clear()
+      ..add(_driver.gebruikerId);
+
+    for (final member in widget.preview.lede) {
+      if (member.isBestuurder) continue;
+
+      final shouldSelect = _rigting == 'IN'
+          ? !member.opKampus
+          : member.opKampus;
+
+      if (shouldSelect) {
+        _selectedIds.add(member.gebruikerId);
+      }
+    }
+  }
+
+  void _toggleRigting() {
+    if (_loading || _verified) return;
+    setState(() {
+      _rigting = _rigting == 'IN' ? 'UIT' : 'IN';
+      _applyDirectionDefaults();
+    });
+  }
+
+  void _toggleMember(SaamryGateMemberDto member, bool? checked) {
+    if (_loading || _verified || member.isBestuurder) return;
+
+    setState(() {
+      if (checked == true) {
+        _selectedIds.add(member.gebruikerId);
+      } else {
+        _selectedIds.remove(member.gebruikerId);
+      }
+    });
+  }
+
+  String _photoUrl(String raw) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return '${MoonApi.baseUrl}$raw';
+  }
+
+  void _showLargePhoto(SaamryGateMemberDto member) {
+    final raw = member.fotoUrl?.trim() ?? '';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: const Color(0xFF111827),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                member.volleNaam,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: kText1,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (raw.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.network(
+                    _photoUrl(raw),
+                    width: 280,
+                    height: 280,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox(
+                      width: 220,
+                      height: 220,
+                      child: Icon(
+                        Icons.person,
+                        size: 150,
+                        color: kTextMuted,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(
+                  width: 220,
+                  height: 220,
+                  child: Icon(
+                    Icons.person,
+                    size: 150,
+                    color: kTextMuted,
+                  ),
+                ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Maak Toe'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmGroup() async {
+    if (_loading || _verified) return;
+
+    if (_selectedIds.isEmpty || !_selectedIds.contains(_driver.gebruikerId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Die bestuurder moet gekies wees')),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final result = await MoonApi.wagteSaamryGateConfirm(
+        groepId: widget.preview.groepId!,
+        kampusId: widget.kampusId,
+        rigting: _rigting,
+        metode: widget.metode,
+        gebruikerIds: _selectedIds.toList(),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _processedCount = (result['verwerk_count'] as num?)?.toInt() ?? 0;
+        _skippedCount = (result['oorgeslaan_count'] as num?)?.toInt() ?? 0;
+        _loading = false;
+        _verified = true;
+      });
+
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        Navigator.pop(context, true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _denyGroup() async {
+    if (_loading || _verified) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text(
+          'Weier Voertuigtoegang',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Geen persoon in hierdie Saamrygroep sal geskandeer word nie. Gaan voort?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Kanselleer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Weier',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      Navigator.pop(context, false);
+    }
+  }
+
+  Widget _avatar(SaamryGateMemberDto member) {
+    final raw = member.fotoUrl?.trim() ?? '';
+
+    return GestureDetector(
+      onTap: () => _showLargePhoto(member),
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: member.isBestuurder ? kAccent : Colors.white24,
+            width: member.isBestuurder ? 2 : 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: raw.isNotEmpty
+              ? Image.network(
+                  _photoUrl(raw),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.person,
+                    color: kTextMuted,
+                    size: 52,
+                  ),
+                )
+              : const Icon(
+                  Icons.person,
+                  color: kTextMuted,
+                  size: 52,
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _memberCard(SaamryGateMemberDto member) {
+    final selected = _selectedIds.contains(member.gebruikerId);
+    final statusText = member.opKampus ? 'OP KAMPUS' : 'NIE OP KAMPUS';
+    final statusIcon = member.opKampus
+        ? Icons.location_on_rounded
+        : Icons.location_off_rounded;
+    final statusColor = member.opKampus ? Colors.green : Colors.orange;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _avatar(member),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          member.volleNaam,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: kText1,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (member.isBestuurder)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kAccent.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: kAccent.withOpacity(0.5),
+                            ),
+                          ),
+                          child: Text(
+                            'BESTUURDER',
+                            style: GoogleFonts.inter(
+                              color: kAccent,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${member.rol} · ${member.nommer}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: kText2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      Icon(statusIcon, color: statusColor, size: 16),
+                      const SizedBox(width: 5),
+                      Text(
+                        statusText,
+                        style: GoogleFonts.inter(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Checkbox(
+              value: selected,
+              onChanged: member.isBestuurder
+                  ? null
+                  : (value) => _toggleMember(member, value),
+              activeColor: kAccent,
+              checkColor: Colors.black,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedCount = _selectedIds.length;
+    final directionWord = _rigting == 'IN' ? 'IN' : 'UIT';
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Saamry Voertuig',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                children: [
+                  GlassCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.directions_car_filled_rounded,
+                              color: kAccent,
+                              size: 30,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                widget.preview.groepNaam ?? 'Saamrygroep',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: kText1,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 11,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _rigting == 'IN'
+                                      ? Colors.green.withOpacity(0.13)
+                                      : Colors.red.withOpacity(0.13),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _rigting == 'IN'
+                                        ? Colors.green
+                                        : Colors.red,
+                                  ),
+                                ),
+                                child: Text(
+                                  _rigting == 'IN'
+                                      ? 'INGANG — PERSONE KOM IN'
+                                      : 'UITGANG — PERSONE GAAN UIT',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    color: _rigting == 'IN'
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            IconButton(
+                              tooltip: 'Verander rigting',
+                              onPressed: _toggleRigting,
+                              icon: const Icon(
+                                Icons.sync_rounded,
+                                color: kAccent,
+                                size: 30,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Ontmerk enige persoon wat nie in die voertuig is nie. Tik op ’n foto om dit groter te sien.',
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'PERSONE IN DIE VOERTUIG',
+                    style: GoogleFonts.inter(
+                      color: kTextMuted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...widget.preview.lede.map(_memberCard),
+                  const SizedBox(height: 8),
+                  if (_verified)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.green),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.verified_rounded,
+                            color: Colors.green,
+                            size: 52,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$_processedCount PERSONE $directionWord BEVESTIG',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: Colors.green,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (_skippedCount > 0) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              '$_skippedCount reeds in die korrekte kampusstatus en is nie weer gelog nie.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                color: kText2,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
+                  else ...[
+                    GradientActionButton(
+                      label: _loading
+                          ? 'BEVESTIG...'
+                          : 'BEVESTIG $selectedCount PERSONE $directionWord',
+                      onTap: _confirmGroup,
+                      height: 56,
+                    ),
+                    const SizedBox(height: 10),
+                    OutlineActionButton(
+                      label: _loading ? 'BESIG...' : 'WEIER VOERTUIGTOEGANG',
+                      onTap: _denyGroup,
+                      height: 52,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
