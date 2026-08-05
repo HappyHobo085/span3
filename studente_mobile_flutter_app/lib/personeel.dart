@@ -2000,8 +2000,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
       'OTP: ${invite.otp}',
       'Geldig tot: ${_formatDateTime(invite.vervalOp)}',
       'Wys hierdie OTP by kampussekuriteit.',
-    ].join('
-');
+    ].join('\n');
 
     final renderBox = shareContext.findRenderObject() as RenderBox?;
 

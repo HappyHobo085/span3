@@ -41,6 +41,7 @@ dependencies:
   nfc_manager: ^3.5.0
   qr_flutter: ^4.1.0
   http_parser: ^4.1.2
+  share_plus: ^13.3.0
 
 dev_dependencies:
   flutter_test:
