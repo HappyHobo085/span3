@@ -585,3 +585,20 @@ class WagteProfileDeclineRequest(BaseModel):
     kampus_id: int
     metode: str = "QR"
 
+# --- SAAMRY SCHEMAS ---
+
+class SaamryVriendVersoekCreate(BaseModel):
+    ontvanger_id: int
+
+
+class SaamryGroepCreate(BaseModel):
+    naam: Optional[str] = None
+    vertrekpunt: str
+    bestemming: str
+    vertrek_tyd: datetime
+    sitplekke: int = 1
+
+
+class SaamryGroepNooiCreate(BaseModel):
+    gebruiker_id: int
+

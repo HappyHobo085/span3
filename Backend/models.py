@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -207,3 +207,83 @@ class Funksie_Besoekers(Base):
 
     besoekers_groep = relationship("Besoekers_Groep", back_populates="funskie_besoekers")
     funskie         = relationship("Funksie",         back_populates="funskie_besoekers")
+
+# --- SAAMRY MODELS ---
+
+class SaamryVriendskap(Base):
+    __tablename__ = 'saamry_vriendskap'
+
+    Vriendskap_ID = Column(Integer, primary_key=True, index=True)
+    Versoeker_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Ontvanger_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    SAA_Status    = Column(String(20), nullable=False, default='HANGEND')
+    Geskep_Op     = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    versoeker = relationship('Gebruikers', foreign_keys=[Versoeker_ID])
+    ontvanger = relationship('Gebruikers', foreign_keys=[Ontvanger_ID])
+
+    __table_args__ = (
+        UniqueConstraint('Versoeker_ID', 'Ontvanger_ID', name='uq_saamry_vriendskap_rigting'),
+        CheckConstraint('"Versoeker_ID" <> "Ontvanger_ID"', name='ck_saamry_vriendskap_nie_self'),
+        CheckConstraint(
+            '"SAA_Status" IN (\'HANGEND\', \'AANVAAR\', \'GEWEIER\')',
+            name='ck_saamry_vriendskap_status',
+        ),
+    )
+
+
+class SaamryGroep(Base):
+    __tablename__ = 'saamry_groep'
+
+    Groep_ID         = Column(Integer, primary_key=True, index=True)
+    Bestuurder_ID    = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    SAA_Naam         = Column(String(120), nullable=False)
+    SAA_Vertrekpunt  = Column(String(200), nullable=False)
+    SAA_Bestemming   = Column(String(200), nullable=False)
+    SAA_Vertrek_Tyd  = Column(DateTime, nullable=False)
+    SAA_Sitplekke    = Column(Integer, nullable=False, default=1)
+    SAA_Status       = Column(String(20), nullable=False, default='AKTIEF')
+    Geskep_Op        = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    bestuurder = relationship('Gebruikers', foreign_keys=[Bestuurder_ID])
+    lede = relationship(
+        'SaamryGroepLid',
+        back_populates='groep',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            '"SAA_Sitplekke" BETWEEN 1 AND 8',
+            name='ck_saamry_groep_sitplekke',
+        ),
+        CheckConstraint(
+            '"SAA_Status" IN (\'AKTIEF\', \'GESLUIT\', \'GEKANSELLEER\')',
+            name='ck_saamry_groep_status',
+        ),
+    )
+
+
+class SaamryGroepLid(Base):
+    __tablename__ = 'saamry_groep_lid'
+
+    Groep_ID       = Column(Integer, ForeignKey('saamry_groep.Groep_ID'), primary_key=True)
+    Gebruiker_ID   = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Genooi_Deur_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    SAA_Status     = Column(String(20), nullable=False, default='HANGEND')
+    Geskep_Op      = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    groep = relationship('SaamryGroep', back_populates='lede')
+    gebruiker = relationship('Gebruikers', foreign_keys=[Gebruiker_ID])
+    genooi_deur = relationship('Gebruikers', foreign_keys=[Genooi_Deur_ID])
+
+    __table_args__ = (
+        CheckConstraint(
+            '"SAA_Status" IN (\'HANGEND\', \'AANVAAR\', \'GEWEIER\', \'VERLAAT\')',
+            name='ck_saamry_groep_lid_status',
+        ),
+    )
+
