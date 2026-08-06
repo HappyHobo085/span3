@@ -1,7 +1,7 @@
 """Gebruiker (User) business logic — extracted from main.py helpers."""
 
 import uuid
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -16,13 +16,70 @@ def kry_rol(db: Session, rol_id: int) -> models.Rolle:
     return rol
 
 
-def is_personeel_rol(rol_naam: str) -> bool:
-    return rol_naam in [
+def get_user_role_ids(db: Session, gebruiker: models.Gebruikers) -> List[int]:
+    role_assignments = (
+        db.query(models.GebruikersRolle)
+        .filter(models.GebruikersRolle.Gebruiker_ID == gebruiker.Gebruiker_ID)
+        .all()
+    )
+    role_ids = [assignment.Rol_ID for assignment in role_assignments]
+    if not role_ids and getattr(gebruiker, "Rol_ID", None) is not None:
+        role_ids = [gebruiker.Rol_ID]
+    return role_ids
+
+
+def get_user_role_names(db: Session, gebruiker: models.Gebruikers) -> List[str]:
+    role_ids = get_user_role_ids(db, gebruiker)
+    if not role_ids:
+        return []
+
+    roles = (
+        db.query(models.Rolle)
+        .filter(models.Rolle.Rol_ID.in_(role_ids))
+        .all()
+    )
+    role_map = {role.Rol_ID: role.ROL_Naam for role in roles}
+    return [role_map[role_id] for role_id in role_ids if role_id in role_map]
+
+
+def sync_gebruiker_roles(
+    db: Session,
+    gebruiker: models.Gebruikers,
+    role_ids: List[int],
+    *,
+    primary_role_id: Optional[int] = None,
+):
+    role_ids = [role_id for role_id in role_ids if role_id is not None]
+    if not role_ids:
+        raise HTTPException(status_code=400, detail="Ten minste een rol moet verskaf word")
+
+    roles = db.query(models.Rolle).filter(models.Rolle.Rol_ID.in_(role_ids)).all()
+    available_role_ids = {role.Rol_ID for role in roles}
+    if len(available_role_ids) != len(set(role_ids)):
+        raise HTTPException(status_code=400, detail="Een of meer rolle bestaan nie")
+
+    db.query(models.GebruikersRolle).filter(
+        models.GebruikersRolle.Gebruiker_ID == gebruiker.Gebruiker_ID
+    ).delete(synchronize_session=False)
+
+    for role_id in role_ids:
+        db.add(models.GebruikersRolle(Gebruiker_ID=gebruiker.Gebruiker_ID, Rol_ID=role_id))
+
+    primary_role = primary_role_id or role_ids[0]
+    if primary_role not in role_ids:
+        primary_role = role_ids[0]
+    gebruiker.Rol_ID = primary_role
+
+
+def is_personeel_rol(role_names) -> bool:
+    if isinstance(role_names, str):
+        role_names = [role_names]
+    return any(rol in [
         "Administrateur",
         "Personeel",
         "Sekuriteit_Wag",
         "Kampus_Opsigter",
-    ]
+    ] for rol in role_names)
 
 
 def kontroleer_kampus(db: Session, kampus_id: Optional[int]):
@@ -94,13 +151,19 @@ def generate_next_per_nommer(db: Session) -> str:
 def sync_gebruiker_subrekords(
     db: Session,
     gebruiker: models.Gebruikers,
-    rol_naam: str,
+    role_names: List[str],
     data: dict,
     *,
     creating: bool = False,
 ):
+    role_name_set = set(role_names or [])
+    is_student = "Student" in role_name_set
+    is_personeel = is_personeel_rol(role_name_set)
+    is_opsigter = "Kampus_Opsigter" in role_name_set
+    is_sekuriteit = "Sekuriteit_Wag" in role_name_set
+
     # --- Student ---
-    if rol_naam == "Student" or "STU_Nommer" in data or "STU_Is_Koshuis" in data or "Koshuis_ID" in data:
+    if is_student or "STU_Nommer" in data or "STU_Is_Koshhuis" in data or "Koshuis_ID" in data:
         student = db.query(models.Student).filter(
             models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
@@ -108,7 +171,7 @@ def sync_gebruiker_subrekords(
         stu_nommer = data.get("STU_Nommer")
 
         if not student and not stu_nommer:
-            if creating or rol_naam == "Student":
+            if creating or is_student:
                 raise HTTPException(status_code=400, detail="Studentenommer is verpligtend")
 
         if stu_nommer:
@@ -144,14 +207,14 @@ def sync_gebruiker_subrekords(
             student.Koshuis_ID = koshuis_id
 
     # --- Personeel rekord vir ALLE werknemerrolle ---
-    if is_personeel_rol(rol_naam) or "PER_Nommer" in data or "PER_Departement" in data:
+    if is_personeel or "PER_Nommer" in data or "PER_Departement" in data:
         personeel = db.query(models.Personeel).filter(
             models.Personeel.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         per_nommer = data.get("PER_Nommer")
 
-        if not personeel and not per_nommer and (creating or is_personeel_rol(rol_naam)):
+        if not personeel and not per_nommer and (creating or is_personeel):
             per_nommer = generate_next_per_nommer(db)
 
         if per_nommer:
@@ -177,7 +240,7 @@ def sync_gebruiker_subrekords(
             personeel.PER_Departement = data["PER_Departement"]
 
     # --- Kampus Opsigter subrekord ---
-    if rol_naam == "Kampus_Opsigter" or "KAMO_Nommer" in data or "Kampus_ID" in data:
+    if is_opsigter or "KAMO_Nommer" in data or "Kampus_ID" in data:
         kontroleer_kampus(db, data.get("Kampus_ID"))
 
         opsigter = db.query(models.Kampus_Opsigter).filter(
@@ -186,12 +249,8 @@ def sync_gebruiker_subrekords(
 
         kamo_nommer = data.get("KAMO_Nommer")
 
-        if not opsigter and rol_naam == "Kampus_Opsigter":
-            opsigter = models.Kampus_Opsigter(
-                Gebruiker_ID=gebruiker.Gebruiker_ID,
-                KAMO_Nommer=per_nommer,
-            )
-            db.add(opsigter)
+        if not kamo_nommer and is_opsigter:
+            raise HTTPException(status_code=400, detail="KAMO_Nommer is verpligtend vir 'n kampus opsigter")
 
         if kamo_nommer:
             kontroleer_unieke_subnommer(
@@ -216,19 +275,15 @@ def sync_gebruiker_subrekords(
             opsigter.Kampus_ID = data["Kampus_ID"]
 
     # --- Sekuriteit Wag subrekord ---
-    if rol_naam == "Sekuriteit_Wag" or "SEK_Nommer" in data:
+    if is_sekuriteit or "SEK_Nommer" in data:
         wag = db.query(models.Sekuriteit_Wag).filter(
             models.Sekuriteit_Wag.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
 
         sek_nommer = data.get("SEK_Nommer")
 
-        if not wag and rol_naam == "Sekuriteit_Wag":
-            wag = models.Sekuriteit_Wag(
-                Gebruiker_ID=gebruiker.Gebruiker_ID,
-                SEK_Nommer=per_nommer,
-            )
-            db.add(wag)
+        if not sek_nommer and is_sekuriteit:
+            raise HTTPException(status_code=400, detail="SEK_Nommer is verpligtend vir 'n sekuriteitswag")
 
         if sek_nommer:
             kontroleer_unieke_subnommer(
@@ -293,7 +348,18 @@ def sync_gebruiker_nfc_tag(db: Session, gebruiker_id: int, data: dict):
 
 def gebruiker_to_dict(g: models.Gebruikers) -> dict:
     """Veilige JSON-serialisering vir Gebruikers + rol/subrol data."""
-    rol_naam = g.rol.ROL_Naam if getattr(g, "rol", None) else None
+    role_assignments = getattr(g, "gebruikers_rolle", None) or []
+    role_names = [
+        assignment.rol.ROL_Naam
+        for assignment in role_assignments
+        if getattr(assignment, "rol", None) is not None
+    ]
+    role_ids = [assignment.Rol_ID for assignment in role_assignments]
+
+    if not role_names and getattr(g, "rol", None) is not None:
+        role_names = [g.rol.ROL_Naam]
+    if not role_ids and getattr(g, "Rol_ID", None) is not None:
+        role_ids = [g.Rol_ID]
 
     data = {
         "Gebruiker_ID": g.Gebruiker_ID,
@@ -304,7 +370,9 @@ def gebruiker_to_dict(g: models.Gebruikers) -> dict:
         "GEB_Selfoon_Nr": g.GEB_Selfoon_Nr,
         "GEB_Profiel_Foto": g.GEB_Profiel_Foto,
         "Rol_ID": g.Rol_ID,
-        "Rol_Naam": rol_naam,
+        "Rol_IDs": role_ids,
+        "Rol_Naam": role_names[0] if role_names else None,
+        "Rol_Namen": role_names,
         "Is_Aktief": g.Is_Aktief,
         "Geskep_Op": g.Geskep_Op.isoformat() if g.Geskep_Op else None,
         "Gewysig_Op": g.Gewysig_Op.isoformat() if g.Gewysig_Op else None,

@@ -9,9 +9,11 @@ import models, schemas, auth
 from services.gebruiker_service import (
     sync_gebruiker_subrekords,
     sync_gebruiker_nfc_tag,
+    sync_gebruiker_roles,
     gebruiker_to_dict,
     kontroleer_unieke_gebruiker_velde,
     kry_rol,
+    get_user_role_names,
 )
 from services.nfc_service import deaktiveer_nfc_tags
 
@@ -30,9 +32,11 @@ def skep_gebruiker(
         epos=str(user_in.GEB_Epos),
         id_nommer=user_in.GEB_ID_Nommer,
     )
-    rol = kry_rol(db, user_in.Rol_ID)
-    rol_naam = rol.ROL_Naam
     user_data = user_in.dict(exclude_unset=True)
+    role_ids = user_data.get("Rol_IDs") or ([user_data["Rol_ID"]] if user_data.get("Rol_ID") is not None else [])
+    if not role_ids:
+        raise HTTPException(status_code=400, detail="Ten minste een rol moet verskaf word")
+    primary_role_id = user_data.get("Rol_ID") or role_ids[0]
 
     try:
         db_user = models.Gebruikers(
@@ -43,14 +47,15 @@ def skep_gebruiker(
             GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord),
             GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
             GEB_Profiel_Foto=user_in.GEB_Profiel_Foto,
-            Rol_ID=user_in.Rol_ID,
+            Rol_ID=primary_role_id,
             Is_Aktief=user_in.Is_Aktief
         )
 
         db.add(db_user)
         db.flush()
 
-        sync_gebruiker_subrekords(db, db_user, rol_naam, user_data, creating=True)
+        sync_gebruiker_roles(db, db_user, role_ids, primary_role_id=primary_role_id)
+        sync_gebruiker_subrekords(db, db_user, get_user_role_names(db, db_user), user_data, creating=True)
         sync_gebruiker_nfc_tag(db, db_user.Gebruiker_ID, user_data)
 
         db.commit()
@@ -88,7 +93,11 @@ def opdateer_gebruiker(
             exclude_user_id=user_id,
         )
 
-    rol = kry_rol(db, update_data.get("Rol_ID", db_user.Rol_ID))
+    role_ids = None
+    if "Rol_IDs" in update_data:
+        role_ids = update_data.pop("Rol_IDs")
+    elif "Rol_ID" in update_data:
+        role_ids = [update_data["Rol_ID"]]
 
     gewone_velde = {
         "GEB_Naam", "GEB_Van", "GEB_ID_Nommer", "GEB_Epos",
@@ -106,7 +115,16 @@ def opdateer_gebruiker(
         if "GEB_Wagwoord" in update_data and update_data["GEB_Wagwoord"]:
             db_user.GEB_Wagwoord = auth.get_password_hash(update_data["GEB_Wagwoord"])
 
-        sync_gebruiker_subrekords(db, db_user, rol.ROL_Naam, update_data)
+        if role_ids is not None:
+            sync_gebruiker_roles(
+                db,
+                db_user,
+                role_ids,
+                primary_role_id=update_data.get("Rol_ID") or role_ids[0],
+            )
+
+        role_names = get_user_role_names(db, db_user)
+        sync_gebruiker_subrekords(db, db_user, role_names, update_data)
         sync_gebruiker_nfc_tag(db, user_id, update_data)
 
         db.commit()
@@ -143,9 +161,9 @@ def lees_gebruikers(
     is_authorized: bool = Depends(auth.check_sekuriteit)
 ):
     query = db.query(models.Gebruikers)
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+    role_names = get_user_role_names(db, current_user)
 
-    if rol.ROL_Naam == "Kampus_Opsigter":
+    if "Kampus_Opsigter" in role_names:
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         if not opsigter_info:
             raise HTTPException(status_code=403, detail="Opsigter is nie aan 'n kampus gekoppel nie.")
@@ -157,7 +175,7 @@ def lees_gebruikers(
 
     gebruikers = query.offset(skip).limit(limit).all()
 
-    if rol.ROL_Naam == "Sekuriteit_Wag":
+    if "Sekuriteit_Wag" in role_names:
         return schemas.APIResponse(
             sukses=True,
             data=[
@@ -190,15 +208,15 @@ def lees_gebruiker(
     if gebruiker is None:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+    role_names = get_user_role_names(db, current_user)
 
-    if rol.ROL_Naam == "Kampus_Opsigter":
+    if "Kampus_Opsigter" in role_names:
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         teiken_opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == user_id).first()
         if teiken_opsigter_info and teiken_opsigter_info.Kampus_ID != opsigter_info.Kampus_ID:
             raise HTTPException(status_code=403, detail="Jy het nie toegang tot hierdie gebruiker nie.")
 
-    if rol.ROL_Naam == "Sekuriteit_Wag":
+    if "Sekuriteit_Wag" in role_names:
         return schemas.APIResponse(
             sukses=True,
             data={

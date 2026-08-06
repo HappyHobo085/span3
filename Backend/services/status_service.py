@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models, schemas
+from services.gebruiker_service import get_user_role_names
 
 
 def haal_laatste_logs_per_gebruiker(
@@ -54,8 +55,8 @@ def haal_laatste_logs_per_gebruiker(
         ).first()
         if not gebruiker:
             continue
-        rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == gebruiker.Rol_ID).first()
-        rol_naam = rol.ROL_Naam if rol else "Onbekend"
+        role_names = get_user_role_names(db, gebruiker)
+        rol_naam = role_names[0] if role_names else "Onbekend"
 
         status_obj = schemas.KampusGebruikerStatus(
             Gebruiker_ID=gebruiker.Gebruiker_ID,
