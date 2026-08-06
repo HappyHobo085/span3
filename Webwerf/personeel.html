@@ -53,6 +53,13 @@
           <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
           <div class="card" id="dash-total-count">Totaal studente: --</div>
           <div class="card" id="dash-percent-count">Bywoning: --</div>
+          <!-- Statistieke: bywoning oor die laaste 10 klasdae (stats.js);
+               klik op 'n kolom om daardie dag se bywoning te sien -->
+          <div class="card wide viz-block" id="dash-stats-card">
+            <strong>Bywoning — laaste 10 klasdae</strong>
+            <div id="stat-bywoning-chart" class="viz-chart"></div>
+            <div id="stat-bywoning-avg" class="viz-caption"></div>
+          </div>
           <div class="card wide" id="dash-in-card" style="flex-direction:column;align-items:stretch">
             <strong>Studente ingeskandeer</strong>
             <div id="dash-in-list" class="admin-list" style="margin-top:8px"></div>
@@ -96,6 +103,7 @@
 
   <!-- Skripte: main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
   <script src="main.js"></script>
+  <script src="stats.js"></script>
   <script src="personeel.js"></script>
 </body>
 </html>

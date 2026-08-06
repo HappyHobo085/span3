@@ -41,6 +41,16 @@
           <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
           <!-- Blokkie wat wys hoeveel inwoners die koshuis het teenoor sy kapasiteit -->
           <div class="card wide" id="dash-kapasiteit-card">Inwoners: -- / --</div>
+          <!-- Statistieke: kapasiteit-meter, in/uit-verdeling en regstreekse tendens (stats.js) -->
+          <div class="card wide viz-block" id="dash-stats-card">
+            <strong>Statistieke</strong>
+            <div id="stat-kapasiteit-meter"></div>
+            <div id="stat-inuit-split"></div>
+            <div>
+              <div class="viz-chart-title">Studente ingeteken oor tyd (regstreeks)</div>
+              <div id="stat-trend" class="viz-chart"></div>
+            </div>
+          </div>
           <!-- Lys van studente wat tans ingeteken is -->
           <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
             <strong>Studente tans ingeteken</strong>
@@ -77,6 +87,7 @@
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
+  <script src="stats.js"></script>
   <script src="koshuis.js"></script>
 </body>
 </html>

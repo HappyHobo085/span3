@@ -22,6 +22,7 @@
   var currentKoshuisId = null;  // Watter koshuis is nou gekies
   var pollingInterval = null;   // Die "horlosie" wat die paneelbord gereeld opdateer
   var alleStudente = null;      // Al die studente word een keer gelaai en hier gebêre
+  var trendHistory = {};        // Per koshuis: monsters van {t, v} vir die tendens-grafiek
 
   /**
    * Hierdie funksie bou 'n klein kaartjie vir een persoon.
@@ -170,6 +171,60 @@
     // Werk die twee naamlyste (ingeteken en uitgeteken) op die paneelbord by
     renderUserList(document.getElementById('dash-student-in-list'), data.scanned_in || [], 'Geen studente nie');
     renderUserList(document.getElementById('dash-student-out-list'), data.scanned_out || [], 'Geen studente nie');
+
+    // Werk die statistieke by: die meter, die verdeling-balk en die tendens-grafiek
+    recordTrendSample(koshuisId, data.scanned_in_count);
+    renderStats(koshuisId, data);
+  }
+
+  /**
+   * Hierdie funksie bêre elke keer 'n "monster" van hoeveel studente ingeteken is,
+   * sodat die tendens-grafiek kan wys hoe dit oor tyd verander.
+   */
+  function recordTrendSample(koshuisId, value) {
+    var key = String(koshuisId);
+    if (!trendHistory[key]) trendHistory[key] = [];
+    var arr = trendHistory[key];
+    arr.push({ t: new Date(), v: Number(value) || 0 });
+    // Hou net die laaste 60 monsters (teen 5 sekondes elk is dit sowat 5 minute)
+    if (arr.length > 60) arr.shift();
+  }
+
+  /**
+   * Hierdie funksie teken die statistieke-paneel met stats.js:
+   * die kapasiteit-meter, die in/uit-verdeling en die tendens-grafiek.
+   */
+  function renderStats(koshuisId, data) {
+    if (!window.MoonStats) return;
+
+    // Meter: hoeveel inwoners teenoor die koshuis se kapasiteit
+    MoonStats.renderMeter(document.getElementById('stat-kapasiteit-meter'), {
+      label: 'Kapasiteit',
+      value: Number(data.inwoner_count) || 0,
+      max: Number(data.KOS_Kapasiteit) || 0
+    });
+
+    // Verdeling-balk: ingeteken (blou) teenoor uitgeteken (dowwe grys)
+    MoonStats.renderSplitBar(document.getElementById('stat-inuit-split'), {
+      title: 'Studente in / uit',
+      segments: [
+        { label: 'Ingeteken', value: Number(data.scanned_in_count) || 0, color: MoonStats.colors.series1 },
+        { label: 'Uitgeteken', value: Number(data.scanned_out_count) || 0, color: MoonStats.colors.dim }
+      ]
+    });
+
+    // Tendens-grafiek: hoeveel studente was oor die afgelope tyd ingeteken
+    var hist = trendHistory[String(koshuisId)] || [];
+    MoonStats.renderTrend(document.getElementById('stat-trend'), {
+      times: hist.map(function (p) { return p.t; }),
+      series: [
+        {
+          label: 'Ingeteken',
+          color: MoonStats.colors.series1,
+          values: hist.map(function (p) { return p.v; })
+        }
+      ]
+    });
   }
 
   /**

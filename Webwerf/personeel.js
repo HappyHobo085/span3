@@ -94,6 +94,8 @@
   var kalGrid = document.getElementById('kal-grid');
   var rosterSearch = document.getElementById('roster-search');
   var rosterList = document.getElementById('roster-list');
+  var statChart = document.getElementById('stat-bywoning-chart');
+  var statAvg = document.getElementById('stat-bywoning-avg');
 
   // ----- Module state -----
   // Onthou watter klas en dag tans gekies is, en watter maand
@@ -233,6 +235,9 @@
   // Hierdie funksie teken die bywoningspaneel: die tellings bo-aan en die
   // twee lyste (ingeskandeer / nie ingeskandeer) vir die gekose dag.
   function renderDashboard() {
+    // Teken eers die bywoning-grafiek oor (dit volg die gekose klas en dag).
+    renderStats();
+
     var bywoning = kryBywoning(currentKlas, selectedDate);
 
     if (dashDatum) dashDatum.textContent = formatDatum(selectedDate);
@@ -280,6 +285,72 @@
           dashOutList.appendChild(createStudentCard(s, s.nommer));
         });
       }
+    }
+  }
+
+  // ----- Statistieke: bywoning oor die laaste klasdae -----
+
+  // Hierdie funksie gee die laaste `n` klasdae (Ma–Vr, tot en met vandag),
+  // met die oudste dag eerste.
+  function kryLaasteKlasdae(n) {
+    var dae = [];
+    var d = new Date(vandag);
+    var guard = 0; // keer dat die lus ooit vashaak
+    while (dae.length < n && guard < 40) {
+      if (isKlasdag(d)) dae.unshift(new Date(d));
+      d.setDate(d.getDate() - 1);
+      guard++;
+    }
+    return dae;
+  }
+
+  /**
+   * Hierdie funksie teken die bywoning-grafiek: 'n kolom vir elk van die laaste
+   * 10 klasdae se bywoningspersentasie. Die gekose dag word uitgelig, en as jy
+   * op 'n kolom klik, word daardie dag gekies (nes op die kalender).
+   */
+  function renderStats() {
+    if (!window.MoonStats || !statChart) return;
+
+    var dae = kryLaasteKlasdae(10);
+    var totaal = currentKlas.studente.length;
+    var som = 0;
+
+    var items = dae.map(function (d) {
+      var byw = kryBywoning(currentKlas, d);
+      var aantalIn = byw ? byw.ingeskandeer.length : 0;
+      var pct = totaal > 0 ? Math.round((aantalIn / totaal) * 100) : 0;
+      som += pct;
+      return {
+        label: d.getDate() + ' ' + MAANDE[d.getMonth()],
+        tick: d.getDate() + '/' + (d.getMonth() + 1),
+        value: pct,
+        detail: aantalIn + ' van ' + totaal + ' studente'
+      };
+    });
+
+    // Kyk of die gekose dag in die venster val sodat sy kolom uitgelig kan word.
+    var selectedIndex = -1;
+    dae.forEach(function (d, i) {
+      if (sameDay(d, selectedDate)) selectedIndex = i;
+    });
+
+    MoonStats.renderColumns(statChart, {
+      items: items,
+      selectedIndex: selectedIndex,
+      onSelect: function (i) {
+        selectedDate = new Date(dae[i]);
+        displayYear = selectedDate.getFullYear();
+        displayMonth = selectedDate.getMonth();
+        renderKalender();
+        renderDashboard();
+      }
+    });
+
+    // Die gemiddelde staan as gewone teks onder die grafiek.
+    if (statAvg) {
+      var avg = dae.length ? Math.round(som / dae.length) : 0;
+      statAvg.textContent = 'Gemiddelde bywoning oor die laaste ' + dae.length + ' klasdae: ' + avg + '%';
     }
   }
 
@@ -425,6 +496,13 @@
   if (rosterSearch) {
     rosterSearch.addEventListener('input', applyRosterFilter);
   }
+
+  // As die venster van grootte verander, teken die grafiek oor sodat dit inpas.
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderStats, 150);
+  });
 
   // ----- Bootstrap -----
   // Sodra die bladsy klaar gelaai het, word alles die eerste keer geteken.
