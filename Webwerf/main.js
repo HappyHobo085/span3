@@ -54,6 +54,87 @@
 })();
 
 // -----------------------------------------------------------------------------
+// Shared site header loader
+// -----------------------------------------------------------------------------
+function loadSiteHeader() {
+  var placeholder = document.getElementById('site-header');
+  if (!placeholder) return Promise.resolve();
+
+  return fetch('header.html', { cache: 'no-cache' })
+    .then(function (response) {
+      if (!response.ok) throw new Error('Header fetch failed: ' + response.status);
+      return response.text();
+    })
+    .then(function (html) {
+      placeholder.innerHTML = html;
+      setActiveNavLink();
+      window.dispatchEvent(new Event('siteHeaderReady'));
+    })
+    .catch(function (error) {
+      console.error('[main.js] header load error', error);
+    });
+}
+
+function onSiteHeaderReady(callback) {
+  if (document.querySelector('.navbar')) {
+    callback();
+    return;
+  }
+
+  window.addEventListener('siteHeaderReady', function handle() {
+    window.removeEventListener('siteHeaderReady', handle);
+    callback();
+  });
+}
+
+function setActiveNavLink() {
+  var currentPage = window.location.pathname.split('/').pop();
+  var activeMap = {
+    'home.html': 'Tuis',
+    'kampus.html': 'Kampus',
+    'koshuis.html': 'Koshuis',
+    'events.html': 'Events',
+    'admin.html': 'Admin',
+    'personeel.html': 'My Klasse'
+  };
+  var activeText = activeMap[currentPage];
+  if (!activeText) return;
+
+  var navbar = document.querySelector('.navbar');
+  if (!navbar) return;
+
+  navbar.querySelectorAll('a').forEach(function (link) {
+    link.classList.remove('active');
+  });
+
+  var link = Array.from(navbar.querySelectorAll('a')).find(function (a) {
+    return a.textContent.trim() === activeText;
+  });
+  if (link) link.classList.add('active');
+}
+
+function insertNavLink(href, text) {
+  var navbar = document.querySelector('.navbar');
+  if (!navbar) return;
+  if (navbar.querySelector('a[href="' + href + '"]')) return;
+
+  var link = document.createElement('a');
+  link.href = href;
+  link.textContent = text;
+
+  var navRight = navbar.querySelector('.navbar-right');
+  if (navRight) {
+    navbar.insertBefore(link, navRight);
+  } else {
+    navbar.appendChild(link);
+  }
+
+  setActiveNavLink();
+}
+
+loadSiteHeader();
+
+// -----------------------------------------------------------------------------
 // Login gate + Admin gate + Admin nav link
 // -----------------------------------------------------------------------------
 // Hierdie funksie begin dadelik en werk soos 'n hek: dit kyk of die gebruiker
@@ -100,51 +181,16 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
   // Wys die "Admin" skakel in die balk bo, maar net vir admin-gebruikers
   // Show the Admin nav link only for admin users
   if (userRole === 'Administrateur' && currentPage !== 'login.html') {
-    // Hierdie funksie loop sodra die blad klaar gelaai het:
-    // dit voeg die "Admin" skakel by die balk bo
-    document.addEventListener('DOMContentLoaded', function () {
-      var navbar = document.querySelector('.navbar');
-      if (!navbar) return;
-
-      // Don't add if already present (e.g. on admin.html itself)
-      if (navbar.querySelector('a[href="admin.html"]')) return;
-
-      var adminLink = document.createElement('a');
-      adminLink.href = 'admin.html';
-      adminLink.textContent = 'Admin';
-
-      // Insert before navbar-right if it exists, otherwise append to end of navbar
-      var navRight = navbar.querySelector('.navbar-right');
-      if (navRight) {
-        navbar.insertBefore(adminLink, navRight);
-      } else {
-        navbar.appendChild(adminLink);
-      }
+    onSiteHeaderReady(function () {
+      insertNavLink('admin.html', 'Admin');
     });
   }
 
   // Wys die "My Klasse" skakel in die balk bo, maar net vir personeel
   // Show the "My Klasse" nav link only for Personeel users
   if (userRole === 'Personeel' && currentPage !== 'login.html') {
-    // Hierdie funksie loop sodra die blad klaar gelaai het:
-    // dit voeg die "My Klasse" skakel by die balk bo
-    document.addEventListener('DOMContentLoaded', function () {
-      var navbar = document.querySelector('.navbar');
-      if (!navbar) return;
-
-      // Don't add if already present (e.g. on personeel.html itself)
-      if (navbar.querySelector('a[href="personeel.html"]')) return;
-
-      var personeelLink = document.createElement('a');
-      personeelLink.href = 'personeel.html';
-      personeelLink.textContent = 'My Klasse';
-
-      var navRight = navbar.querySelector('.navbar-right');
-      if (navRight) {
-        navbar.insertBefore(personeelLink, navRight);
-      } else {
-        navbar.appendChild(personeelLink);
-      }
+    onSiteHeaderReady(function () {
+      insertNavLink('personeel.html', 'My Klasse');
     });
   }
 })();
