@@ -1,7 +1,8 @@
 // =============================================================================
 // main.js — Hierdie lêer word op al die blaaie van die webwerf gebruik.
-// Dit maak seker die gebruiker is ingeteken, laai die API-lêer,
-// en wys ekstra skakels in die balk bo net vir admin- en personeel-gebruikers.
+// Dit maak seker die gebruiker is ingeteken, laai die API-lêer, en keer
+// dat gebruikers sonder die regte rol sekere blaaie oopmaak.
+// (Die navigasie-balk self word deur header.js gebou.)
 // =============================================================================
 
 /**
@@ -13,11 +14,10 @@
  *   If the user is not marked logged in, force redirect to login.html (except when already there).
  * Part 3 — Admin gate:
  *   If the current page is admin.html and the user is not an Administrateur, block access.
- * Part 4 — Admin nav link:
- *   Dynamically adds an "Admin" link in the navbar for admin users only.
- * Part 5 — Personeel gate + nav link:
- *   personeel.html is only for the Personeel role; a "My Klasse" navbar link
- *   is added dynamically for Personeel users only.
+ * Part 4 — Personeel gate:
+ *   personeel.html is only for the Personeel role.
+ *
+ * Die navigasie-balk (met die rol-gebaseerde skakels) word deur header.js gebou.
  */
 
 // -----------------------------------------------------------------------------
@@ -97,56 +97,8 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
     return;
   }
 
-  // Wys die "Admin" skakel in die balk bo, maar net vir admin-gebruikers
-  // Show the Admin nav link only for admin users
-  if (userRole === 'Administrateur' && currentPage !== 'login.html') {
-    // Hierdie funksie loop sodra die blad klaar gelaai het:
-    // dit voeg die "Admin" skakel by die balk bo
-    document.addEventListener('DOMContentLoaded', function () {
-      var navbar = document.querySelector('.navbar');
-      if (!navbar) return;
-
-      // Don't add if already present (e.g. on admin.html itself)
-      if (navbar.querySelector('a[href="admin.html"]')) return;
-
-      var adminLink = document.createElement('a');
-      adminLink.href = 'admin.html';
-      adminLink.textContent = 'Admin';
-
-      // Insert before navbar-right if it exists, otherwise append to end of navbar
-      var navRight = navbar.querySelector('.navbar-right');
-      if (navRight) {
-        navbar.insertBefore(adminLink, navRight);
-      } else {
-        navbar.appendChild(adminLink);
-      }
-    });
-  }
-
-  // Wys die "My Klasse" skakel in die balk bo, maar net vir personeel
-  // Show the "My Klasse" nav link only for Personeel users
-  if (userRole === 'Personeel' && currentPage !== 'login.html') {
-    // Hierdie funksie loop sodra die blad klaar gelaai het:
-    // dit voeg die "My Klasse" skakel by die balk bo
-    document.addEventListener('DOMContentLoaded', function () {
-      var navbar = document.querySelector('.navbar');
-      if (!navbar) return;
-
-      // Don't add if already present (e.g. on personeel.html itself)
-      if (navbar.querySelector('a[href="personeel.html"]')) return;
-
-      var personeelLink = document.createElement('a');
-      personeelLink.href = 'personeel.html';
-      personeelLink.textContent = 'My Klasse';
-
-      var navRight = navbar.querySelector('.navbar-right');
-      if (navRight) {
-        navbar.insertBefore(personeelLink, navRight);
-      } else {
-        navbar.appendChild(personeelLink);
-      }
-    });
-  }
+  // Die navigasie-balk self (met die rol-gebaseerde "Admin" en "My Klasse"
+  // skakels) word deur header.js gebou — sien header.js.
 })();
 
 // Hierdie funksie teken die gebruiker uit: dit vee die gestoorde inteken-inligting
