@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 
 from database import get_db
@@ -59,6 +60,170 @@ def lys_lokasies(
 
     db.commit()
     return schemas.APIResponse(sukses=True, data=result)
+
+
+@router.get("/klasse")
+def lys_klasse(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee 'n lys van alle klasse (lokasies met LOK_Tipe == 'Klaskamer')."""
+    lokasies = db.query(models.Lokasie).filter(models.Lokasie.LOK_Tipe == "Klaskamer").all()
+    result = []
+    for l in lokasies:
+        tag = db.query(models.NFC_Tags).filter(
+            models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True
+        ).first()
+        result.append({
+            "Lokasie_ID": l.Lokasie_ID,
+            "LOK_Naam": l.LOK_Naam,
+            "Kampus_ID": l.Kampus_ID,
+            "NFC_UID": tag.NFC_UID if tag else None,
+        })
+
+    return schemas.APIResponse(sukses=True, data=result)
+
+
+@router.get("/klasse/{lokasie_id}/roster")
+def kry_klas_roster(
+    lokasie_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee die lys van studente wat ooit by hierdie lokaal ingeskandeer het (unikale gebruikers)."""
+    subq = (
+        db.query(models.ToegangsLogs.Gebruiker_ID)
+        .filter(models.ToegangsLogs.Lokasie_ID == lokasie_id)
+        .distinct()
+        .subquery()
+    )
+
+    resultate = (
+        db.query(models.Gebruikers, models.Student)
+        .join(models.Student, models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID)
+        .filter(models.Gebruikers.Gebruiker_ID.in_(subq))
+        .all()
+    )
+
+    roster = []
+    for gebruiker, student in resultate:
+        roster.append({
+            "Gebruiker_ID": gebruiker.Gebruiker_ID,
+            "GEB_Naam": gebruiker.GEB_Naam,
+            "GEB_Van": gebruiker.GEB_Van,
+            "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+            "STU_Nommer": student.STU_Nommer,
+        })
+
+    return schemas.APIResponse(sukses=True, data=roster)
+
+
+@router.get("/klasse/{lokasie_id}/bywoning")
+def kry_klas_bywoning(
+    lokasie_id: int,
+    date: str = None,  # ISO date string YYYY-MM-DD; defaults to today
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee bywoningdata vir 'n klas op 'n gegewe datum.
+
+    Response bevat: total_students (est), present_count, present list (met tyd), absent list.
+    """
+    from datetime import datetime, date as _date
+
+    if date:
+        try:
+            day = datetime.fromisoformat(date).date()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Ongeldige datumformaat — gebruik YYYY-MM-DD")
+    else:
+        day = datetime.utcnow().date()
+
+    # Students who scanned IN on that day for this lokasie
+    present_rows = (
+        db.query(models.ToegangsLogs.Gebruiker_ID)
+        .filter(
+            models.ToegangsLogs.Lokasie_ID == lokasie_id,
+            func.date(models.ToegangsLogs.TOE_Tydstempel) == day,
+            models.ToegangsLogs.TOE_Rigting == "IN",
+        )
+        .distinct()
+        .all()
+    )
+
+    present_ids = [r[0] for r in present_rows]
+
+    # Roster = distinct users who have ever scanned at this lokasie (best-effort)
+    roster_rows = (
+        db.query(models.ToegangsLogs.Gebruiker_ID)
+        .filter(models.ToegangsLogs.Lokasie_ID == lokasie_id)
+        .distinct()
+        .all()
+    )
+    roster_ids = [r[0] for r in roster_rows]
+
+    # Fetch user details for present and roster
+    present = []
+    if present_ids:
+        for uid in present_ids:
+            gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == uid).first()
+            last_in = (
+                db.query(models.ToegangsLogs)
+                .filter(
+                    models.ToegangsLogs.Gebruiker_ID == uid,
+                    models.ToegangsLogs.Lokasie_ID == lokasie_id,
+                    func.date(models.ToegangsLogs.TOE_Tydstempel) == day,
+                    models.ToegangsLogs.TOE_Rigting == "IN",
+                )
+                .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+                .first()
+            )
+            present.append({
+                "Gebruiker_ID": gebruiker.Gebruiker_ID,
+                "GEB_Naam": gebruiker.GEB_Naam,
+                "GEB_Van": gebruiker.GEB_Van,
+                "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+                "STU_Nommer": db.query(models.Student.STU_Nommer).filter(models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID).scalar(),
+                "Tyd": last_in.TOE_Tydstempel.isoformat() if last_in and last_in.TOE_Tydstempel else None,
+            })
+
+    roster_users = []
+    if roster_ids:
+        users = (
+            db.query(models.Gebruikers, models.Student)
+            .join(models.Student, models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID)
+            .filter(models.Gebruikers.Gebruiker_ID.in_(roster_ids))
+            .all()
+        )
+        for gebruiker, student in users:
+            roster_users.append({
+                "Gebruiker_ID": gebruiker.Gebruiker_ID,
+                "GEB_Naam": gebruiker.GEB_Naam,
+                "GEB_Van": gebruiker.GEB_Van,
+                "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+                "STU_Nommer": student.STU_Nommer,
+            })
+
+    absent = [u for u in roster_users if u["Gebruiker_ID"] not in present_ids]
+
+    total_students = len(roster_users)
+    present_count = len(present)
+
+    percent = round((present_count / total_students) * 100) if total_students > 0 else 0
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Lokasie_ID": lokasie_id,
+            "Datum": day.isoformat(),
+            "Total_Students": total_students,
+            "Present_Count": present_count,
+            "Present": present,
+            "Absent": absent,
+            "Percent": percent,
+        }
+    )
 
 
 @router.put("/lokasies/{lokasie_id}", response_model=schemas.APIResponse[schemas.Lokasie])
