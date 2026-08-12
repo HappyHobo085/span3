@@ -13,8 +13,18 @@
 </head>
 <body>
   <!-- Personeel toegang: slegs Personeel-rol (gate in main.js) -->
-  <!-- Navigasie-balk bo-aan: gedeelde header (header.js voeg dit hier in) -->
-  <script src="header.js"></script>
+  <!-- Navigasie-balk bo-aan: skakels na die ander bladsye en die Teken Uit knoppie -->
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+    <a href="personeel.html" class="active">My Klasse</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
+  </nav>
 
   <!-- Hoof-inhoud van die bladsy -->
   <main class="page" id="personeel-page">
@@ -39,6 +49,10 @@
         <h2>Klas Bywoning</h2>
         <!-- Tellings en lyste: wie het ingeskandeer en wie nie -->
         <div class="dashboard-grid">
+          <div class="card" id="dash-in-count">Ingeskandeer: --</div>
+          <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
+          <div class="card" id="dash-total-count">Totaal studente: --</div>
+          <div class="card" id="dash-percent-count">Bywoning: --</div>
           <!-- Statistieke: bywoning oor die laaste 10 klasdae (stats.js);
                klik op 'n kolom om daardie dag se bywoning te sien -->
           <div class="card wide viz-block" id="dash-stats-card">

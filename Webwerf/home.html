@@ -14,8 +14,17 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Navigasie-balk: gedeelde header (header.js voeg dit hier in) -->
-  <script src="header.js"></script>
+  <!-- Navigasie-balk: skakels na die ander blaaie en die "Teken Uit" knoppie -->
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html" class="active">Tuis</a>
+    <a href="kampus.html">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
+  </nav>
 
   <!-- Hoofinhoud van die tuisblad -->
   <main class="page" id="home-page">

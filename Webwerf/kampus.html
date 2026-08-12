@@ -11,8 +11,14 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Navigasiebalk: gedeelde header (header.js voeg dit hier in) -->
-  <script src="header.js"></script>
+  <!-- Navigasiebalk: skakels na die ander bladsye van die webwerf -->
+  <nav class="navbar">
+    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
+    <a href="home.html">Tuis</a>
+    <a href="kampus.html" class="active">Kampus</a>
+    <a href="koshuis.html">Koshuis</a>
+    <a href="events.html">Events</a>
+  </nav>
 
   <!-- Hoofdeel van die bladsy -->
   <main class="page" id="home-page">
@@ -34,6 +40,11 @@
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
+          <!-- Vier blokkies wat wys hoeveel mense in- en uitgeteken is -->
+          <div class="card" id="dash-student-in-count">Studente ingeteken: --</div>
+          <div class="card" id="dash-personeel-in-count">Personeel ingeteken: --</div>
+          <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
+          <div class="card" id="dash-personeel-out-count">Personeel uitgeteken: --</div>
           <!-- Statistieke: in/uit-verdelings en regstreekse tendens (stats.js) -->
           <div class="card wide viz-block" id="dash-stats-card">
             <strong>Statistieke</strong>
