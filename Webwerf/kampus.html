@@ -18,6 +18,9 @@
     <a href="kampus.html" class="active">Kampus</a>
     <a href="koshuis.html">Koshuis</a>
     <a href="events.html">Events</a>
+    <div class="navbar-right">
+      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
+    </div>
   </nav>
 
   <!-- Hoofdeel van die bladsy -->
@@ -40,11 +43,6 @@
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
-          <!-- Vier blokkies wat wys hoeveel mense in- en uitgeteken is -->
-          <div class="card" id="dash-student-in-count">Studente ingeteken: --</div>
-          <div class="card" id="dash-personeel-in-count">Personeel ingeteken: --</div>
-          <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
-          <div class="card" id="dash-personeel-out-count">Personeel uitgeteken: --</div>
           <!-- Statistieke: in/uit-verdelings en regstreekse tendens (stats.js) -->
           <div class="card wide viz-block" id="dash-stats-card">
             <strong>Statistieke</strong>
