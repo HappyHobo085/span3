@@ -27,6 +27,7 @@
   // ----- Waardes wat die bladsy onthou terwyl dit oop is -----
   var currentKampusId = null;   // Watter kampus is nou gekies
   var pollingInterval = null;   // Die "horlosie" wat die paneelbord gereeld opdateer
+  var trendHistory = {};        // Per kampus: monsters van {t, stu, per} vir die tendens-grafiek
 
   /**
    * Hierdie funksie bou 'n klein kaartjie vir een persoon.
@@ -215,6 +216,67 @@
     renderUserList(document.getElementById('dash-student-out-list'), studentOut);
     renderUserList(document.getElementById('dash-personeel-in-list'), personeelIn);
     renderUserList(document.getElementById('dash-personeel-out-list'), personeelOut);
+
+    // Werk die statistieke by: die twee verdeling-balke en die tendens-grafiek
+    recordTrendSample(kampusId, studentIn.length, personeelIn.length);
+    renderStats(kampusId, studentIn.length, studentOut.length, personeelIn.length, personeelOut.length);
+  }
+
+  /**
+   * Hierdie funksie bêre elke keer 'n "monster" van hoeveel studente en personeel
+   * op die kampus is, sodat die tendens-grafiek kan wys hoe dit oor tyd verander.
+   */
+  function recordTrendSample(kampusId, studente, personeel) {
+    var key = String(kampusId);
+    if (!trendHistory[key]) trendHistory[key] = [];
+    var arr = trendHistory[key];
+    arr.push({ t: new Date(), stu: studente, per: personeel });
+    // Hou net die laaste 60 monsters (teen 5 sekondes elk is dit sowat 5 minute)
+    if (arr.length > 60) arr.shift();
+  }
+
+  /**
+   * Hierdie funksie teken die statistieke-paneel met stats.js:
+   * verdeling-balke vir studente en personeel, en die tendens-grafiek.
+   */
+  function renderStats(kampusId, stuIn, stuOut, perIn, perOut) {
+    if (!window.MoonStats) return;
+
+    // Verdeling-balk: studente in (blou) teenoor uit (dowwe grys)
+    MoonStats.renderSplitBar(document.getElementById('stat-studente-split'), {
+      title: 'Studente in / uit',
+      segments: [
+        { label: 'Ingeteken', value: stuIn, color: MoonStats.colors.series1 },
+        { label: 'Uitgeteken', value: stuOut, color: MoonStats.colors.dim }
+      ]
+    });
+
+    // Verdeling-balk: personeel in (pers) teenoor uit (dowwe grys)
+    MoonStats.renderSplitBar(document.getElementById('stat-personeel-split'), {
+      title: 'Personeel in / uit',
+      segments: [
+        { label: 'Ingeteken', value: perIn, color: MoonStats.colors.series2 },
+        { label: 'Uitgeteken', value: perOut, color: MoonStats.colors.dim }
+      ]
+    });
+
+    // Tendens-grafiek: studente en personeel op kampus oor die afgelope tyd
+    var hist = trendHistory[String(kampusId)] || [];
+    MoonStats.renderTrend(document.getElementById('stat-trend'), {
+      times: hist.map(function (p) { return p.t; }),
+      series: [
+        {
+          label: 'Studente',
+          color: MoonStats.colors.series1,
+          values: hist.map(function (p) { return p.stu; })
+        },
+        {
+          label: 'Personeel',
+          color: MoonStats.colors.series2,
+          values: hist.map(function (p) { return p.per; })
+        }
+      ]
+    });
   }
 
   /**

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 import models, schemas, auth
+from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(tags=["Auth"])
 
@@ -44,18 +45,19 @@ def login_vir_toegang_token(
             detail="Verkeerde gebruikersnaam of wagwoord"
         )
 
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
-    rol_naam = rol.ROL_Naam if rol else "Onbekend"
+    role_names = get_user_role_names(db, user)
+    rol_naam = role_names[0] if role_names else "Onbekend"
 
     access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
-        data={"sub": str(user.Gebruiker_ID), "rol": user.Rol_ID, "rol_naam": rol_naam},
+        data={"sub": str(user.Gebruiker_ID), "rol": user.Rol_ID, "rol_naam": rol_naam, "roles": role_names},
         expires_delta=access_token_expires
     )
 
     request.session["user_id"] = user.Gebruiker_ID
     request.session["rol"] = user.Rol_ID
     request.session["rol_naam"] = rol_naam
+    request.session["roles"] = role_names
 
     response.set_cookie(
         key="access_token",

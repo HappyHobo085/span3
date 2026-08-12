@@ -11,6 +11,7 @@ from sqlalchemy import func
 
 from database import get_db
 import models, schemas, auth
+from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -33,7 +34,7 @@ def kry_my_profiel(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+    role_names = get_user_role_names(db, current_user)
     student = db.query(models.Student).filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID).first()
     personeel = db.query(models.Personeel).filter(models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID).first()
     opsigter = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
@@ -46,7 +47,8 @@ def kry_my_profiel(
             "naam": current_user.GEB_Naam,
             "van": current_user.GEB_Van,
             "rol_id": current_user.Rol_ID,
-            "rol": rol.ROL_Naam if rol else "Onbekend",
+            "rol": role_names[0] if role_names else "Onbekend",
+            "rol_namen": role_names,
             "epos": current_user.GEB_Epos,
             "selfoon": current_user.GEB_Selfoon_Nr,
             "foto_url": current_user.GEB_Profiel_Foto,
@@ -102,7 +104,7 @@ def kry_my_dashboard(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
+    role_names = get_user_role_names(db, current_user)
 
     laaste_kampus_log = db.query(models.ToegangsLogs).filter(
         models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
@@ -142,7 +144,8 @@ def kry_my_dashboard(
             "gebruiker_id": current_user.Gebruiker_ID,
             "naam": current_user.GEB_Naam,
             "van": current_user.GEB_Van,
-            "rol": rol.ROL_Naam if rol else "Onbekend",
+            "rol": role_names[0] if role_names else "Onbekend",
+            "rol_namen": role_names,
             "kampus_status": kampus_status,
             "laaste_kampus": log_to_dict(laaste_kampus_log),
             "laaste_klas": log_to_dict(laaste_klas_log),

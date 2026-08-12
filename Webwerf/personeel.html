@@ -10,21 +10,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <!-- Personeel toegang: slegs Personeel-rol (gate in main.js) -->
-  <!-- Navigasie-balk bo-aan: skakels na die ander bladsye en die Teken Uit knoppie -->
-  <nav class="navbar">
-    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
-    <a href="home.html">Tuis</a>
-    <a href="kampus.html">Kampus</a>
-    <a href="koshuis.html">Koshuis</a>
-    <a href="events.html">Events</a>
-    <a href="personeel.html" class="active">My Klasse</a>
-    <div class="navbar-right">
-      <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
-    </div>
-  </nav>
+  <!-- Shared header placeholder -->
+  <div id="site-header"></div>
 
   <!-- Hoof-inhoud van die bladsy -->
   <main class="page" id="personeel-page">
@@ -53,13 +44,12 @@
           <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
           <div class="card" id="dash-total-count">Totaal studente: --</div>
           <div class="card" id="dash-percent-count">Bywoning: --</div>
-          <div class="card wide" id="dash-in-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente ingeskandeer</strong>
-            <div id="dash-in-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
-          <div class="card wide" id="dash-out-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente nie ingeskandeer</strong>
-            <div id="dash-out-list" class="admin-list" style="margin-top:8px"></div>
+          <!-- Statistieke: bywoning oor die laaste 10 klasdae (stats.js);
+               klik op 'n kolom om daardie dag se bywoning te sien -->
+          <div class="card wide viz-block" id="dash-stats-card">
+            <strong>Bywoning — laaste 10 klasdae</strong>
+            <div id="stat-bywoning-chart" class="viz-chart"></div>
+            <div id="stat-bywoning-avg" class="viz-caption"></div>
           </div>
         </div>
       </article>
@@ -96,6 +86,7 @@
 
   <!-- Skripte: main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
   <script src="main.js"></script>
+  <script src="stats.js"></script>
   <script src="personeel.js"></script>
 </body>
 </html>

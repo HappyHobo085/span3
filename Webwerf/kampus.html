@@ -9,16 +9,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
 </head>
 <body>
-  <!-- Navigasiebalk: skakels na die ander bladsye van die webwerf -->
-  <nav class="navbar">
-    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
-    <a href="home.html">Tuis</a>
-    <a href="kampus.html" class="active">Kampus</a>
-    <a href="koshuis.html">Koshuis</a>
-    <a href="events.html">Events</a>
-  </nav>
+  <!-- Shared header placeholder -->
+  <div id="site-header"></div>
 
   <!-- Hoofdeel van die bladsy -->
   <main class="page" id="home-page">
@@ -40,11 +35,16 @@
       <article class="glass-card panel" aria-label="Dashboard">
         <h2>Dashboard</h2>
         <div class="dashboard-grid">
-          <!-- Vier blokkies wat wys hoeveel mense in- en uitgeteken is -->
-          <div class="card" id="dash-student-in-count">Studente ingeteken: --</div>
-          <div class="card" id="dash-personeel-in-count">Personeel ingeteken: --</div>
-          <div class="card" id="dash-student-out-count">Studente uitgeteken: --</div>
-          <div class="card" id="dash-personeel-out-count">Personeel uitgeteken: --</div>
+          <!-- Statistieke: in/uit-verdelings en regstreekse tendens (stats.js) -->
+          <div class="card wide viz-block" id="dash-stats-card">
+            <strong>Statistieke</strong>
+            <div id="stat-studente-split"></div>
+            <div id="stat-personeel-split"></div>
+            <div>
+              <div class="viz-chart-title">Op kampus oor tyd (regstreeks)</div>
+              <div id="stat-trend" class="viz-chart"></div>
+            </div>
+          </div>
           <!-- Lys van studente wat tans op die kampus is -->
           <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
             <strong>Studente tans op kampus</strong>
@@ -99,6 +99,7 @@
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
   <script src="website_api_calls.js"></script>
   <script src="main.js"></script>
+  <script src="stats.js"></script>
   <script src="kampus.js"></script>
 </body>
 </html>

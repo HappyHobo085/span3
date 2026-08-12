@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 import database, models
+from services.gebruiker_service import get_user_role_names
 
 load_dotenv()
 
@@ -88,6 +89,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Stel verstekwaardes vir request.state
         request.state.user = None
         request.state.role = None
+        request.state.roles = []
 
         if DISABLE_AUTH:
             db = database.SessionLocal()
@@ -95,9 +97,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 fallback = _dev_fallback_user(db)
                 if fallback:
                     request.state.user = fallback
-                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == fallback.Rol_ID).first()
-                    if rol:
-                        request.state.role = rol.ROL_Naam
+                    request.state.roles = get_user_role_names(db, fallback)
+                    if request.state.roles:
+                        request.state.role = request.state.roles[0]
             except Exception:
                 pass
             finally:
@@ -134,9 +136,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
                 if user:
                     request.state.user = user
-                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
-                    if rol:
-                        request.state.role = rol.ROL_Naam
+                    request.state.roles = get_user_role_names(db, user)
+                    if request.state.roles:
+                        request.state.role = request.state.roles[0]
             except Exception:
                 pass
             finally:
@@ -166,9 +168,9 @@ async def get_current_user(
                 user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
                 if user:
                     request.state.user = user
-                    rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == user.Rol_ID).first()
-                    if rol:
-                        request.state.role = rol.ROL_Naam
+                    request.state.roles = get_user_role_names(db, user)
+                    if request.state.roles:
+                        request.state.role = request.state.roles[0]
                     return user
         except JWTError:
             pass
@@ -194,19 +196,22 @@ class RoleChecker:
         if DISABLE_AUTH:
             return True
 
-        rol_naam = getattr(request.state, "role", None)
-        if not rol_naam:
-            rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
-            if not rol:
-                raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
-            rol_naam = rol.ROL_Naam
+        role_names = list(getattr(request.state, "roles", []) or [])
+        if not role_names:
+            role_names = get_user_role_names(db, current_user)
+            request.state.roles = role_names
+
+        if not role_names:
+            raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
+
+        request.state.role = role_names[0]
 
         # Admins het universele toegang
-        if rol_naam == "Administrateur":
+        if "Administrateur" in role_names:
             return True
 
         # Check of die rol in die toegelate lys is
-        if rol_naam not in self.allowed_roles:
+        if not any(role_name in self.allowed_roles for role_name in role_names):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Toegang geweier. Benodig een van: {self.allowed_roles}"
@@ -227,15 +232,17 @@ async def verifieer_kampus_toegang(
     if DISABLE_AUTH:
         return True
 
-    rol_naam = getattr(request.state, "role", None)
-    if not rol_naam:
-        rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == current_user.Rol_ID).first()
-        rol_naam = rol.ROL_Naam if rol else None
-    
-    if rol_naam == "Administrateur":
+    role_names = list(getattr(request.state, "roles", []) or [])
+    if not role_names:
+        role_names = get_user_role_names(db, current_user)
+        request.state.roles = role_names
+
+    request.state.role = role_names[0] if role_names else None
+
+    if "Administrateur" in role_names:
         return True
-    
-    if rol_naam == "Kampus_Opsigter":
+
+    if "Kampus_Opsigter" in role_names:
         opsigter_rekord = db.query(models.Kampus_Opsigter).filter(
             models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID,
             models.Kampus_Opsigter.Kampus_ID == kampus_id
