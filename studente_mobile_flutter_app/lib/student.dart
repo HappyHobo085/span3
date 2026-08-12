@@ -50,7 +50,7 @@ class _HomePageState extends State<HomePage> {
             // ── Page content ────────────────────────────────────────────
             Expanded(
               child: _selectedIndex == 0
-                  ? const _TuisTab()
+                  ? _TuisTab(onSaamry: () => setState(() => _selectedIndex = 2), onVisitors: () => setState(() => _selectedIndex = 3))
                   : _selectedIndex == 2
                       ? const SaamryTab()
                       : _selectedIndex == 3
@@ -71,7 +71,10 @@ class _HomePageState extends State<HomePage> {
 
 // ─── Tuis (Home) tab ─────────────────────────────────────────────────────────
 class _TuisTab extends StatefulWidget {
-  const _TuisTab();
+  final VoidCallback onSaamry;
+  final VoidCallback onVisitors;
+
+  const _TuisTab({required this.onSaamry, required this.onVisitors});
 
   @override
   State<_TuisTab> createState() => _TuisTabState();
@@ -240,43 +243,132 @@ class _TuisTabState extends State<_TuisTab> {
                   : '${_formatTime(laasteKlas['tyd'])}',
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
-            Row(
-              children: [
-                Expanded(
-                  child: GradientActionButton(
-                    label: 'Wys QR',
-                    onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LeftEmptyPage(),
-                      ),
-                    );
-                  },
-                    height: 50,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GradientActionButton(
-                    label: 'Skandeer Klas',
-                    onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const RightEmptyPage(
+            Text(
+              'VINNIGE AKSIES',
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final available = constraints.maxWidth;
+                final columns = available >= 820 ? 3 : available >= 430 ? 2 : 1;
+                final tileWidth = (available - ((columns - 1) * 12)) / columns;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: tileWidth,
+                      child: _StudentQuickAction(
+                        icon: Icons.qr_code_2_rounded,
+                        label: 'Wys QR',
+                        subtitle: 'Kampustoegang',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LeftEmptyPage()),
                         ),
                       ),
-                    );
-                  },
-                    height: 50,
-                  ),
-                ),
-              ],
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _StudentQuickAction(
+                        icon: Icons.nfc_rounded,
+                        label: 'Skandeer Klas',
+                        subtitle: 'NFC klasinskandering',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RightEmptyPage()),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _StudentQuickAction(
+                        icon: Icons.event_rounded,
+                        label: 'Events',
+                        subtitle: 'Komende events & RSVP',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const _StudentEventsPage()),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _StudentQuickAction(
+                        icon: Icons.directions_car_rounded,
+                        label: 'Saamry',
+                        subtitle: 'Bestuur jou groep',
+                        onTap: widget.onSaamry,
+                      ),
+                    ),
+                    SizedBox(
+                      width: tileWidth,
+                      child: _StudentQuickAction(
+                        icon: Icons.person_add_alt_1_rounded,
+                        label: 'Besoekers',
+                        subtitle: 'Skep uitnodiging',
+                        onTap: widget.onVisitors,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StudentQuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _StudentQuickAction({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: kGlassDecoration(radius: 16),
+          child: Row(
+            children: [
+              Icon(icon, color: kAccent, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: kText1, fontSize: 14, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: kTextMuted, fontSize: 10)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: kTextMuted, size: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -2794,6 +2886,316 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ─── EVENTS — inline binne student.dart ─────────────────────────────────────
+class _StudentEventsPage extends StatefulWidget {
+  const _StudentEventsPage({super.key});
+
+  @override
+  State<_StudentEventsPage> createState() => _StudentEventsPageState();
+}
+
+class _StudentEventsPageState extends State<_StudentEventsPage> {
+  String _view = 'komende';
+  bool _loading = true;
+  int? _busyEventId;
+  String? _error;
+  List<MoonEventDto> _events = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await MoonApi.fetchEvents(view: _view);
+      if (!mounted) return;
+      setState(() {
+        _events = result;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _setView(String value) async {
+    if (_view == value) return;
+    setState(() => _view = value);
+    await _load();
+  }
+
+  Future<void> _rsvp(MoonEventDto event) async {
+    if (_busyEventId != null) return;
+    setState(() => _busyEventId = event.eventId);
+    try {
+      await MoonApi.rsvpEvent(event.eventId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('RSVP bevestig')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyEventId = null);
+    }
+  }
+
+  Future<void> _cancelRsvp(MoonEventDto event) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text('Kanselleer RSVP', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Kanselleer jou RSVP vir ${event.naam}?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Nee'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ja, kanselleer'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || _busyEventId != null) return;
+    setState(() => _busyEventId = event.eventId);
+    try {
+      await MoonApi.cancelEventRsvp(event.eventId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('RSVP gekanselleer')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyEventId = null);
+    }
+  }
+
+  String _date(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  String _time(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Events',
+              subtitle: 'Komende events en RSVP',
+              showBack: true,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+              child: Row(
+                children: [
+                  _StudentEventFilterButton(label: 'Komende', active: _view == 'komende', onTap: () => _setView('komende')),
+                  const SizedBox(width: 8),
+                  _StudentEventFilterButton(label: "My RSVP's", active: _view == 'my', onTap: () => _setView('my')),
+                  const SizedBox(width: 8),
+                  _StudentEventFilterButton(label: 'Vorige', active: _view == 'vorige', onTap: () => _setView('vorige')),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: _buildBody(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [SizedBox(height: 180), Center(child: CircularProgressIndicator())],
+      );
+    }
+    if (_error != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          const SizedBox(height: 80),
+          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 46),
+          const SizedBox(height: 12),
+          Text(_error!, textAlign: TextAlign.center, style: GoogleFonts.inter(color: Colors.red)),
+        ],
+      );
+    }
+    if (_events.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          const SizedBox(height: 80),
+          const Icon(Icons.event_busy_rounded, color: kTextMuted, size: 52),
+          const SizedBox(height: 12),
+          Text(
+            _view == 'my' ? "Jy het nog geen aktiewe RSVP's nie" : 'Geen events om te wys nie',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: kText2, fontSize: 14),
+          ),
+        ],
+      );
+    }
+
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+      itemCount: _events.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final event = _events[index];
+        final busy = _busyEventId == event.eventId;
+        return GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.event_rounded, color: kAccent, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(event.naam, style: GoogleFonts.inter(color: kText1, fontSize: 17, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${event.kampusNaam}${event.lokasieNaam == null ? '' : ' · ${event.lokasieNaam}'}',
+                          style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (event.hetRsvp)
+                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '${_date(event.beginTyd)} · ${_time(event.beginTyd)}–${_time(event.eindTyd)}',
+                style: GoogleFonts.inter(color: kText1, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              if ((event.beskrywing ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(event.beskrywing!, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: kTextMuted, fontSize: 12)),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${event.rsvpAantal} / ${event.kapasiteit} RSVP',
+                      style: GoogleFonts.inter(color: event.vol ? Colors.orange : kText2, fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Text('${event.plekkeOor} plekke oor', style: GoogleFonts.inter(color: kTextMuted, fontSize: 11)),
+                ],
+              ),
+              if (_view != 'vorige' && event.status == 'AKTIEF') ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: event.hetRsvp
+                      ? OutlinedButton.icon(
+                          onPressed: busy ? null : () => _cancelRsvp(event),
+                          icon: const Icon(Icons.event_busy_rounded),
+                          label: Text(busy ? 'Besig...' : 'Kanselleer RSVP'),
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: event.vol || busy ? null : () => _rsvp(event),
+                          icon: const Icon(Icons.how_to_reg_rounded),
+                          label: Text(event.vol ? 'EVENT VOL' : (busy ? 'Besig...' : 'RSVP – EK GAAN')),
+                        ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StudentEventFilterButton extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _StudentEventFilterButton({required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          decoration: BoxDecoration(
+            color: active ? kAccent.withOpacity(0.14) : const Color(0x0AFFFFFF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: active ? kAccent : const Color(0x14FFFFFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(color: active ? kText1 : kTextMuted, fontSize: 11, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );

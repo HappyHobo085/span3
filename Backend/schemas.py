@@ -632,3 +632,29 @@ class BesoekerOtpVerifyRequest(BaseModel):
 
 class BesoekerBesluitRequest(BaseModel):
     kampus_id: int
+
+# --- EVENTS / FUNKSIE RSVP SCHEMAS ---
+
+class EventCreateRequest(BaseModel):
+    naam: str
+    kampus_id: int
+    lokasie_id: Optional[int] = None
+    begin_tyd: datetime
+    eind_tyd: datetime
+    kapasiteit: int
+    beskrywing: Optional[str] = None
+
+
+class EventUpdateRequest(BaseModel):
+    naam: Optional[str] = None
+    kampus_id: Optional[int] = None
+    lokasie_id: Optional[int] = None
+    begin_tyd: Optional[datetime] = None
+    eind_tyd: Optional[datetime] = None
+    kapasiteit: Optional[int] = None
+    beskrywing: Optional[str] = None
+
+
+class EventRsvpRequest(BaseModel):
+    status: str = "GAAN"
+

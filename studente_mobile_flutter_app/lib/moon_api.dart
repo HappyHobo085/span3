@@ -499,6 +499,97 @@ class BesoekerUitnodigingDto {
       (status == 'HANGEND' && !DateTime.now().isBefore(vervalOp));
 }
 
+/// =========================
+/// Events DTOs
+/// =========================
+
+class MoonEventDto {
+  final int eventId;
+  final String naam;
+  final int kampusId;
+  final String kampusNaam;
+  final int? lokasieId;
+  final String? lokasieNaam;
+  final DateTime beginTyd;
+  final DateTime eindTyd;
+  final String? beskrywing;
+  final int kapasiteit;
+  final int rsvpAantal;
+  final int plekkeOor;
+  final bool vol;
+  final String status;
+  final bool isAktief;
+  final String? myRsvp;
+
+  MoonEventDto({
+    required this.eventId,
+    required this.naam,
+    required this.kampusId,
+    required this.kampusNaam,
+    this.lokasieId,
+    this.lokasieNaam,
+    required this.beginTyd,
+    required this.eindTyd,
+    this.beskrywing,
+    required this.kapasiteit,
+    required this.rsvpAantal,
+    required this.plekkeOor,
+    required this.vol,
+    required this.status,
+    required this.isAktief,
+    this.myRsvp,
+  });
+
+  factory MoonEventDto.fromJson(Map<String, dynamic> json) {
+    return MoonEventDto(
+      eventId: (json['event_id'] as num).toInt(),
+      naam: json['naam']?.toString() ?? '',
+      kampusId: (json['kampus_id'] as num).toInt(),
+      kampusNaam: json['kampus_naam']?.toString() ?? 'Onbekende kampus',
+      lokasieId: (json['lokasie_id'] as num?)?.toInt(),
+      lokasieNaam: json['lokasie_naam']?.toString(),
+      beginTyd: DateTime.parse(json['begin_tyd'].toString()).toLocal(),
+      eindTyd: DateTime.parse(json['eind_tyd'].toString()).toLocal(),
+      beskrywing: json['beskrywing']?.toString(),
+      kapasiteit: (json['kapasiteit'] as num?)?.toInt() ?? 0,
+      rsvpAantal: (json['rsvp_aantal'] as num?)?.toInt() ?? 0,
+      plekkeOor: (json['plekke_oor'] as num?)?.toInt() ?? 0,
+      vol: json['vol'] == true,
+      status: json['status']?.toString() ?? 'AKTIEF',
+      isAktief: json['is_aktief'] == true,
+      myRsvp: json['my_rsvp']?.toString(),
+    );
+  }
+
+  bool get hetRsvp => myRsvp == 'GAAN';
+}
+
+class EventRsvpItemDto {
+  final int gebruikerId;
+  final String volleNaam;
+  final String rol;
+  final String nommer;
+  final DateTime rsvpTyd;
+
+  EventRsvpItemDto({
+    required this.gebruikerId,
+    required this.volleNaam,
+    required this.rol,
+    required this.nommer,
+    required this.rsvpTyd,
+  });
+
+  factory EventRsvpItemDto.fromJson(Map<String, dynamic> json) {
+    return EventRsvpItemDto(
+      gebruikerId: (json['gebruiker_id'] as num).toInt(),
+      volleNaam: json['volle_naam']?.toString() ?? '',
+      rol: json['rol']?.toString() ?? '',
+      nommer: json['nommer']?.toString() ?? '',
+      rsvpTyd: DateTime.parse(json['rsvp_tyd'].toString()).toLocal(),
+    );
+  }
+}
+
 class MoonApi {
   MoonApi._();
 
@@ -1479,6 +1570,141 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     return BesoekerUitnodigingDto.fromJson(
       Map<String, dynamic>.from(data as Map),
     );
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Events / RSVP
+  // ---------------------------------------------------------------------------
+
+  static Map<String, String> _eventHeaders({bool jsonBody = false}) {
+    return {
+      'Accept': 'application/json',
+      if (jsonBody) 'Content-Type': 'application/json',
+      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+        'Authorization': 'Bearer ${bearerToken!.trim()}',
+    };
+  }
+
+  static dynamic _decodeEventResponse(http.Response response) {
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Event-versoek het misluk',
+      );
+    }
+    return decoded['data'];
+  }
+
+  static Future<List<MoonEventDto>> fetchEvents({String view = 'komende'}) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/events?view=${Uri.encodeQueryComponent(view)}'),
+      headers: _eventHeaders(),
+    );
+    final data = _decodeEventResponse(response);
+    if (data == null) return [];
+    return (data as List)
+        .map((e) => MoonEventDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  static Future<MoonEventDto> createEvent({
+    required String naam,
+    required int kampusId,
+    int? lokasieId,
+    required DateTime beginTyd,
+    required DateTime eindTyd,
+    required int kapasiteit,
+    String? beskrywing,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events'),
+      headers: _eventHeaders(jsonBody: true),
+      body: jsonEncode({
+        'naam': naam.trim(),
+        'kampus_id': kampusId,
+        'lokasie_id': lokasieId,
+        'begin_tyd': beginTyd.toUtc().toIso8601String(),
+        'eind_tyd': eindTyd.toUtc().toIso8601String(),
+        'kapasiteit': kapasiteit,
+        'beskrywing': beskrywing?.trim(),
+      }),
+    );
+    return MoonEventDto.fromJson(
+      Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
+    );
+  }
+
+  static Future<MoonEventDto> updateEvent({
+    required int eventId,
+    required String naam,
+    required int kampusId,
+    int? lokasieId,
+    required DateTime beginTyd,
+    required DateTime eindTyd,
+    required int kapasiteit,
+    String? beskrywing,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/events/$eventId'),
+      headers: _eventHeaders(jsonBody: true),
+      body: jsonEncode({
+        'naam': naam.trim(),
+        'kampus_id': kampusId,
+        'lokasie_id': lokasieId,
+        'begin_tyd': beginTyd.toUtc().toIso8601String(),
+        'eind_tyd': eindTyd.toUtc().toIso8601String(),
+        'kapasiteit': kapasiteit,
+        'beskrywing': beskrywing?.trim(),
+      }),
+    );
+    return MoonEventDto.fromJson(
+      Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
+    );
+  }
+
+  static Future<MoonEventDto> cancelEvent(int eventId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events/$eventId/kanselleer'),
+      headers: _eventHeaders(),
+    );
+    return MoonEventDto.fromJson(
+      Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
+    );
+  }
+
+  static Future<MoonEventDto> rsvpEvent(int eventId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events/$eventId/rsvp'),
+      headers: _eventHeaders(jsonBody: true),
+      body: jsonEncode({'status': 'GAAN'}),
+    );
+    return MoonEventDto.fromJson(
+      Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
+    );
+  }
+
+  static Future<MoonEventDto> cancelEventRsvp(int eventId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/events/$eventId/rsvp'),
+      headers: _eventHeaders(),
+    );
+    return MoonEventDto.fromJson(
+      Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
+    );
+  }
+
+  static Future<List<EventRsvpItemDto>> fetchEventRsvps(int eventId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/events/$eventId/rsvps'),
+      headers: _eventHeaders(),
+    );
+    final data = Map<String, dynamic>.from(_decodeEventResponse(response) as Map);
+    final raw = data['rsvps'];
+    if (raw == null) return [];
+    return (raw as List)
+        .map((e) => EventRsvpItemDto.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
 }

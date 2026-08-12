@@ -23,6 +23,10 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const _KoshuisPage()));
       return;
     }
+    if (index == 3) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const _NoodPage()));
+      return;
+    }
     setState(() => _selectedIndex = index);
   }
 
@@ -112,7 +116,7 @@ class _TuisTabState extends State<_TuisTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paneelbord',
+              'Dashboard',
               style: GoogleFonts.inter(
                 color: kText1,
                 fontSize: 24,
@@ -138,7 +142,7 @@ class _TuisTabState extends State<_TuisTab> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Dashboard kon nie laai nie: $_fout',
+                        'Paneelbord kon nie laai nie: $_fout',
                         style: GoogleFonts.inter(
                           color: kText2,
                           fontSize: 12,
@@ -264,33 +268,83 @@ class _TuisTabState extends State<_TuisTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _SectionTitle('VINNIGE TOEGANG'),
+                  const _SectionTitle('VINNIGE AKSIES'),
                   const SizedBox(height: 12),
-                  _QuickActionRow(
-                    label: 'Kampus',
-                    icon: Icons.location_city_rounded,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const _KampusPage()),
-                    ),
-                  ),
-                  const _ThinDivider(),
-                  _QuickActionRow(
-                    label: 'Koshuis',
-                    icon: Icons.apartment_rounded,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const _KoshuisPage()),
-                    ),
-                  ),
-                  const _ThinDivider(),
-                  _QuickActionRow(
-                    label: 'Geleenthede',
-                    icon: Icons.event_rounded,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const _EventsPage()),
-                    ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final available = constraints.maxWidth;
+                      final columns = available >= 620
+                          ? 4
+                          : available >= 360
+                              ? 2
+                              : 1;
+                      final tileWidth =
+                          (available - ((columns - 1) * 12)) / columns;
+
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          SizedBox(
+                            width: tileWidth,
+                            child: _OpsigterQuickActionCard(
+                              icon: Icons.location_city_rounded,
+                              label: 'Kampus',
+                              subtitle: 'Kampusoorsig',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const _KampusPage(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: tileWidth,
+                            child: _OpsigterQuickActionCard(
+                              icon: Icons.apartment_rounded,
+                              label: 'Koshuis',
+                              subtitle: 'Koshuisoorsig',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const _KoshuisPage(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: tileWidth,
+                            child: _OpsigterQuickActionCard(
+                              icon: Icons.event_rounded,
+                              label: 'Events',
+                              subtitle: 'Bestuur events',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const _EventsPage(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: tileWidth,
+                            child: _OpsigterQuickActionCard(
+                              icon: Icons.emergency_rounded,
+                              label: 'Nood',
+                              subtitle: 'Noodbeheer',
+                              danger: true,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const _NoodPage(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1086,8 +1140,8 @@ class _KoshuisPageState extends State<_KoshuisPage> {
 }
 
 
-class _EventsPage extends StatelessWidget {
-  const _EventsPage();
+class _NoodPage extends StatelessWidget {
+  const _NoodPage();
 
   @override
   Widget build(BuildContext context) {
@@ -1096,32 +1150,108 @@ class _EventsPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Geleenthede', subtitle: 'Kampusgeleenthede', showBack: true),
+            const AppScreenHeader(
+              title: 'Nood',
+              subtitle: 'Kampus noodbeheer',
+              showBack: true,
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: const [
-                        Expanded(child: _OpsigterMetricCard(label: 'GELEENTHEDE', value: '0', subtitle: 'Aktief', icon: Icons.event_rounded)),
-                        SizedBox(width: 12),
-                        Expanded(child: _OpsigterMetricCard(label: 'TOEGANGE', value: '0', subtitle: 'Vandag', icon: Icons.qr_code_scanner_rounded)),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.8),
+                          width: 1.4,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.emergency_rounded,
+                            color: Colors.red,
+                            size: 52,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'NOODSTELSEL',
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Geen aktiewe noodgeval',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Die noodsein en sirene word later aan Firebase gekoppel.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kText2,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    const _InfoGlassCard(title: 'AKTIEWE GELEENTHEDE', name: 'Geen aktiewe geleenthede', detail: 'Geleenthede sal hier verskyn wanneer dit geskep word.', icon: Icons.event_busy_rounded),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     GlassCard(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const _SectionTitle('AKSIES'),
+                          const _SectionTitle('NOODAKSIE'),
                           const SizedBox(height: 12),
-                          _QuickActionRow(label: 'Skep Geleentheid', icon: Icons.add_circle_outline_rounded, onTap: () => _showComingSoon(context)),
-                          const _ThinDivider(),
-                          _QuickActionRow(label: 'Geleentheid-toegang', icon: Icons.qr_code_2_rounded, onTap: () => _showComingSoon(context)),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              onPressed: null,
+                              icon: const Icon(Icons.warning_amber_rounded),
+                              label: Text(
+                                'AKTIVEER NOOD',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                disabledBackgroundColor:
+                                    Colors.red.withOpacity(0.28),
+                                disabledForegroundColor:
+                                    Colors.white.withOpacity(0.55),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Die knoppie bly vir nou gedeaktiveer totdat ons die noodsein, sirene en toestelkennisgewings koppel.',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 11,
+                              height: 1.4,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1130,6 +1260,581 @@ class _EventsPage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _EventsPage extends StatefulWidget {
+  const _EventsPage();
+
+  @override
+  State<_EventsPage> createState() => _EventsPageState();
+}
+
+class _EventsPageState extends State<_EventsPage> {
+  bool _loading = true;
+  String? _error;
+  List<MoonEventDto> _events = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final events = await MoonApi.fetchEvents(view: 'komende');
+      if (!mounted) return;
+      setState(() {
+        _events = events;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  String _date(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  String _time(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _create() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const _EventFormPage()),
+    );
+    if (changed == true) await _load();
+  }
+
+  Future<void> _manage(MoonEventDto event) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => _OpsigterEventDetailPage(event: event)),
+    );
+    if (changed == true) await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalRsvp = _events.fold<int>(0, (sum, e) => sum + e.rsvpAantal);
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(title: 'Events', subtitle: 'Skep en bestuur kampus-events', showBack: true),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: _loading ? '—' : '${_events.length}', subtitle: 'Komende', icon: Icons.event_rounded)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _OpsigterMetricCard(label: 'RSVP', value: _loading ? '—' : '$totalRsvp', subtitle: 'Bevestig', icon: Icons.how_to_reg_rounded)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    GradientActionButton(label: 'Skep Nuwe Event', onTap: _create, height: 52),
+                    const SizedBox(height: 16),
+                    if (_error != null)
+                      GlassCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Text(_error!, style: GoogleFonts.inter(color: Colors.red, fontSize: 12)),
+                      )
+                    else if (_loading)
+                      const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
+                    else if (_events.isEmpty)
+                      const _InfoGlassCard(title: 'KOMENDE EVENTS', name: 'Geen komende events', detail: 'Druk “Skep Nuwe Event” om die eerste event te skep.', icon: Icons.event_busy_rounded)
+                    else ...[
+                      const _SectionTitle('KOMENDE EVENTS'),
+                      const SizedBox(height: 10),
+                      ..._events.map((event) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GlassCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.event_rounded, color: kAccent, size: 28),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(event.naam, style: GoogleFonts.inter(color: kText1, fontSize: 17, fontWeight: FontWeight.w800))),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text('${event.kampusNaam}${event.lokasieNaam == null ? '' : ' · ${event.lokasieNaam}'}', style: GoogleFonts.inter(color: kText2, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              Text('${_date(event.beginTyd)} · ${_time(event.beginTyd)}–${_time(event.eindTyd)}', style: GoogleFonts.inter(color: kText1, fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 10),
+                              Text('${event.rsvpAantal} / ${event.kapasiteit} RSVP · ${event.plekkeOor} plekke oor', style: GoogleFonts.inter(color: event.vol ? Colors.orange : kTextMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 12),
+                              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _manage(event), icon: const Icon(Icons.settings_rounded), label: const Text('BESTUUR EVENT'))),
+                            ],
+                          ),
+                        ),
+                      )),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventFormPage extends StatefulWidget {
+  final MoonEventDto? event;
+  const _EventFormPage({this.event});
+
+  @override
+  State<_EventFormPage> createState() => _EventFormPageState();
+}
+
+class _EventFormPageState extends State<_EventFormPage> {
+  final _name = TextEditingController();
+  final _capacity = TextEditingController(text: '100');
+  final _description = TextEditingController();
+  List<KampusDto> _campuses = [];
+  List<LokasieDto> _locations = [];
+  KampusDto? _campus;
+  LokasieDto? _location;
+  DateTime _start = DateTime.now().add(const Duration(days: 1));
+  DateTime _end = DateTime.now().add(const Duration(days: 1, hours: 2));
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  bool get _editing => widget.event != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.event;
+    if (e != null) {
+      _name.text = e.naam;
+      _capacity.text = '${e.kapasiteit}';
+      _description.text = e.beskrywing ?? '';
+      _start = e.beginTyd;
+      _end = e.eindTyd;
+    }
+    _loadLookups();
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _capacity.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLookups() async {
+    try {
+      final campuses = await MoonApi.fetchOpsigterKampusse();
+      final locations = await MoonApi.fetchLokasies();
+      if (!mounted) return;
+      final targetCampus = widget.event?.kampusId;
+      final selectedCampus = campuses.where((c) => c.kampusId == targetCampus).isNotEmpty
+          ? campuses.firstWhere((c) => c.kampusId == targetCampus)
+          : (campuses.isNotEmpty ? campuses.first : null);
+      final targetLocation = widget.event?.lokasieId;
+      final selectedLocation = locations.where((l) => l.id == targetLocation).isNotEmpty
+          ? locations.firstWhere((l) => l.id == targetLocation)
+          : null;
+      setState(() {
+        _campuses = campuses;
+        _locations = locations;
+        _campus = selectedCampus;
+        _location = selectedLocation;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  List<LokasieDto> get _filteredLocations {
+    final id = _campus?.kampusId;
+    if (id == null) return [];
+    return _locations.where((l) => l.kampusId == id).toList();
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime initial) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 1095)),
+    );
+    if (date == null || !mounted) return null;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  String _dt(DateTime value) {
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}  ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final name = _name.text.trim();
+    final capacity = int.tryParse(_capacity.text.trim());
+    if (name.isEmpty || _campus?.kampusId == null || capacity == null || capacity < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Vul event naam, kampus en ’n geldige kapasiteit in')));
+      return;
+    }
+    if (!_end.isAfter(_start)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Eindtyd moet ná begintyd wees')));
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      if (_editing) {
+        await MoonApi.updateEvent(
+          eventId: widget.event!.eventId,
+          naam: name,
+          kampusId: _campus!.kampusId!,
+          lokasieId: _location?.id,
+          beginTyd: _start,
+          eindTyd: _end,
+          kapasiteit: capacity,
+          beskrywing: _description.text,
+        );
+      } else {
+        await MoonApi.createEvent(
+          naam: name,
+          kampusId: _campus!.kampusId!,
+          lokasieId: _location?.id,
+          beginTyd: _start,
+          eindTyd: _end,
+          kapasiteit: capacity,
+          beskrywing: _description.text,
+        );
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(title: _editing ? 'Wysig Event' : 'Skep Event', subtitle: 'Event besonderhede', showBack: true),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null) ...[
+                            Text(_error!, style: GoogleFonts.inter(color: Colors.red)),
+                            const SizedBox(height: 12),
+                          ],
+                          _EventField(controller: _name, label: 'Event naam'),
+                          const SizedBox(height: 12),
+                          GlassCard(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<KampusDto>(
+                                value: _campus,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF111827),
+                                hint: const Text('Kies kampus', style: TextStyle(color: kTextMuted)),
+                                items: _campuses.map((c) => DropdownMenuItem(value: c, child: Text(c.naam, style: const TextStyle(color: kText1)))).toList(),
+                                onChanged: (value) => setState(() {
+                                  _campus = value;
+                                  if (_location != null && _location!.kampusId != value?.kampusId) _location = null;
+                                }),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          GlassCard(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<LokasieDto>(
+                                value: _filteredLocations.any((l) => l.id == _location?.id) ? _location : null,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF111827),
+                                hint: const Text('Lokaal / area (opsioneel)', style: TextStyle(color: kTextMuted)),
+                                items: _filteredLocations.map((l) => DropdownMenuItem(value: l, child: Text(l.naam, style: const TextStyle(color: kText1)))).toList(),
+                                onChanged: (value) => setState(() => _location = value),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _DateTimeTile(label: 'Begin', value: _dt(_start), onTap: () async { final v = await _pickDateTime(_start); if (v != null) setState(() => _start = v); }),
+                          const SizedBox(height: 10),
+                          _DateTimeTile(label: 'Einde', value: _dt(_end), onTap: () async { final v = await _pickDateTime(_end); if (v != null) setState(() => _end = v); }),
+                          const SizedBox(height: 12),
+                          _EventField(controller: _capacity, label: 'Kapasiteit', keyboardType: TextInputType.number),
+                          const SizedBox(height: 12),
+                          _EventField(controller: _description, label: 'Beskrywing', maxLines: 4),
+                          const SizedBox(height: 18),
+                          GradientActionButton(label: _saving ? 'Besig...' : (_editing ? 'Stoor Veranderinge' : 'Skep Event'), onTap: _saving ? () {} : _save, height: 52),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OpsigterEventDetailPage extends StatefulWidget {
+  final MoonEventDto event;
+  const _OpsigterEventDetailPage({required this.event});
+
+  @override
+  State<_OpsigterEventDetailPage> createState() => _OpsigterEventDetailPageState();
+}
+
+class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
+  bool _changed = false;
+
+  Future<void> _edit() async {
+    final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _EventFormPage(event: widget.event)));
+    if (changed == true && mounted) {
+      setState(() => _changed = true);
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _cancel() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text('Kanselleer Event', style: TextStyle(color: Colors.white)),
+        content: Text('Kanselleer ${widget.event.naam}?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nee')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ja, kanselleer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    try {
+      await MoonApi.cancelEvent(widget.event.eventId);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.event;
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(title: e.naam, subtitle: 'Event bestuur', showBack: true),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [
+                      Expanded(child: _OpsigterMetricCard(label: 'RSVP', value: '${e.rsvpAantal}', subtitle: 'Bevestig', icon: Icons.how_to_reg_rounded)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _OpsigterMetricCard(label: 'OOP', value: '${e.plekkeOor}', subtitle: 'Plekke oor', icon: Icons.event_seat_rounded)),
+                    ]),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(e.kampusNaam, style: GoogleFonts.inter(color: kText1, fontSize: 15, fontWeight: FontWeight.w800)),
+                        if (e.lokasieNaam != null) ...[const SizedBox(height: 4), Text(e.lokasieNaam!, style: GoogleFonts.inter(color: kText2))],
+                        if ((e.beskrywing ?? '').isNotEmpty) ...[const SizedBox(height: 10), Text(e.beskrywing!, style: GoogleFonts.inter(color: kTextMuted, fontSize: 12))],
+                      ]),
+                    ),
+                    const SizedBox(height: 14),
+                    GradientActionButton(label: 'Sien RSVP-Lys', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _EventRsvpListPage(event: e))), height: 50),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(onPressed: _edit, icon: const Icon(Icons.edit_rounded), label: const Text('Wysig Event')),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(onPressed: _cancel, icon: const Icon(Icons.cancel_rounded, color: Colors.red), label: const Text('Kanselleer Event', style: TextStyle(color: Colors.red))),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventRsvpListPage extends StatefulWidget {
+  final MoonEventDto event;
+  const _EventRsvpListPage({required this.event});
+
+  @override
+  State<_EventRsvpListPage> createState() => _EventRsvpListPageState();
+}
+
+class _EventRsvpListPageState extends State<_EventRsvpListPage> {
+  bool _loading = true;
+  String? _error;
+  List<EventRsvpItemDto> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final items = await MoonApi.fetchEventRsvps(widget.event.eventId);
+      if (!mounted) return;
+      setState(() { _items = items; _loading = false; _error = null; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(title: "RSVP-Lys", subtitle: widget.event.naam, showBack: true),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _items.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = _items[index];
+                              return GlassCard(
+                                padding: const EdgeInsets.all(14),
+                                child: Row(children: [
+                                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text(item.volleNaam, style: GoogleFonts.inter(color: kText1, fontSize: 14, fontWeight: FontWeight.w700)),
+                                    const SizedBox(height: 3),
+                                    Text('${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}', style: GoogleFonts.inter(color: kTextMuted, fontSize: 11)),
+                                  ])),
+                                ]),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final int maxLines;
+  final TextInputType? keyboardType;
+  const _EventField({required this.controller, required this.label, this.maxLines = 1, this.keyboardType});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        style: GoogleFonts.inter(color: kText1),
+        decoration: InputDecoration(border: InputBorder.none, labelText: label, labelStyle: GoogleFonts.inter(color: kTextMuted)),
+      ),
+    );
+  }
+}
+
+class _DateTimeTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  const _DateTimeTile({required this.label, required this.value, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: GlassCard(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            const Icon(Icons.schedule_rounded, color: kAccent),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: GoogleFonts.inter(color: kTextMuted, fontSize: 10, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(value, style: GoogleFonts.inter(color: kText1, fontSize: 13, fontWeight: FontWeight.w600)),
+            ])),
+            const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+          ]),
         ),
       ),
     );
@@ -1192,6 +1897,78 @@ class _OpsigterMetricCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(subtitle, style: GoogleFonts.inter(color: kText2, fontSize: 11)),
         ],
+      ),
+    );
+  }
+}
+
+
+class _OpsigterQuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool danger;
+
+  const _OpsigterQuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = danger ? Colors.red : kAccent;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 112),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: danger
+                ? Colors.red.withOpacity(0.08)
+                : const Color(0x0DFFFFFF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: danger
+                  ? Colors.red.withOpacity(0.45)
+                  : const Color(0x14FFFFFF),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: accent, size: 28),
+              const Spacer(),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: kText1,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: kTextMuted,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1284,9 +2061,10 @@ class _OpsigterNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _NavItem(icon: Icons.dashboard_rounded, label: 'Paneelbord'),
+      _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
       _NavItem(icon: Icons.location_city_rounded, label: 'Kampus'),
       _NavItem(icon: Icons.apartment_rounded, label: 'Koshuis'),
+      _NavItem(icon: Icons.emergency_rounded, label: 'Nood'),
       _NavItem(icon: Icons.person_rounded, label: 'Profiel'),
     ];
 
@@ -1315,7 +2093,20 @@ class _OpsigterNavBar extends StatelessWidget {
                   ),
                   Icon(items[i].icon, size: 22, color: active ? kAccent : kTextMuted),
                   const SizedBox(height: 4),
-                  Text(items[i].label, style: GoogleFonts.inter(color: active ? kText1 : kTextMuted, fontSize: 10, fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      items[i].label,
+                      maxLines: 1,
+                      style: GoogleFonts.inter(
+                        color: active ? kText1 : kTextMuted,
+                        fontSize: 9.5,
+                        fontWeight: active
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

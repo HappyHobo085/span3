@@ -189,16 +189,57 @@ class Koshuis(Base):
 class Funksie(Base):
     __tablename__ = 'funskie'
 
-    Funksie_ID    = Column(Integer, primary_key=True, index=True)
-    Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
-    FUN_Naam      = Column(String(100), nullable=False)
-    FUN_Begin_Tyd = Column(DateTime, nullable=False)
-    FUN_Eind_Tyd  = Column(DateTime, nullable=False)
-    FUN_Beskrywing = Column(Text)
-    FUN_Is_Aktief = Column(Boolean, nullable=False, default=True)
+    Funksie_ID      = Column(Integer, primary_key=True, index=True)
+    Kampus_ID       = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+    Lokasie_ID      = Column(Integer, ForeignKey('lokasie.Lokasie_ID'), nullable=True)
+    Geskep_Deur_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
+    FUN_Naam        = Column(String(100), nullable=False)
+    FUN_Begin_Tyd   = Column(DateTime, nullable=False)
+    FUN_Eind_Tyd    = Column(DateTime, nullable=False)
+    FUN_Beskrywing  = Column(Text)
+    FUN_Kapasiteit  = Column(Integer, nullable=False, default=100)
+    FUN_Status      = Column(String(20), nullable=False, default='AKTIEF')
+    FUN_Is_Aktief   = Column(Boolean, nullable=False, default=True)
+    Geskep_Op       = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    kampus          = relationship("Kampus",         back_populates="funksies")
+    kampus            = relationship("Kampus", back_populates="funksies")
+    lokasie           = relationship("Lokasie", foreign_keys=[Lokasie_ID])
+    geskep_deur       = relationship("Gebruikers", foreign_keys=[Geskep_Deur_ID])
     funskie_besoekers = relationship("Funksie_Besoekers", back_populates="funskie")
+    rsvps             = relationship(
+        "FunksieRSVP",
+        back_populates="funksie",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint('"FUN_Kapasiteit" > 0', name='ck_funksie_kapasiteit'),
+        CheckConstraint(
+            '"FUN_Status" IN (\'AKTIEF\', \'GEKANSELLEER\')',
+            name='ck_funksie_status',
+        ),
+    )
+
+
+class FunksieRSVP(Base):
+    __tablename__ = 'funksie_rsvp'
+
+    Funksie_ID   = Column(Integer, ForeignKey('funskie.Funksie_ID'), primary_key=True)
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    RSVP_Status  = Column(String(20), nullable=False, default='GAAN')
+    RSVP_Tyd     = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    funskie   = relationship("Funksie", back_populates="rsvps")
+    gebruiker = relationship("Gebruikers")
+
+    __table_args__ = (
+        CheckConstraint(
+            '"RSVP_Status" IN (\'GAAN\', \'KAN_NIE\', \'GEKANSELLEER\')',
+            name='ck_funksie_rsvp_status',
+        ),
+    )
 
 class Funksie_Besoekers(Base):
     __tablename__ = 'funskie_besoekers'

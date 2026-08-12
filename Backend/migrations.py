@@ -233,3 +233,109 @@ def run_migrations(engine):
             f"(Saamry-hek toegangslogs) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 011: Events / Funksie RSVP
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "Lokasie_ID" INT NULL'
+            ))
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "Geskep_Deur_ID" INT NULL'
+            ))
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "FUN_Kapasiteit" INT NOT NULL DEFAULT 100'
+            ))
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "FUN_Status" VARCHAR(20) NOT NULL DEFAULT \'AKTIEF\''
+            ))
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'
+            ))
+            _conn.execute(text(
+                'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'
+            ))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'fk_funksie_lokasie'
+                    ) THEN
+                        ALTER TABLE funksie
+                        ADD CONSTRAINT fk_funksie_lokasie
+                        FOREIGN KEY ("Lokasie_ID") REFERENCES lokasie("Lokasie_ID");
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'fk_funksie_geskep_deur'
+                    ) THEN
+                        ALTER TABLE funksie
+                        ADD CONSTRAINT fk_funksie_geskep_deur
+                        FOREIGN KEY ("Geskep_Deur_ID") REFERENCES gebruikers("Gebruiker_ID");
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_funksie_kapasiteit'
+                    ) THEN
+                        ALTER TABLE funksie
+                        ADD CONSTRAINT ck_funksie_kapasiteit CHECK ("FUN_Kapasiteit" > 0);
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_funksie_status'
+                    ) THEN
+                        ALTER TABLE funksie
+                        ADD CONSTRAINT ck_funksie_status
+                        CHECK ("FUN_Status" IN ('AKTIEF', 'GEKANSELLEER'));
+                    END IF;
+                END $$;
+            """))
+
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS funksie_rsvp (
+                    "Funksie_ID" INT NOT NULL REFERENCES funksie("Funksie_ID"),
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "RSVP_Status" VARCHAR(20) NOT NULL DEFAULT 'GAAN',
+                    "RSVP_Tyd" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY ("Funksie_ID", "Gebruiker_ID"),
+                    CONSTRAINT ck_funksie_rsvp_status
+                        CHECK ("RSVP_Status" IN ('GAAN', 'KAN_NIE', 'GEKANSELLEER'))
+                )
+            """))
+
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_funksie_begin_tyd ON funksie ("FUN_Begin_Tyd")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_funksie_kampus ON funksie ("Kampus_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_funksie_rsvp_gebruiker ON funksie_rsvp ("Gebruiker_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_funksie_rsvp_status ON funksie_rsvp ("RSVP_Status")'
+            ))
+
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 011 "
+            f"(Events / Funksie RSVP) het misluk: {_migrasie_fout}"
+        )
+
