@@ -16,15 +16,24 @@
  */
 
 (function () {
+  // Lees 'n kleur uit die CSS-veranderlikes in styles.css sodat die grafieke
+  // saam met die tema (lig/donker) verander wanneer hulle weer geteken word.
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
   // ----- Kleure wat al die grafieke deel -----
+  // Die tema-afhanklike kleure is "getters": elke keer as 'n grafiek geteken
+  // word, word die huidige tema se waarde gelees.
   var COLORS = {
     series1: '#009fd4',              // Studente — donkerder stap van --accent-2
     series2: '#7b61ff',              // Personeel — die --accent kleur
-    dim: 'rgba(255,255,255,0.20)',   // de-emfase: uitgeteken / afwesig
-    grid: 'rgba(255,255,255,0.07)',  // dun rooster-lyne
-    axis: 'rgba(255,255,255,0.35)',  // as-etikette
-    ink: 'rgba(255,255,255,0.85)',   // waarde-etikette
-    surface: '#0A1423',              // die bladsy se agtergrond (vir ringe/gapings)
+    get dim() { return cssVar('--viz-dim', 'rgba(255,255,255,0.20)'); },   // de-emfase
+    get grid() { return cssVar('--viz-grid', 'rgba(255,255,255,0.07)'); }, // rooster-lyne
+    get axis() { return cssVar('--viz-axis', 'rgba(255,255,255,0.35)'); }, // as-etikette
+    get ink() { return cssVar('--viz-ink', 'rgba(255,255,255,0.85)'); },   // waarde-etikette
+    get surface() { return cssVar('--bg', '#0A1423'); },                   // blad-agtergrond
     accent: '#7b61ff',
     warning: '#f59e0b',
     error: '#ef4444'
@@ -391,7 +400,7 @@
     // Kruishaar + tooltip: beweeg oor die grafiek en sien elke reeks se waarde.
     var cross = svgEl('line', {
       y1: padT, y2: h - padB, x1: padL, x2: padL,
-      stroke: 'rgba(255,255,255,0.25)', 'stroke-width': 1, visibility: 'hidden'
+      stroke: COLORS.axis, 'stroke-width': 1, visibility: 'hidden'
     });
     svg.appendChild(cross);
 
@@ -501,7 +510,7 @@
       var x = padL + i * band + (band - barW) / 2;
       var topY = baseY - plotH * v / 100;
       var selected = i === opts.selectedIndex;
-      var fill = selected ? COLORS.accent : 'rgba(255,255,255,0.22)';
+      var fill = selected ? COLORS.accent : COLORS.dim;
 
       var g = svgEl('g', { 'class': 'viz-col' });
 
