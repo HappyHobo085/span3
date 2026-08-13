@@ -176,7 +176,14 @@ def _normalize_insert_row(table, row: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]]) -> int:
+def _normalize_import_mode(mode: Optional[str]) -> str:
+    value = (mode or 'merge').strip().lower()
+    if value not in {'merge', 'replace'}:
+        raise ValueError("Import mode must be either 'merge' or 'replace'.")
+    return value
+
+
+def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]], mode: str = 'merge') -> int:
     table = _resolve_table(table_name)
     valid_rows = []
     pk_columns = [column for column in table.columns if column.primary_key]
@@ -184,27 +191,36 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
     for row in rows:
         sanitized = _normalize_insert_row(table, row)
 
-        if pk_columns:
-            pk_values = []
-            for column in pk_columns:
-                if column.name in sanitized:
-                    pk_values.append((column.name, sanitized[column.name]))
-            if pk_values:
+        if conflict_columns:
+            matched_values = []
+            for column_name in sorted(conflict_columns):
+                if column_name in sanitized:
+                    matched_values.append((column_name, sanitized[column_name]))
+            if matched_values:
                 conditions = []
-                for column_name, value in pk_values:
+                for column_name, value in matched_values:
                     conditions.append(getattr(table.c, column_name) == value)
                 existing_row = db.execute(table.select().where(*conditions)).first()
                 if existing_row is not None:
                     existing_data = dict(existing_row._mapping)
+                    if mode_name == 'replace':
+                        update_values = {
+                            column.name: sanitized[column.name]
+                            for column in table.columns
+                            if column.name in sanitized
+                        }
+                        update_rows.append((conditions, update_values))
+                        continue
+
                     comparison_row = {
                         column.name: sanitized.get(column.name)
                         for column in table.columns
-                        if not column.primary_key
+                        if column.name not in conflict_columns
                     }
                     existing_comparison = {
                         column.name: existing_data.get(column.name)
                         for column in table.columns
-                        if not column.primary_key
+                        if column.name not in conflict_columns
                     }
                     if comparison_row == existing_comparison:
                         continue
@@ -234,8 +250,14 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
             continue
 
         if insertable:
-            valid_rows.append(insertable)
+            insert_rows.append(insertable)
 
+<<<<<<< HEAD
+=======
+    for conditions, values in update_rows:
+        db.execute(table.update().where(*conditions).values(**values))
+
+>>>>>>> f173f36 (Add CSV import mode selection and handling for merge/replace strategies)
     if not valid_rows:
         return 0
 
@@ -280,12 +302,14 @@ async def import_table_csv(
     table: str = Form(..., description="Table name or model name to import into"),
     file: Optional[UploadFile] = File(default=None),
     text: Optional[str] = Form(default=None),
+    mode: str = Form(default="merge", description="Import strategy: merge or replace"),
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
 ):
     try:
         _resolve_table(table)
+        import_mode = _normalize_import_mode(mode)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -311,7 +335,7 @@ async def import_table_csv(
     inserted = _insert_csv_rows(db, table, rows)
     return schemas.APIResponse(
         sukses=True,
-        data={"table": _resolve_table(table).name, "imported_rows": inserted},
+        data={"table": _resolve_table(table).name, "imported_rows": inserted, "mode": import_mode},
     )
 
 

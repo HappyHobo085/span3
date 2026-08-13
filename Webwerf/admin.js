@@ -81,6 +81,7 @@
   const uploadCsvBtn = document.getElementById('upload-csv-btn');
   const csvFileInput = document.getElementById('csv-file-input');
   const csvModal = document.getElementById('csvModal');
+  const csvModeSelect = document.getElementById('csv-mode-select');
   const csvTableSelect = document.getElementById('csv-table-select');
   const csvActionSelect = document.getElementById('csv-action-select');
   const csvSourceSelect = document.getElementById('csv-source-select');
@@ -208,6 +209,38 @@
     statusEl.hidden = true;
   }
 
+  async function reloadAdminPageDataAfterImport(tableName) {
+    const table = (tableName || '').toLowerCase();
+
+    const refreshTasks = [
+      loadKampusDropdown(),
+      loadLokale(),
+      loadKoshuise(),
+      loadRolleDropdown(),
+      loadGebruikers()
+    ];
+
+    try {
+      await Promise.all(refreshTasks);
+
+      if (table.includes('kampus')) {
+        await loadKampusDropdown();
+      }
+      if (table.includes('loka') || table.includes('klas')) {
+        await loadLokale();
+      }
+      if (table.includes('kosh')) {
+        await loadKoshuise();
+      }
+      if (table.includes('gebruiker') || table.includes('role') || table.includes('rol')) {
+        await loadGebruikers();
+        await loadRolleDropdown();
+      }
+    } catch (error) {
+      console.warn('CSV import refresh failed:', error);
+    }
+  }
+
   function openCsvModal() {
     if (!csvModal) return;
     csvModal.classList.add('open');
@@ -217,6 +250,9 @@
     }
     if (csvActionSelect) {
       csvActionSelect.value = 'import';
+    }
+    if (csvModeSelect) {
+      csvModeSelect.value = 'merge';
     }
     if (csvSourceSelect) {
       csvSourceSelect.value = 'file';
@@ -235,6 +271,7 @@
     if (csvFilePicker) csvFilePicker.value = '';
     if (csvTableSelect) csvTableSelect.value = '';
     if (csvSourceSelect) csvSourceSelect.value = 'file';
+    if (csvModeSelect) csvModeSelect.value = 'merge';
     clearCsvStatus();
     updateCsvPanelVisibility();
   }
@@ -269,6 +306,7 @@
     const table = csvTableSelect ? csvTableSelect.value : '';
     const action = csvActionSelect ? csvActionSelect.value : 'import';
     const source = csvSourceSelect ? csvSourceSelect.value : 'file';
+    const mode = csvModeSelect ? csvModeSelect.value : 'merge';
 
     if (!table) {
       showCsvStatus('Kies asseblief die tabel wat jy wil gebruik.', 'error');
@@ -308,13 +346,22 @@
       return;
     }
 
-    const result = await window.MoonApi.importCsvTable(table, source === 'file' ? file : null, source === 'text' ? text : null);
+    const result = await window.MoonApi.importCsvTable(
+      table,
+      source === 'file' ? file : null,
+      source === 'text' ? text : null,
+      mode
+    );
     if (!result || !result.ok) {
       showCsvStatus((result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.', 'error');
       return;
     }
 
-    showCsvStatus('CSV is suksesvol opgelaai na ' + table + '.', 'success');
+    if (csvFilePicker) csvFilePicker.value = '';
+    if (csvTextArea) csvTextArea.value = '';
+
+    showCsvStatus('CSV is suksesvol opgelaai na ' + table + ' in ' + mode + '-modus.', 'success');
+    await reloadAdminPageDataAfterImport(table);
   }
 
   // =====================================================================

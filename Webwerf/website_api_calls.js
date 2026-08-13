@@ -386,9 +386,10 @@
     /**
      * POST /admin/csv/import
      */
-    importCsvTable: async function (table, file, text) {
+    importCsvTable: async function (table, file, text, mode) {
       const formData = new FormData();
       formData.append('table', table);
+      formData.append('mode', mode || 'merge');
 
       if (file) {
         formData.append('file', file);
