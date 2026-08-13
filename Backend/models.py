@@ -242,14 +242,14 @@ class FunksieRSVP(Base):
     )
 
 class Funksie_Besoekers(Base):
-    __tablename__ = 'funskie_besoekers'
+    __tablename__ = 'funksie_besoekers'
 
     Besoekers_Groep_ID = Column(Integer, ForeignKey('besoekers_groep.Besoekers_Groep_ID'), primary_key=True)
-    Funksie_ID         = Column(Integer, ForeignKey('funskie.Funksie_ID'),                 primary_key=True)
+    Funksie_ID         = Column(Integer, ForeignKey('funksie.Funksie_ID'),                 primary_key=True)
     FUNB_Status        = Column(String(32), nullable=False)
 
-    besoekers_groep = relationship("Besoekers_Groep", back_populates="funskie_besoekers")
-    funskie         = relationship("Funksie",         back_populates="funskie_besoekers")
+    besoekers_groep = relationship("Besoekers_Groep", back_populates="funksie_besoekers")
+    funksie         = relationship("Funksie",         back_populates="funksie_besoekers")
 
 # --- SAAMRY MODELS ---
 
