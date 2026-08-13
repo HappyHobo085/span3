@@ -185,8 +185,11 @@ def _normalize_import_mode(mode: Optional[str]) -> str:
 
 def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]], mode: str = 'merge') -> int:
     table = _resolve_table(table_name)
-    valid_rows = []
+    mode_name = _normalize_import_mode(mode)
     pk_columns = [column for column in table.columns if column.primary_key]
+    conflict_columns = {column.name for column in pk_columns}
+    insert_rows = []
+    update_rows = []
 
     for row in rows:
         sanitized = _normalize_insert_row(table, row)
@@ -252,18 +255,16 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
         if insertable:
             insert_rows.append(insertable)
 
-<<<<<<< HEAD
-=======
     for conditions, values in update_rows:
         db.execute(table.update().where(*conditions).values(**values))
 
->>>>>>> f173f36 (Add CSV import mode selection and handling for merge/replace strategies)
-    if not valid_rows:
+    if not insert_rows and not update_rows:
         return 0
 
-    db.execute(table.insert(), valid_rows)
+    if insert_rows:
+        db.execute(table.insert(), insert_rows)
     db.commit()
-    return len(valid_rows)
+    return len(insert_rows) + len(update_rows)
 
 
 @router.get("/csv/tables")
@@ -332,7 +333,7 @@ async def import_table_csv(
             detail="No CSV rows were found to import.",
         )
 
-    inserted = _insert_csv_rows(db, table, rows)
+    inserted = _insert_csv_rows(db, table, rows, mode=import_mode)
     return schemas.APIResponse(
         sukses=True,
         data={"table": _resolve_table(table).name, "imported_rows": inserted, "mode": import_mode},
