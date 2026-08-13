@@ -4,22 +4,22 @@ from sqlalchemy import text
 
 
 def run_pre_migrations(engine):
-    """Run schema renames that must happen before SQLAlchemy create_all()."""
+    """Rename legacy misspelled event tables before SQLAlchemy create_all()."""
     try:
         with engine.begin() as _conn:
             _conn.execute(text("""
                 DO $$
                 BEGIN
-                    -- Rename the original misspelled event table, if it still exists.
+                    -- If only the old misspelled table exists, rename it.
                     IF to_regclass('public.funksie') IS NULL
-                       AND to_regclass('public.funksie') IS NOT NULL THEN
-                        ALTER TABLE funskie RENAME TO funksie;
+                       AND to_regclass('public.funskie') IS NOT NULL THEN
+                        ALTER TABLE public.funskie RENAME TO funksie;
                     END IF;
 
-                    -- Rename the original misspelled event-visitor link table too.
+                    -- Same for the old event/visitor link table.
                     IF to_regclass('public.funksie_besoekers') IS NULL
-                       AND to_regclass('public.funksie_besoekers') IS NOT NULL THEN
-                        ALTER TABLE funskie_besoekers RENAME TO funksie_besoekers;
+                       AND to_regclass('public.funskie_besoekers') IS NOT NULL THEN
+                        ALTER TABLE public.funskie_besoekers RENAME TO funksie_besoekers;
                     END IF;
                 END $$;
             """))
@@ -264,6 +264,7 @@ def run_migrations(engine):
     # Migrasie 011: Events / Funksie RSVP
     try:
         with engine.connect() as _conn:
+            # Canonical event table is now "funksie".
             _conn.execute(text(
                 'ALTER TABLE funksie ADD COLUMN IF NOT EXISTS "Lokasie_ID" INT NULL'
             ))
@@ -334,9 +335,40 @@ def run_migrations(engine):
                 END $$;
             """))
 
+            # If the old "funskie" table still exists as well as "funksie",
+            # preserve its old event rows by copying the common columns across.
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF to_regclass('public.funksie') IS NOT NULL
+                       AND to_regclass('public.funskie') IS NOT NULL THEN
+                        INSERT INTO funksie (
+                            "Funksie_ID",
+                            "Kampus_ID",
+                            "FUN_Naam",
+                            "FUN_Begin_Tyd",
+                            "FUN_Eind_Tyd",
+                            "FUN_Beskrywing",
+                            "FUN_Is_Aktief"
+                        )
+                        SELECT
+                            "Funksie_ID",
+                            "Kampus_ID",
+                            "FUN_Naam",
+                            "FUN_Begin_Tyd",
+                            "FUN_Eind_Tyd",
+                            "FUN_Beskrywing",
+                            "FUN_Is_Aktief"
+                        FROM funskie
+                        ON CONFLICT ("Funksie_ID") DO NOTHING;
+                    END IF;
+                END $$;
+            """))
+
+            # Create RSVP table if it does not yet exist.
             _conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS funksie_rsvp (
-                    "Funksie_ID" INT NOT NULL REFERENCES funksie("Funksie_ID"),
+                    "Funksie_ID" INT NOT NULL,
                     "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
                     "RSVP_Status" VARCHAR(20) NOT NULL DEFAULT 'GAAN',
                     "RSVP_Tyd" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -345,6 +377,105 @@ def run_migrations(engine):
                     CONSTRAINT ck_funksie_rsvp_status
                         CHECK ("RSVP_Status" IN ('GAAN', 'KAN_NIE', 'GEKANSELLEER'))
                 )
+            """))
+
+            # IMPORTANT: Earlier versions created this FK against the old "funskie"
+            # table. Drop whichever FK is currently attached to Funksie_ID and recreate
+            # it against the canonical "funksie" table.
+            _conn.execute(text("""
+                DO $$
+                DECLARE
+                    _fk RECORD;
+                BEGIN
+                    FOR _fk IN
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        JOIN pg_attribute a
+                          ON a.attrelid = c.conrelid
+                         AND a.attnum = ANY(c.conkey)
+                        WHERE c.conrelid = 'funksie_rsvp'::regclass
+                          AND c.contype = 'f'
+                          AND a.attname = 'Funksie_ID'
+                    LOOP
+                        EXECUTE format(
+                            'ALTER TABLE funksie_rsvp DROP CONSTRAINT %I',
+                            _fk.conname
+                        );
+                    END LOOP;
+
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conrelid = 'funksie_rsvp'::regclass
+                          AND conname = 'fk_funksie_rsvp_funksie'
+                    ) THEN
+                        ALTER TABLE funksie_rsvp
+                        ADD CONSTRAINT fk_funksie_rsvp_funksie
+                        FOREIGN KEY ("Funksie_ID")
+                        REFERENCES funksie("Funksie_ID")
+                        ON DELETE CASCADE;
+                    END IF;
+                END $$;
+            """))
+
+            # If both visitor-link tables exist, copy legacy links to the canonical one.
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF to_regclass('public.funksie_besoekers') IS NOT NULL
+                       AND to_regclass('public.funskie_besoekers') IS NOT NULL THEN
+                        INSERT INTO funksie_besoekers (
+                            "Besoekers_Groep_ID",
+                            "Funksie_ID",
+                            "FUNB_Status"
+                        )
+                        SELECT
+                            "Besoekers_Groep_ID",
+                            "Funksie_ID",
+                            "FUNB_Status"
+                        FROM funskie_besoekers
+                        ON CONFLICT ("Besoekers_Groep_ID", "Funksie_ID") DO NOTHING;
+                    END IF;
+                END $$;
+            """))
+
+            # Also guarantee the canonical visitor link points to canonical "funksie".
+            _conn.execute(text("""
+                DO $$
+                DECLARE
+                    _fk RECORD;
+                BEGIN
+                    IF to_regclass('public.funksie_besoekers') IS NOT NULL THEN
+                        FOR _fk IN
+                            SELECT c.conname
+                            FROM pg_constraint c
+                            JOIN pg_attribute a
+                              ON a.attrelid = c.conrelid
+                             AND a.attnum = ANY(c.conkey)
+                            WHERE c.conrelid = 'funksie_besoekers'::regclass
+                              AND c.contype = 'f'
+                              AND a.attname = 'Funksie_ID'
+                        LOOP
+                            EXECUTE format(
+                                'ALTER TABLE funksie_besoekers DROP CONSTRAINT %I',
+                                _fk.conname
+                            );
+                        END LOOP;
+
+                        IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint
+                            WHERE conrelid = 'funksie_besoekers'::regclass
+                              AND conname = 'fk_funksie_besoekers_funksie'
+                        ) THEN
+                            ALTER TABLE funksie_besoekers
+                            ADD CONSTRAINT fk_funksie_besoekers_funksie
+                            FOREIGN KEY ("Funksie_ID")
+                            REFERENCES funksie("Funksie_ID")
+                            ON DELETE CASCADE;
+                        END IF;
+                    END IF;
+                END $$;
             """))
 
             _conn.execute(text(

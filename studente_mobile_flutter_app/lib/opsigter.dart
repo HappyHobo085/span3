@@ -1928,7 +1928,7 @@ class _OpsigterQuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 112),
+          height: 112,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: danger
