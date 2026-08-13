@@ -29,8 +29,52 @@
     <section class="top-controls space-between" aria-label="Admin aksies">
       <div class="control-group" style="flex-direction:row;gap:10px">
         <button class="btn-primary" id="open-create-user-modal" type="button">+ Skep Gebruiker</button>
-        <button class="btn-outline" id="upload-csv-btn" type="button">Oplaai CSV</button>
+        <button class="btn-outline" id="upload-csv-btn" type="button">Oplaai/Aflaai CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none">
+      </div>
+
+      <div id="csvModal" class="class-modal-overlay" aria-hidden="true">
+        <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="csv-modal-title">
+          <h3 id="csv-modal-title">CSV Import / Export</h3>
+
+          <div class="field">
+            <label for="csv-action-select">Aksie</label>
+            <select class="glass-select" id="csv-action-select">
+              <option value="import">Invoer (Import)</option>
+              <option value="export">Uitvoer (Export)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="csv-table-select">Tabel</label>
+            <select class="glass-select" id="csv-table-select">
+              <option value="">Kies tabel...</option>
+            </select>
+          </div>
+
+          <div class="field" id="csv-source-group">
+            <label for="csv-source-select">CSV Bron</label>
+            <select class="glass-select" id="csv-source-select">
+              <option value="file">Lêer oplaai</option>
+              <option value="text">Teks plak</option>
+            </select>
+          </div>
+
+          <div class="field" id="csv-file-group">
+            <label for="csv-file-picker">CSV-lêer</label>
+            <input class="glass-input" id="csv-file-picker" type="file" accept=".csv,text/csv">
+          </div>
+
+          <div class="field" id="csv-text-group" style="display:none">
+            <label for="csv-text-area">CSV-teks</label>
+            <textarea class="glass-input" id="csv-text-area" rows="8" placeholder="Plak CSV-teks hier..."></textarea>
+          </div>
+
+          <div class="class-modal-actions">
+            <button class="btn-outline" id="close-csv-modal" type="button">Kanselleer</button>
+            <button class="btn-primary" id="confirm-csv-action" type="button">Doen</button>
+          </div>
+        </div>
       </div>
       <div class="control-group" style="flex-direction:row;gap:10px">
         <button class="btn-primary" id="open-create-kampus-modal" type="button">+ Skep Kampus</button>

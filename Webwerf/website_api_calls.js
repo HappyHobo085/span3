@@ -43,14 +43,14 @@
   async function apiRequest(path, options = {}) {
 
     const token = localStorage.getItem('access_token');
+    const isFormData = options.body instanceof FormData;
 
     // Maak die opskrifte reg: ons stuur en ontvang JSON-teks.
-    const headers = Object.assign(
-      {
-        'Content-Type': 'application/json',
-      },
-      options.headers || {}
-    );
+    const headers = Object.assign({}, options.headers || {});
+
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     // Only attach token if one exists
     // Sit die aanmeld-bewys by (net as daar een is) sodat die bediener
@@ -78,6 +78,7 @@
       ok: response.ok,
       status: response.status,
       body: body,
+      raw: response,
     };
   }
 
@@ -370,6 +371,77 @@
         method: 'GET',
       });
       return r.body;
+    },
+
+    /**
+     * GET /admin/csv/tables
+     */
+    fetchCsvTables: async function () {
+      const r = await apiRequest('/admin/csv/tables', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /admin/csv/import
+     */
+    importCsvTable: async function (table, file, text) {
+      const formData = new FormData();
+      formData.append('table', table);
+
+      if (file) {
+        formData.append('file', file);
+      }
+      if (text && !file) {
+        formData.append('text', text);
+      }
+
+      const token = localStorage.getItem('access_token');
+      const headers = {};
+      if (token) {
+        headers.Authorization = 'Bearer ' + token;
+      }
+
+      const response = await fetch(API_BASE_URL + '/admin/csv/import', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      let body = {};
+      try {
+        body = await response.json();
+      } catch (e) {
+        body = {};
+      }
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        body,
+      };
+    },
+
+    /**
+     * GET /admin/csv/export?table=
+     */
+    exportCsvTable: async function (table) {
+      const url = new URL(API_BASE_URL + '/admin/csv/export');
+      url.searchParams.set('table', table);
+
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+      });
+
+      const text = await response.text();
+      return {
+        ok: response.ok,
+        status: response.status,
+        text,
+      };
     },
 
     /**

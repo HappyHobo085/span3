@@ -77,6 +77,20 @@
   const newUserName = document.getElementById('new-user-name');
   const newUserSurname = document.getElementById('new-user-surname');
   const newUserEmail = document.getElementById('new-user-email');
+
+  const uploadCsvBtn = document.getElementById('upload-csv-btn');
+  const csvFileInput = document.getElementById('csv-file-input');
+  const csvModal = document.getElementById('csvModal');
+  const csvTableSelect = document.getElementById('csv-table-select');
+  const csvActionSelect = document.getElementById('csv-action-select');
+  const csvSourceSelect = document.getElementById('csv-source-select');
+  const csvSourceGroup = document.getElementById('csv-source-group');
+  const csvFilePicker = document.getElementById('csv-file-picker');
+  const csvTextArea = document.getElementById('csv-text-area');
+  const csvFileGroup = document.getElementById('csv-file-group');
+  const csvTextGroup = document.getElementById('csv-text-group');
+  const closeCsvModalBtn = document.getElementById('close-csv-modal');
+  const confirmCsvActionBtn = document.getElementById('confirm-csv-action');
   const newUserStudentNr = document.getElementById('new-user-student-nr');
   const studentNumberField = document.getElementById('student-number-field');
   const newUserIsKoshuis = document.getElementById('new-user-is-koshuis');
@@ -151,6 +165,135 @@
     } else {
       list.style.maxHeight = '';
     }
+  }
+
+  async function loadCsvTableOptions() {
+    if (!csvTableSelect || !window.MoonApi) return;
+
+    const json = await window.MoonApi.fetchCsvTables();
+    const tables = json && json.data && Array.isArray(json.data.tables) ? json.data.tables : [];
+
+    if (!tables.length) {
+      csvTableSelect.innerHTML = '<option value="">Geen tabelle beskikbaar</option>';
+      return;
+    }
+
+    csvTableSelect.innerHTML = '<option value="">Kies tabel...</option>';
+    tables.forEach(function (tableName) {
+      const option = document.createElement('option');
+      option.value = tableName;
+      option.textContent = tableName;
+      csvTableSelect.appendChild(option);
+    });
+  }
+
+  function openCsvModal() {
+    if (!csvModal) return;
+    csvModal.classList.add('open');
+    csvModal.setAttribute('aria-hidden', 'false');
+    if (csvTableSelect && !csvTableSelect.value) {
+      csvTableSelect.value = '';
+    }
+    if (csvActionSelect) {
+      csvActionSelect.value = 'import';
+    }
+    if (csvSourceSelect) {
+      csvSourceSelect.value = 'file';
+    }
+    if (csvTextArea) csvTextArea.value = '';
+    if (csvFilePicker) csvFilePicker.value = '';
+    updateCsvPanelVisibility();
+  }
+
+  function closeCsvModal() {
+    if (!csvModal) return;
+    csvModal.classList.remove('open');
+    csvModal.setAttribute('aria-hidden', 'true');
+    if (csvTextArea) csvTextArea.value = '';
+    if (csvFilePicker) csvFilePicker.value = '';
+    if (csvTableSelect) csvTableSelect.value = '';
+    if (csvSourceSelect) csvSourceSelect.value = 'file';
+    updateCsvPanelVisibility();
+  }
+
+  function updateCsvPanelVisibility() {
+    if (!csvActionSelect || !csvSourceSelect) return;
+    const action = csvActionSelect.value;
+    const isImport = action === 'import';
+
+    if (csvSourceGroup) {
+      csvSourceGroup.style.display = isImport ? '' : 'none';
+    }
+
+    if (!isImport) {
+      if (csvFileGroup) csvFileGroup.style.display = 'none';
+      if (csvTextGroup) csvTextGroup.style.display = 'none';
+      return;
+    }
+
+    const source = csvSourceSelect.value;
+    if (csvFileGroup) {
+      csvFileGroup.style.display = source === 'file' ? '' : 'none';
+    }
+    if (csvTextGroup) {
+      csvTextGroup.style.display = source === 'text' ? '' : 'none';
+    }
+  }
+
+  async function handleCsvAction() {
+    if (!window.MoonApi) return;
+
+    const table = csvTableSelect ? csvTableSelect.value : '';
+    const action = csvActionSelect ? csvActionSelect.value : 'import';
+    const source = csvSourceSelect ? csvSourceSelect.value : 'file';
+
+    if (!table) {
+      alert('Kies asseblief die tabel wat jy wil gebruik.');
+      return;
+    }
+
+    if (action === 'export') {
+      const result = await window.MoonApi.exportCsvTable(table);
+      if (!result || !result.ok) {
+        alert('Kon CSV nie uitstuur nie.');
+        return;
+      }
+
+      const blob = new Blob([result.text], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = table + '.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      alert('CSV-uitsending is gedownload.');
+      closeCsvModal();
+      return;
+    }
+
+    const file = csvFilePicker && csvFilePicker.files && csvFilePicker.files[0] ? csvFilePicker.files[0] : null;
+    const text = csvTextArea ? csvTextArea.value.trim() : '';
+
+    if (source === 'file' && !file) {
+      alert('Kies asseblief ' + 'n CSV-lêer om op te laai.');
+      return;
+    }
+
+    if (source === 'text' && !text) {
+      alert('Plak asseblief CSV-teks in die teksveld.');
+      return;
+    }
+
+    const result = await window.MoonApi.importCsvTable(table, source === 'file' ? file : null, source === 'text' ? text : null);
+    if (!result || !result.ok) {
+      alert((result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.');
+      return;
+    }
+
+    alert('CSV is suksesvol opgelaai na ' + table + '.');
+    closeCsvModal();
   }
 
   // =====================================================================
@@ -1506,6 +1649,7 @@ async function refreshDashboard() {
   document.addEventListener('DOMContentLoaded', async function () {
   await loadKampusDropdown();
   await loadRolleDropdown();
+  await loadCsvTableOptions();
 
   toggleStudentField();
 
@@ -1518,6 +1662,33 @@ async function refreshDashboard() {
   applyUserFilter();
 
   await refreshDashboard();
+
+  if (uploadCsvBtn) {
+    uploadCsvBtn.addEventListener('click', openCsvModal);
+  }
+
+  if (closeCsvModalBtn) {
+    closeCsvModalBtn.addEventListener('click', closeCsvModal);
+  }
+
+  if (csvActionSelect) {
+    csvActionSelect.addEventListener('change', updateCsvPanelVisibility);
+  }
+
+  if (csvSourceSelect) {
+    csvSourceSelect.addEventListener('change', updateCsvPanelVisibility);
+  }
+
+  if (confirmCsvActionBtn) {
+    confirmCsvActionBtn.addEventListener('click', handleCsvAction);
+  }
+
+  if (csvFileInput) {
+    csvFileInput.addEventListener('change', function () {
+      if (!csvFileInput.files || !csvFileInput.files.length) return;
+      openCsvModal();
+    });
+  }
 
   setInterval(refreshDashboard, 5000);
 
