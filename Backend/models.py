@@ -231,7 +231,7 @@ class FunksieRSVP(Base):
     RSVP_Tyd     = Column(DateTime, default=datetime.utcnow, nullable=False)
     Gewysig_Op   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    funksie = relationship("Funksie", back_populates="rsvps")
+    funksie   = relationship("Funksie", back_populates="rsvps")
     gebruiker = relationship("Gebruikers")
 
     __table_args__ = (
