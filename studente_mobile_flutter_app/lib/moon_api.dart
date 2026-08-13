@@ -594,7 +594,7 @@ class MoonApi {
   MoonApi._();
 
   /// Verander na jou backend IP
-  static String baseUrl = "http://happyhobo-pc.tail251156.ts.net:8000";
+  static String baseUrl = "https://capstone-production-3673.up.railway.app:8000";
 
   /// JWT token indien benodig
   static String? bearerToken;
