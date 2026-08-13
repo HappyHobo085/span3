@@ -10,6 +10,34 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+
+def _prepare_insert_row_for_new_primary_key(table, current_row: Dict[str, Any], existing_row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if existing_row is None:
+        return dict(current_row)
+
+    pk_columns = [column for column in table.columns if column.primary_key]
+    if not pk_columns:
+        return dict(current_row)
+
+    comparison_row = {
+        column.name: current_row.get(column.name)
+        for column in table.columns
+        if not column.primary_key
+    }
+    existing_comparison = {
+        column.name: existing_row.get(column.name)
+        for column in table.columns
+        if not column.primary_key
+    }
+
+    if comparison_row == existing_comparison:
+        return {}
+
+    prepared = dict(current_row)
+    for column in pk_columns:
+        prepared.pop(column.name, None)
+    return prepared
+
 from database import get_db
 import models, schemas, auth
 from services.nfc_service import genereer_unieke_nfc_uid
@@ -129,17 +157,84 @@ def _table_rows_for_export(db: Session, table_name: str) -> List[Dict[str, Any]]
     return [dict(zip(table.columns.keys(), row)) for row in result]
 
 
+def _normalize_insert_row(table, row: Dict[str, Any]) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+
+    for column in table.columns:
+        if column.name not in row:
+            if column.nullable:
+                normalized[column.name] = None
+            continue
+
+        if row.get(column.name) is not None:
+            normalized[column.name] = row[column.name]
+            continue
+
+        if column.nullable:
+            normalized[column.name] = None
+
+    return normalized
+
+
 def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]]) -> int:
     table = _resolve_table(table_name)
     valid_rows = []
+    pk_columns = [column for column in table.columns if column.primary_key]
+
     for row in rows:
-        sanitized = {
-            key: value
-            for key, value in row.items()
-            if key in table.columns.keys() and value is not None
+        sanitized = _normalize_insert_row(table, row)
+
+        if pk_columns:
+            pk_values = []
+            for column in pk_columns:
+                if column.name in sanitized:
+                    pk_values.append((column.name, sanitized[column.name]))
+            if pk_values:
+                conditions = []
+                for column_name, value in pk_values:
+                    conditions.append(getattr(table.c, column_name) == value)
+                existing_row = db.execute(table.select().where(*conditions)).first()
+                if existing_row is not None:
+                    existing_data = dict(existing_row._mapping)
+                    comparison_row = {
+                        column.name: sanitized.get(column.name)
+                        for column in table.columns
+                        if not column.primary_key
+                    }
+                    existing_comparison = {
+                        column.name: existing_data.get(column.name)
+                        for column in table.columns
+                        if not column.primary_key
+                    }
+                    if comparison_row == existing_comparison:
+                        continue
+
+                    prepared_row = _prepare_insert_row_for_new_primary_key(table, sanitized, existing_data)
+                    if not prepared_row:
+                        continue
+                    sanitized = prepared_row
+
+        insertable = {
+            column.name: sanitized[column.name]
+            for column in table.columns
+            if column.name in sanitized
         }
-        if sanitized:
-            valid_rows.append(sanitized)
+
+        missing_required = [
+            column.name
+            for column in table.columns
+            if not column.primary_key
+            and column.name not in insertable
+            and not column.nullable
+            and column.default is None
+            and column.server_default is None
+        ]
+
+        if missing_required:
+            continue
+
+        if insertable:
+            valid_rows.append(insertable)
 
     if not valid_rows:
         return 0

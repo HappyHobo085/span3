@@ -187,6 +187,27 @@
     });
   }
 
+  function showCsvStatus(message, type) {
+    const statusEl = document.getElementById('csv-status-message');
+    if (!statusEl) {
+      alert(message);
+      return;
+    }
+
+    statusEl.textContent = message;
+    statusEl.classList.remove('success', 'error');
+    statusEl.classList.add(type === 'error' ? 'error' : 'success');
+    statusEl.hidden = false;
+  }
+
+  function clearCsvStatus() {
+    const statusEl = document.getElementById('csv-status-message');
+    if (!statusEl) return;
+    statusEl.textContent = '';
+    statusEl.classList.remove('success', 'error');
+    statusEl.hidden = true;
+  }
+
   function openCsvModal() {
     if (!csvModal) return;
     csvModal.classList.add('open');
@@ -202,6 +223,7 @@
     }
     if (csvTextArea) csvTextArea.value = '';
     if (csvFilePicker) csvFilePicker.value = '';
+    clearCsvStatus();
     updateCsvPanelVisibility();
   }
 
@@ -213,6 +235,7 @@
     if (csvFilePicker) csvFilePicker.value = '';
     if (csvTableSelect) csvTableSelect.value = '';
     if (csvSourceSelect) csvSourceSelect.value = 'file';
+    clearCsvStatus();
     updateCsvPanelVisibility();
   }
 
@@ -248,14 +271,14 @@
     const source = csvSourceSelect ? csvSourceSelect.value : 'file';
 
     if (!table) {
-      alert('Kies asseblief die tabel wat jy wil gebruik.');
+      showCsvStatus('Kies asseblief die tabel wat jy wil gebruik.', 'error');
       return;
     }
 
     if (action === 'export') {
       const result = await window.MoonApi.exportCsvTable(table);
       if (!result || !result.ok) {
-        alert('Kon CSV nie uitstuur nie.');
+        showCsvStatus('Kon CSV nie uitstuur nie.', 'error');
         return;
       }
 
@@ -268,8 +291,7 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      alert('CSV-uitsending is gedownload.');
-      closeCsvModal();
+      showCsvStatus('CSV-uitsending is suksesvol afgelaai.', 'success');
       return;
     }
 
@@ -277,23 +299,22 @@
     const text = csvTextArea ? csvTextArea.value.trim() : '';
 
     if (source === 'file' && !file) {
-      alert('Kies asseblief ' + 'n CSV-lêer om op te laai.');
+      showCsvStatus('Kies asseblief ' + 'n CSV-lêer om op te laai.', 'error');
       return;
     }
 
     if (source === 'text' && !text) {
-      alert('Plak asseblief CSV-teks in die teksveld.');
+      showCsvStatus('Plak asseblief CSV-teks in die teksveld.', 'error');
       return;
     }
 
     const result = await window.MoonApi.importCsvTable(table, source === 'file' ? file : null, source === 'text' ? text : null);
     if (!result || !result.ok) {
-      alert((result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.');
+      showCsvStatus((result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.', 'error');
       return;
     }
 
-    alert('CSV is suksesvol opgelaai na ' + table + '.');
-    closeCsvModal();
+    showCsvStatus('CSV is suksesvol opgelaai na ' + table + '.', 'success');
   }
 
   // =====================================================================

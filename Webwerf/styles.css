@@ -340,6 +340,27 @@ body{
   background-color:var(--surface-1);cursor:pointer;
 }
 .class-modal select option{background:var(--option-bg);color:var(--text-1)}
+.modal-status{
+  display:none;
+  margin-top:14px;
+  padding:10px 12px;
+  border-radius:var(--r-sm);
+  font-size:12px;
+  font-weight:600;
+  border:1px solid transparent;
+}
+.modal-status.success{
+  display:block;
+  background:rgba(16,185,129,0.12);
+  border-color:rgba(16,185,129,0.45);
+  color:var(--success);
+}
+.modal-status.error{
+  display:block;
+  background:rgba(239,68,68,0.10);
+  border-color:rgba(239,68,68,0.45);
+  color:var(--error);
+}
 .class-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 
 /* ─── Login page ─────────────────────────────────────────────────────────── */
