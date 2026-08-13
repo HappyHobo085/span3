@@ -1,42 +1,16 @@
 """Admin utility routes."""
 
 import csv
+import inspect
 import io
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import inspect, select
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-
-
-def _prepare_insert_row_for_new_primary_key(table, current_row: Dict[str, Any], existing_row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if existing_row is None:
-        return dict(current_row)
-
-    pk_columns = [column for column in table.columns if column.primary_key]
-    if not pk_columns:
-        return dict(current_row)
-
-    comparison_row = {
-        column.name: current_row.get(column.name)
-        for column in table.columns
-        if not column.primary_key
-    }
-    existing_comparison = {
-        column.name: existing_row.get(column.name)
-        for column in table.columns
-        if not column.primary_key
-    }
-
-    if comparison_row == existing_comparison:
-        return {}
-
-    prepared = dict(current_row)
-    for column in pk_columns:
-        prepared.pop(column.name, None)
-    return prepared
 
 from database import get_db
 import models, schemas, auth
@@ -179,6 +153,7 @@ def _normalize_insert_row(table, row: Dict[str, Any]) -> Dict[str, Any]:
 def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]]) -> int:
     table = _resolve_table(table_name)
     valid_rows = []
+    updated_rows = 0
     pk_columns = [column for column in table.columns if column.primary_key]
 
     for row in rows:
@@ -209,10 +184,18 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
                     if comparison_row == existing_comparison:
                         continue
 
-                    prepared_row = _prepare_insert_row_for_new_primary_key(table, sanitized, existing_data)
-                    if not prepared_row:
-                        continue
-                    sanitized = prepared_row
+                    # Same primary key, changed data: update the existing row in
+                    # place. Inserting a copy instead would collide with unique
+                    # columns (e.g. gebruikers.GEB_Epos) on a populated database.
+                    update_values = {
+                        column.name: sanitized[column.name]
+                        for column in table.columns
+                        if not column.primary_key and column.name in sanitized
+                    }
+                    if update_values:
+                        db.execute(table.update().where(*conditions).values(**update_values))
+                        updated_rows += 1
+                    continue
 
         insertable = {
             column.name: sanitized[column.name]
@@ -236,12 +219,11 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
         if insertable:
             valid_rows.append(insertable)
 
-    if not valid_rows:
-        return 0
-
-    db.execute(table.insert(), valid_rows)
-    db.commit()
-    return len(valid_rows)
+    if valid_rows:
+        db.execute(table.insert(), valid_rows)
+    if valid_rows or updated_rows:
+        db.commit()
+    return len(valid_rows) + updated_rows
 
 
 @router.get("/csv/tables")
@@ -308,7 +290,14 @@ async def import_table_csv(
             detail="No CSV rows were found to import.",
         )
 
-    inserted = _insert_csv_rows(db, table, rows)
+    try:
+        inserted = _insert_csv_rows(db, table, rows)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CSV-invoer het misluk weens 'n databasis-beperking: {exc.orig}",
+        ) from exc
     return schemas.APIResponse(
         sukses=True,
         data={"table": _resolve_table(table).name, "imported_rows": inserted},
