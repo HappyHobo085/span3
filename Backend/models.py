@@ -127,7 +127,7 @@ class Besoekers_Groep(Base):
 
     besoekers           = relationship("Besoeker",           back_populates="besoekers_groep")
     onverwagte_besoekers = relationship("Onverwagte_Besoeker", back_populates="besoekers_groep")
-    funskie_besoekers    = relationship("Funksie_Besoekers",  back_populates="besoekers_groep")
+    funksie_besoekers    = relationship("Funksie_Besoekers",  back_populates="besoekers_groep")
 
 class Besoeker(Base):
     __tablename__ = 'besoeker'
@@ -187,7 +187,7 @@ class Koshuis(Base):
     studente = relationship("Student", back_populates="koshuis")
 
 class Funksie(Base):
-    __tablename__ = 'funskie'
+    __tablename__ = 'funksie'
 
     Funksie_ID      = Column(Integer, primary_key=True, index=True)
     Kampus_ID       = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
@@ -206,7 +206,7 @@ class Funksie(Base):
     kampus            = relationship("Kampus", back_populates="funksies")
     lokasie           = relationship("Lokasie", foreign_keys=[Lokasie_ID])
     geskep_deur       = relationship("Gebruikers", foreign_keys=[Geskep_Deur_ID])
-    funskie_besoekers = relationship("Funksie_Besoekers", back_populates="funskie")
+    funksie_besoekers = relationship("Funksie_Besoekers", back_populates="funksie")
     rsvps             = relationship(
         "FunksieRSVP",
         back_populates="funksie",
@@ -225,7 +225,7 @@ class Funksie(Base):
 class FunksieRSVP(Base):
     __tablename__ = 'funksie_rsvp'
 
-    Funksie_ID   = Column(Integer, ForeignKey('funskie.Funksie_ID'), primary_key=True)
+    Funksie_ID   = Column(Integer, ForeignKey('funksie.Funksie_ID'), primary_key=True)
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
     RSVP_Status  = Column(String(20), nullable=False, default='GAAN')
     RSVP_Tyd     = Column(DateTime, default=datetime.utcnow, nullable=False)

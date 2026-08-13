@@ -3,6 +3,34 @@
 from sqlalchemy import text
 
 
+def run_pre_migrations(engine):
+    """Run schema renames that must happen before SQLAlchemy create_all()."""
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    -- Rename the original misspelled event table, if it still exists.
+                    IF to_regclass('public.funksie') IS NULL
+                       AND to_regclass('public.funksie') IS NOT NULL THEN
+                        ALTER TABLE funskie RENAME TO funksie;
+                    END IF;
+
+                    -- Rename the original misspelled event-visitor link table too.
+                    IF to_regclass('public.funksie_besoekers') IS NULL
+                       AND to_regclass('public.funksie_besoekers') IS NOT NULL THEN
+                        ALTER TABLE funskie_besoekers RENAME TO funksie_besoekers;
+                    END IF;
+                END $$;
+            """))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: pre-migrasie (funskie -> funksie) het misluk: "
+            f"{_migrasie_fout}"
+        )
+        raise
+
+
 def run_migrations(engine):
     """Run idempotent schema migrations at startup."""
     # Migrasie 006: Maak koshuis.Kampus_ID nullable (create_all verander nie bestaande tabelle nie)
@@ -338,4 +366,3 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 011 "
             f"(Events / Funksie RSVP) het misluk: {_migrasie_fout}"
         )
-

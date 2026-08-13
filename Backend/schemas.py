@@ -35,8 +35,7 @@ class UserBase(BaseModel):
     GEB_Epos: EmailStr
     GEB_Selfoon_Nr: Optional[str] = None
     GEB_Profiel_Foto: Optional[str] = None
-    Rol_ID: Optional[int] = None
-    Rol_IDs: Optional[List[int]] = None
+    Rol_ID: int
     Is_Aktief: bool = True
 
 class UserCreate(UserBase):
@@ -62,7 +61,6 @@ class UserUpdate(BaseModel):
     GEB_Selfoon_Nr: Optional[str] = None
     GEB_Profiel_Foto: Optional[str] = None
     Rol_ID: Optional[int] = None
-    Rol_IDs: Optional[List[int]] = None
     Is_Aktief: Optional[bool] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: Optional[bool] = None
@@ -659,4 +657,3 @@ class EventUpdateRequest(BaseModel):
 
 class EventRsvpRequest(BaseModel):
     status: str = "GAAN"
-

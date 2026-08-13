@@ -10,12 +10,15 @@ import os
 import auth, schemas
 from database import engine
 import models
-from migrations import run_migrations
+from migrations import run_pre_migrations, run_migrations
 
 from routers import (
     auth_routes, gebruikers, kampus, koshuis, lokasie,
     nfc, wagte, student, dashboard, admin, saamry, besoekers, events,
 )
+
+# Rename legacy misspelled event tables BEFORE SQLAlchemy checks/creates tables.
+run_pre_migrations(engine)
 
 # Skep alle tabelle outomaties by opstart
 models.Base.metadata.create_all(bind=engine)
