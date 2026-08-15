@@ -129,23 +129,37 @@ def kontroleer_unieke_subnommer(
         raise HTTPException(status_code=400, detail=detail)
 
 
-def generate_next_per_nommer(db: Session) -> str:
+def generate_next_subnommer(db: Session, model, field_name: str, prefix: str) -> str:
+    field = getattr(model, field_name)
     last = (
-        db.query(models.Personeel)
-        .filter(models.Personeel.PER_Nommer.like("PER%"))
-        .order_by(models.Personeel.PER_Nommer.desc())
+        db.query(model)
+        .filter(field.like(f"{prefix}%"))
+        .order_by(field.desc())
         .first()
     )
 
-    if not last or not last.PER_Nommer:
-        return "PER0001"
+    last_value = getattr(last, field_name, None) if last else None
+    if not last_value:
+        return f"{prefix}0001"
 
     try:
-        next_num = int(last.PER_Nommer.replace("PER", "")) + 1
+        next_num = int(last_value.replace(prefix, "")) + 1
     except ValueError:
         next_num = 1
 
-    return f"PER{next_num:04d}"
+    return f"{prefix}{next_num:04d}"
+
+
+def generate_next_per_nommer(db: Session) -> str:
+    return generate_next_subnommer(db, models.Personeel, "PER_Nommer", "PER")
+
+
+def generate_next_kamo_nommer(db: Session) -> str:
+    return generate_next_subnommer(db, models.Kampus_Opsigter, "KAMO_Nommer", "KAMO")
+
+
+def generate_next_sek_nommer(db: Session) -> str:
+    return generate_next_subnommer(db, models.Sekuriteit_Wag, "SEK_Nommer", "SEK")
 
 
 def sync_gebruiker_subrekords(
@@ -249,8 +263,8 @@ def sync_gebruiker_subrekords(
 
         kamo_nommer = data.get("KAMO_Nommer")
 
-        if not kamo_nommer and is_opsigter:
-            raise HTTPException(status_code=400, detail="KAMO_Nommer is verpligtend vir 'n kampus opsigter")
+        if not opsigter and not kamo_nommer and (creating or is_opsigter):
+            kamo_nommer = generate_next_kamo_nommer(db)
 
         if kamo_nommer:
             kontroleer_unieke_subnommer(
@@ -282,8 +296,8 @@ def sync_gebruiker_subrekords(
 
         sek_nommer = data.get("SEK_Nommer")
 
-        if not sek_nommer and is_sekuriteit:
-            raise HTTPException(status_code=400, detail="SEK_Nommer is verpligtend vir 'n sekuriteitswag")
+        if not wag and not sek_nommer and (creating or is_sekuriteit):
+            sek_nommer = generate_next_sek_nommer(db)
 
         if sek_nommer:
             kontroleer_unieke_subnommer(
