@@ -41,12 +41,26 @@
       btn.textContent = labelFor(theme);
     });
 
-    var navRight = document.querySelector('.navbar-right');
-    var navbar = document.querySelector('.navbar');
-    if (navRight) {
-      navRight.insertBefore(btn, navRight.firstChild);
-    } else if (navbar) {
-      navbar.appendChild(btn);
+    function placeInNavbar() {
+      var navRight = document.querySelector('.navbar-right');
+      var navbar = document.querySelector('.navbar');
+      if (navRight) {
+        // Langs die Teken Uit-knoppie
+        navRight.insertBefore(btn, navRight.firstChild);
+      } else if (navbar) {
+        navbar.appendChild(btn);
+      }
+    }
+
+    if (document.querySelector('.navbar')) {
+      placeInNavbar();
+    } else if (document.getElementById('site-header')) {
+      // Die navbar word async deur main.js se loadSiteHeader() ingelaai —
+      // wag vir die sein voordat die knoppie geplaas word
+      window.addEventListener('siteHeaderReady', function handle() {
+        window.removeEventListener('siteHeaderReady', handle);
+        placeInNavbar();
+      });
     } else {
       // Geen navbar (bv. login.html): sweef die knoppie regs-bo
       btn.classList.add('theme-toggle--floating');
