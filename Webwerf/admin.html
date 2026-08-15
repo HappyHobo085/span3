@@ -101,7 +101,7 @@
       <article class="glass-card panel" aria-label="Gebruikers">
         <h2>Gebruikers</h2>
         <div class="list-search" style="display:flex;gap:8px">
-          <input class="glass-input" type="search" id="user-search"
+          <input class="glass-input" type="search" id="user-search" autocomplete="off"
                  aria-label="Soek gebruiker" placeholder="Soek gebruiker..." style="flex:1">
           <select class="glass-select" id="user-role-filter" aria-label="Filter volgens rol" style="width:160px">
             <option value="">Alle Rolle</option>
@@ -116,7 +116,7 @@
       <article class="glass-card panel" aria-label="Lokale">
         <h2>Lokale</h2>
         <div class="list-search" style="display:flex;gap:8px">
-          <input class="glass-input" type="search" id="venue-search"
+          <input class="glass-input" type="search" id="venue-search" autocomplete="off"
                  aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
           <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
             <option value="">Alle Kampusse</option>
@@ -131,7 +131,7 @@
       <article class="glass-card panel" aria-label="Kampusse">
         <h2>Kampusse</h2>
         <div class="list-search">
-          <input class="glass-input" type="search" id="kampus-search"
+          <input class="glass-input" type="search" id="kampus-search" autocomplete="off"
                  aria-label="Soek kampus" placeholder="Soek kampus...">
         </div>
         <div class="admin-list" id="kampus-list">
@@ -142,7 +142,7 @@
       <article class="glass-card panel" aria-label="Koshuise">
         <h2>Koshuise</h2>
         <div class="list-search">
-          <input class="glass-input" type="search" id="koshuis-search"
+          <input class="glass-input" type="search" id="koshuis-search" autocomplete="off"
                  aria-label="Soek koshuis" placeholder="Soek koshuis...">
         </div>
         <div class="admin-list" id="koshuis-list">
@@ -195,7 +195,7 @@
       </div>
       <div class="field">
         <label for="new-user-email">E-pos</label>
-        <input class="glass-input" id="new-user-email" type="email" placeholder="Voer e-posadres in">
+        <input class="glass-input" id="new-user-email" type="email" autocomplete="off" placeholder="Voer e-posadres in">
       </div>
       <div class="field" id="student-number-field" style="display:none">
         <label for="new-user-student-nr">Studentenommer</label>
@@ -215,7 +215,7 @@
       </div>
       <div class="field">
         <label for="new-user-password">Wagwoord</label>
-        <input class="glass-input" id="new-user-password" type="password" placeholder="Voer wagwoord in">
+        <input class="glass-input" id="new-user-password" type="password" autocomplete="new-password" placeholder="Voer wagwoord in">
       </div>
       <div class="field">
         <label for="new-user-role">Rol</label>
@@ -271,11 +271,11 @@
       <h3 id="password-modal-title">Verander Wagwoord — <span id="password-modal-user-name">Gebruiker</span></h3>
       <div class="field">
         <label for="new-password">Nuwe Wagwoord</label>
-        <input class="glass-input" id="new-password" type="password" placeholder="Voer nuwe wagwoord in">
+        <input class="glass-input" id="new-password" type="password" autocomplete="new-password" placeholder="Voer nuwe wagwoord in">
       </div>
       <div class="field">
         <label for="confirm-password">Bevestig Wagwoord</label>
-        <input class="glass-input" id="confirm-password" type="password" placeholder="Bevestig nuwe wagwoord">
+        <input class="glass-input" id="confirm-password" type="password" autocomplete="new-password" placeholder="Bevestig nuwe wagwoord">
       </div>
       <div class="class-modal-actions">
         <button class="btn-outline" id="close-password-modal" type="button">Kanselleer</button>
