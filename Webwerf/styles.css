@@ -147,6 +147,15 @@ body{
 }
 .user-card + .user-card{margin-top:10px}
 
+/* Klikbare kaartjie (klasregister op personeel.html): gekies = aksent-rand */
+.user-card--klikbaar{cursor:pointer}
+.user-card--klikbaar:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.user-card--gekies,
+.user-card--gekies:hover{
+  border-color:var(--accent);
+  box-shadow:0 0 32px rgba(123,97,255,0.35);
+}
+
 .user-card .admin-user-info{flex:1;min-width:0}
 .user-card .admin-user-name{font-size:14px;font-weight:600;color:var(--text-1)}
 .user-card .admin-user-email{font-size:11px;color:var(--text-muted);margin-top:3px}
@@ -238,6 +247,7 @@ body{
   min-height:68px;font-size:10px;font-weight:600;color:var(--text-2);
 }
 .card.wide{grid-column:1/-1}
+.card[hidden]{display:none}
 .mock-circle-card{padding:10px}
 .mock-circle{
   width:56px;height:56px;border-radius:50%;

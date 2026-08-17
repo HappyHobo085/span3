@@ -15,7 +15,9 @@
  *   - styles.css (.kalender* klasse)
  *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
  *     dash-total-count, dash-percent-count, dash-in-list, dash-out-list,
- *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list.
+ *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list,
+ *     dash-student-card, student-stats-titel, stat-student-split,
+ *     stat-student-caption.
  */
 
 // Al die kode loop binne een omhulsel sodat die veranderlikes hier
@@ -96,6 +98,10 @@
   var rosterList = document.getElementById('roster-list');
   var statChart = document.getElementById('stat-bywoning-chart');
   var statAvg = document.getElementById('stat-bywoning-avg');
+  var studentCard = document.getElementById('dash-student-card');
+  var studentTitel = document.getElementById('student-stats-titel');
+  var studentSplit = document.getElementById('stat-student-split');
+  var studentCaption = document.getElementById('stat-student-caption');
 
   // ----- Module state -----
   // Onthou watter klas en dag tans gekies is, en watter maand
@@ -104,7 +110,11 @@
   vandag.setHours(0, 0, 0, 0);
 
   var currentKlas = MOCK_KLASSE[0];
+  var selectedStudent = null; // student wat in die klasregister gekies is
   var selectedDate = new Date(vandag);
+
+  // Oor hoeveel klasdae die gekose student se bywoning bereken word.
+  var STUDENT_STAT_DAE = 30;
   var displayYear = vandag.getFullYear();
   var displayMonth = vandag.getMonth();
 
@@ -296,7 +306,8 @@
     var dae = [];
     var d = new Date(vandag);
     var guard = 0; // keer dat die lus ooit vashaak
-    while (dae.length < n && guard < 40) {
+    var maxGuard = n * 2 + 10; // genoeg kalenderdae vir n weeksdae (plus naweke)
+    while (dae.length < n && guard < maxGuard) {
       if (isKlasdag(d)) dae.unshift(new Date(d));
       d.setDate(d.getDate() - 1);
       guard++;
@@ -352,6 +363,85 @@
       var avg = dae.length ? Math.round(som / dae.length) : 0;
       statAvg.textContent = 'Gemiddelde bywoning oor die laaste ' + dae.length + ' klasdae: ' + avg + '%';
     }
+  }
+
+  // ----- Studentbywoning: statistieke vir die gekose student -----
+
+  /**
+   * Hierdie funksie tel hoeveel keer 'n student oor die laaste `nDae` klasdae
+   * die klas bygewoon en gemis het (dieselfde deterministiese data as die
+   * dashboard, so die syfers stem ooreen met die dag-vir-dag lyste).
+   */
+  function kryStudentBywoning(klas, student, nDae) {
+    var dae = kryLaasteKlasdae(nDae);
+    var bygewoon = 0;
+    var gemis = 0;
+
+    dae.forEach(function (d) {
+      var byw = kryBywoning(klas, d);
+      if (!byw) return;
+      var was_in = byw.ingeskandeer.some(function (b) {
+        return b.student.nommer === student.nommer;
+      });
+      if (was_in) bygewoon++; else gemis++;
+    });
+
+    return { bygewoon: bygewoon, gemis: gemis, dae: dae.length };
+  }
+
+  /**
+   * Hierdie funksie wys die gekose student se bywoning vir die huidige module
+   * in die linkerpaneel (onder die statistiek-kaart): 'n verdeling-balk met
+   * bygewoon teenoor gemis, plus 'n opsomming. Geen student gekies = weggesteek.
+   */
+  function renderStudentStats() {
+    if (!studentCard) return;
+
+    if (!selectedStudent) {
+      studentCard.hidden = true;
+      return;
+    }
+
+    var stats = kryStudentBywoning(currentKlas, selectedStudent, STUDENT_STAT_DAE);
+    studentCard.hidden = false;
+
+    if (studentTitel) {
+      studentTitel.textContent = 'Studentbywoning — ' +
+        selectedStudent.naam + ' ' + selectedStudent.van +
+        ' (' + currentKlas.id + ')';
+    }
+
+    if (window.MoonStats && studentSplit) {
+      MoonStats.renderSplitBar(studentSplit, {
+        title: 'Klasse bygewoon / gemis',
+        segments: [
+          { label: 'Bygewoon', value: stats.bygewoon, color: MoonStats.colors.series1 },
+          { label: 'Gemis', value: stats.gemis, color: MoonStats.colors.error }
+        ]
+      });
+    }
+
+    if (studentCaption) {
+      var pct = stats.dae > 0 ? Math.round((stats.bygewoon / stats.dae) * 100) : 0;
+      studentCaption.textContent = selectedStudent.nommer + ' het ' +
+        stats.bygewoon + ' van die laaste ' + stats.dae + ' klasdae bygewoon (' +
+        pct + '%) en ' + stats.gemis + ' gemis.';
+    }
+  }
+
+  // Hierdie funksie kies 'n student (of ontkies met 'n tweede klik) en
+  // werk die uitgeligte kaartjie in die klasregister by.
+  function selectStudent(student) {
+    var selfde = selectedStudent && selectedStudent.nommer === student.nommer;
+    selectedStudent = selfde ? null : student;
+
+    if (rosterList) {
+      rosterList.querySelectorAll('.user-card').forEach(function (row) {
+        row.classList.toggle('user-card--gekies',
+          !!selectedStudent && row.dataset.nommer === selectedStudent.nommer);
+      });
+    }
+    renderStudentStats();
   }
 
   // ----- Kalender rendering -----
@@ -418,12 +508,30 @@
   }
 
   // ----- Klasregister (regterpaneel-lys) -----
-  // Hierdie funksie wys die volle klaslys van die gekose klas.
+  // Hierdie funksie wys die volle klaslys van die gekose klas. Elke kaartjie
+  // is klikbaar: kies 'n student om sy/haar bywoningstatistieke links te sien.
   function renderRoster() {
     if (!rosterList) return;
     rosterList.innerHTML = '';
     currentKlas.studente.forEach(function (s) {
-      rosterList.appendChild(createStudentCard(s, s.nommer));
+      var card = createStudentCard(s, s.nommer);
+      card.classList.add('user-card--klikbaar');
+      card.dataset.nommer = s.nommer;
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label',
+        'Wys bywoningstatistieke vir ' + s.naam + ' ' + s.van);
+      if (selectedStudent && selectedStudent.nommer === s.nommer) {
+        card.classList.add('user-card--gekies');
+      }
+      card.addEventListener('click', function () { selectStudent(s); });
+      card.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          selectStudent(s);
+        }
+      });
+      rosterList.appendChild(card);
     });
     applyRosterFilter();
   }
@@ -463,6 +571,9 @@
         return k.id === klasSelect.value;
       })[0];
       if (gekies) currentKlas = gekies;
+      // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
+      selectedStudent = null;
+      renderStudentStats();
       renderDashboard();
       renderRoster();
     });
