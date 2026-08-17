@@ -370,6 +370,8 @@ class _KampusPageState extends State<_KampusPage> {
   List<KampusDto> _kampusse = [];
   KampusDto? _gekoseKampus;
   Map<String, dynamic> _status = {};
+  List<Map<String, dynamic>> _besoekers = [];
+  List<MoonEventDto> _kampusEvents = [];
 
   @override
   void initState() {
@@ -415,15 +417,31 @@ class _KampusPageState extends State<_KampusPage> {
     setState(() {
       _laai = true;
       _fout = null;
+      _status = {};
+      _besoekers = [];
+      _kampusEvents = [];
     });
 
     try {
-      final result = await MoonApi.fetchKampusStatus(kampusId);
+      final resultate = await Future.wait<dynamic>([
+        MoonApi.fetchKampusStatus(kampusId),
+        MoonApi.fetchOpsigterKampusBesoekers(kampusId),
+        MoonApi.fetchEvents(view: 'komende'),
+      ]);
 
       if (!mounted) return;
 
+      final status = Map<String, dynamic>.from(resultate[0] as Map);
+      final besoekers = List<Map<String, dynamic>>.from(resultate[1] as List);
+      final alleEvents = List<MoonEventDto>.from(resultate[2] as List);
+      final kampusEvents = alleEvents
+          .where((event) => event.kampusId == kampusId)
+          .toList();
+
       setState(() {
-        _status = result;
+        _status = status;
+        _besoekers = besoekers;
+        _kampusEvents = kampusEvents;
         _laai = false;
       });
     } catch (e) {
@@ -453,6 +471,16 @@ class _KampusPageState extends State<_KampusPage> {
       final r = item['Rol_Naam']?.toString().toLowerCase() ?? '';
       return r == rol.toLowerCase();
     }).length;
+  }
+
+  List<Map<String, dynamic>> _rolLys(
+    List<Map<String, dynamic>> lys,
+    String rol,
+  ) {
+    return lys.where((item) {
+      final r = item['Rol_Naam']?.toString().toLowerCase() ?? '';
+      return r == rol.toLowerCase();
+    }).toList();
   }
 
   String _naamVan(Map<String, dynamic> item) {
@@ -496,12 +524,15 @@ class _KampusPageState extends State<_KampusPage> {
   @override
   Widget build(BuildContext context) {
     final scannedIn = _lys('scanned_in');
-    final scannedOut = _lys('scanned_out');
+    final studenteLys = _rolLys(scannedIn, 'Student');
+    final personeelLys = _rolLys(scannedIn, 'Personeel');
 
-    final studenteIn = _telRol(scannedIn, 'Student');
-    final personeelIn = _telRol(scannedIn, 'Personeel');
-    final studenteOut = _telRol(scannedOut, 'Student');
-    final personeelOut = _telRol(scannedOut, 'Personeel');
+    final studenteIn = studenteLys.length;
+    final personeelIn = personeelLys.length;
+    final besoekersVandag = _besoekers.length;
+    final eventsKomende = _kampusEvents.length;
+    final kampusNaam = _gekoseKampus?.naam ?? 'Kampus';
+    final kampusId = _gekoseKampus?.kampusId;
 
     return Scaffold(
       backgroundColor: kBg,
@@ -621,6 +652,17 @@ class _KampusPageState extends State<_KampusPage> {
                               value: _laai ? '—' : '$studenteIn',
                               subtitle: 'In kampus',
                               icon: Icons.school_rounded,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => _KampusPeopleListPage(
+                                    title: 'Studente in Kampus',
+                                    kampusNaam: kampusNaam,
+                                    items: studenteLys,
+                                    emptyText: 'Geen studente is tans op kampus nie.',
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -630,6 +672,17 @@ class _KampusPageState extends State<_KampusPage> {
                               value: _laai ? '—' : '$personeelIn',
                               subtitle: 'In kampus',
                               icon: Icons.badge_rounded,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => _KampusPeopleListPage(
+                                    title: 'Personeel in Kampus',
+                                    kampusNaam: kampusNaam,
+                                    items: personeelLys,
+                                    emptyText: 'Geen personeel is tans op kampus nie.',
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -641,19 +694,39 @@ class _KampusPageState extends State<_KampusPage> {
                         children: [
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'STUDENTE UIT',
-                              value: _laai ? '—' : '$studenteOut',
-                              subtitle: 'Uit kampus',
-                              icon: Icons.logout_rounded,
+                              label: 'BESOEKERS',
+                              value: _laai ? '—' : '$besoekersVandag',
+                              subtitle: 'Vandag',
+                              icon: Icons.person_add_alt_1_rounded,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => _KampusBesoekersPage(
+                                    kampusNaam: kampusNaam,
+                                    items: _besoekers,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'PERS. UIT',
-                              value: _laai ? '—' : '$personeelOut',
-                              subtitle: 'Uit kampus',
-                              icon: Icons.exit_to_app_rounded,
+                              label: 'EVENTS',
+                              value: _laai ? '—' : '$eventsKomende',
+                              subtitle: 'Komende',
+                              icon: Icons.event_rounded,
+                              onTap: kampusId == null
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => _EventsPage(
+                                            kampusId: kampusId,
+                                            kampusNaam: kampusNaam,
+                                          ),
+                                        ),
+                                      ),
                             ),
                           ),
                         ],
@@ -693,33 +766,6 @@ class _KampusPageState extends State<_KampusPage> {
                         ),
                       ),
 
-                      const SizedBox(height: 14),
-
-                      GlassCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionTitle('AKSIES'),
-                            const SizedBox(height: 12),
-                            _QuickActionRow(
-                              label: 'Soek persoon op kampus',
-                              icon: Icons.search_rounded,
-                              onTap: () => _showComingSoon(context),
-                            ),
-                            const _ThinDivider(),
-                            _QuickActionRow(
-                              label: 'Verfris kampusdata',
-                              icon: Icons.refresh_rounded,
-                              onTap: () {
-                                if (_gekoseKampus?.kampusId != null) {
-                                  _laaiStatus(_gekoseKampus!.kampusId!);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1100,33 +1146,6 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                         ),
                       ),
 
-                      const SizedBox(height: 14),
-
-                      GlassCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionTitle('AKSIES'),
-                            const SizedBox(height: 12),
-                            _QuickActionRow(
-                              label: 'Soek inwoner',
-                              icon: Icons.search_rounded,
-                              onTap: () => _showComingSoon(context),
-                            ),
-                            const _ThinDivider(),
-                            _QuickActionRow(
-                              label: 'Verfris koshuisdata',
-                              icon: Icons.refresh_rounded,
-                              onTap: () {
-                                if (_gekoseKoshuis?.koshuisId != null) {
-                                  _laaiStatus(_gekoseKoshuis!.koshuisId!);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1139,6 +1158,165 @@ class _KoshuisPageState extends State<_KoshuisPage> {
   }
 }
 
+
+class _KampusPeopleListPage extends StatelessWidget {
+  final String title;
+  final String kampusNaam;
+  final List<Map<String, dynamic>> items;
+  final String emptyText;
+
+  const _KampusPeopleListPage({
+    required this.title,
+    required this.kampusNaam,
+    required this.items,
+    required this.emptyText,
+  });
+
+  String _naam(Map<String, dynamic> item) {
+    final naam = item['GEB_Naam']?.toString() ?? '';
+    final van = item['GEB_Van']?.toString() ?? '';
+    final full = '$naam $van'.trim();
+    return full.isEmpty ? 'Onbekende persoon' : full;
+  }
+
+  String _detail(Map<String, dynamic> item) {
+    final rol = item['Rol_Naam']?.toString() ?? '';
+    final metode = item['Metode']?.toString() ?? '';
+    final tydRaw = item['Tydstempel']?.toString() ?? '';
+    String tyd = '';
+    if (tydRaw.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(tydRaw).add(const Duration(hours: 2));
+        tyd = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {}
+    }
+    return [rol, 'IN', metode, tyd].where((v) => v.trim().isNotEmpty).join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(title: title, subtitle: kampusNaam, showBack: true),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          emptyText,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return GlassCard(
+                          padding: const EdgeInsets.all(14),
+                          child: _MiniLogRow(
+                            name: _naam(item),
+                            detail: _detail(item),
+                            icon: Icons.person_rounded,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KampusBesoekersPage extends StatelessWidget {
+  final String kampusNaam;
+  final List<Map<String, dynamic>> items;
+
+  const _KampusBesoekersPage({
+    required this.kampusNaam,
+    required this.items,
+  });
+
+  String _naam(Map<String, dynamic> item) {
+    final naam = item['naam']?.toString() ?? '';
+    final van = item['van']?.toString() ?? '';
+    final full = '$naam $van'.trim();
+    return full.isEmpty ? 'Onbekende besoeker' : full;
+  }
+
+  String _detail(Map<String, dynamic> item) {
+    final selfoon = item['selfoon']?.toString() ?? '';
+    final gasheer = item['gasheer_naam']?.toString() ?? '';
+    final rede = item['rede']?.toString() ?? '';
+    final tydRaw = item['besluit_op']?.toString() ?? '';
+    String tyd = '';
+    if (tydRaw.isNotEmpty) {
+      try {
+        final parsed = DateTime.parse(tydRaw);
+        final dt = parsed.isUtc ? parsed.toLocal() : parsed.add(const Duration(hours: 2));
+        tyd = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {}
+    }
+    return [
+      if (gasheer.isNotEmpty) 'Gasheer: $gasheer',
+      if (selfoon.isNotEmpty) selfoon,
+      if (rede.isNotEmpty) rede,
+      if (tyd.isNotEmpty) 'Toegelaat $tyd',
+    ].join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Besoekers',
+              subtitle: '$kampusNaam · vandag',
+              showBack: true,
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Geen besoekers is vandag toegelaat nie.',
+                        style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return GlassCard(
+                          padding: const EdgeInsets.all(14),
+                          child: _MiniLogRow(
+                            name: _naam(item),
+                            detail: _detail(item),
+                            icon: Icons.person_add_alt_1_rounded,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _NoodPage extends StatelessWidget {
   const _NoodPage();
@@ -1268,7 +1446,10 @@ class _NoodPage extends StatelessWidget {
 
 
 class _EventsPage extends StatefulWidget {
-  const _EventsPage();
+  final int? kampusId;
+  final String? kampusNaam;
+
+  const _EventsPage({this.kampusId, this.kampusNaam});
 
   @override
   State<_EventsPage> createState() => _EventsPageState();
@@ -1291,7 +1472,10 @@ class _EventsPageState extends State<_EventsPage> {
       _error = null;
     });
     try {
-      final events = await MoonApi.fetchEvents(view: 'komende');
+      final allEvents = await MoonApi.fetchEvents(view: 'komende');
+      final events = widget.kampusId == null
+          ? allEvents
+          : allEvents.where((event) => event.kampusId == widget.kampusId).toList();
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -1338,7 +1522,13 @@ class _EventsPageState extends State<_EventsPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(title: 'Events', subtitle: 'Skep en bestuur kampus-events', showBack: true),
+            AppScreenHeader(
+              title: 'Events',
+              subtitle: widget.kampusNaam == null
+                  ? 'Skep en bestuur kampus-events'
+                  : '${widget.kampusNaam} · komende events',
+              showBack: true,
+            ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _load,
@@ -1879,12 +2069,19 @@ class _OpsigterMetricCard extends StatelessWidget {
   final String value;
   final String subtitle;
   final IconData icon;
+  final VoidCallback? onTap;
 
-  const _OpsigterMetricCard({required this.label, required this.value, required this.subtitle, required this.icon});
+  const _OpsigterMetricCard({
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    final card = GlassCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1897,6 +2094,17 @@ class _OpsigterMetricCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(subtitle, style: GoogleFonts.inter(color: kText2, fontSize: 11)),
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: card,
       ),
     );
   }

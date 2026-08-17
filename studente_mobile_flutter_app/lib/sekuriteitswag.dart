@@ -234,6 +234,12 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   final FocusNode _manualFocusNode = FocusNode();
 
   Timer? _qrDebounce;
+  Timer? _manualDebounce;
+  bool _manualChecking = false;
+  bool? _manualNommerBestaan;
+  bool _manualNommerAktief = true;
+  String? _manualNommerTipe;
+  String? _manualNommerNaam;
   bool _loading = false;
   bool _nfcSessionActive = false;
   bool _nfcAvailable = false;
@@ -259,6 +265,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   @override
   void dispose() {
     _qrDebounce?.cancel();
+    _manualDebounce?.cancel();
 
     // Moenie dispose vertraag deur hier te await nie.
     if (_nfcSessionActive) {
@@ -410,7 +417,13 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
       _scannerController.clear();
       if (metode == 'HANDMATIG') {
+        _manualDebounce?.cancel();
         _manualController.clear();
+        _manualChecking = false;
+        _manualNommerBestaan = null;
+        _manualNommerAktief = true;
+        _manualNommerTipe = null;
+        _manualNommerNaam = null;
       }
 
       setState(() {
@@ -505,6 +518,80 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     );
   }
 
+  void _handleManualChanged(String value) {
+    _manualDebounce?.cancel();
+    final clean = value.trim();
+
+    if (clean.isEmpty) {
+      setState(() {
+        _manualChecking = false;
+        _manualNommerBestaan = null;
+        _manualNommerAktief = true;
+        _manualNommerTipe = null;
+        _manualNommerNaam = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _manualChecking = true;
+      _manualNommerBestaan = null;
+      _manualNommerTipe = null;
+      _manualNommerNaam = null;
+    });
+
+    _manualDebounce = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
+      final latest = _manualController.text.trim();
+      if (latest.isEmpty || latest != clean) return;
+
+      try {
+        final result = await MoonApi.wagteNommerCheck(latest);
+        if (!mounted || _manualController.text.trim() != latest) return;
+
+        final bestaan = result['bestaan'] == true;
+        final aktief = result['aktief'] != false;
+        final tipe = result['tipe']?.toString();
+        final naam = '${result['naam'] ?? ''} ${result['van'] ?? ''}'.trim();
+
+        setState(() {
+          _manualChecking = false;
+          _manualNommerBestaan = bestaan;
+          _manualNommerAktief = aktief;
+          _manualNommerTipe = tipe;
+          _manualNommerNaam = naam.isEmpty ? null : naam;
+        });
+      } catch (_) {
+        if (!mounted || _manualController.text.trim() != latest) return;
+        setState(() {
+          _manualChecking = false;
+          _manualNommerBestaan = null;
+          _manualNommerTipe = null;
+          _manualNommerNaam = null;
+        });
+      }
+    });
+  }
+
+  String get _manualValidationText {
+    if (_manualChecking) return 'Kontroleer nommer...';
+    if (_manualNommerBestaan == false) return 'Nommer bestaan nie';
+    if (_manualNommerBestaan == true && !_manualNommerAktief) {
+      return 'Gebruiker bestaan maar is gedeaktiveer';
+    }
+    if (_manualNommerBestaan == true) {
+      final tipe = _manualNommerTipe == 'STUDENT'
+          ? 'Studentenommer'
+          : _manualNommerTipe == 'PERSONEEL'
+              ? 'Personeelnommer'
+              : 'ID-nommer';
+      return _manualNommerNaam == null
+          ? '$tipe gevind'
+          : '$tipe gevind · $_manualNommerNaam';
+    }
+    return '';
+  }
+
   Future<void> _submitManual() async {
     final clean = _manualController.text.trim();
 
@@ -514,6 +601,18 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           content: Text('Tik eers ’n student-, personeel- of ID-nommer in'),
         ),
       );
+      _manualFocusNode.requestFocus();
+      return;
+    }
+
+    if (_manualNommerBestaan == false) {
+      setState(() => _status = 'Nommer bestaan nie');
+      _manualFocusNode.requestFocus();
+      return;
+    }
+
+    if (_manualNommerBestaan == true && !_manualNommerAktief) {
+      setState(() => _status = 'Gebruiker is gedeaktiveer');
       _manualFocusNode.requestFocus();
       return;
     }
@@ -570,7 +669,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                     // Die enigste sigbare invoerbalk – vir worst-case handmatige invoer.
                     GlassCard(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 8,
                         vertical: 6,
                       ),
                       child: TextField(
@@ -583,22 +682,96 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                         enableSuggestions: false,
                         style: GoogleFonts.inter(color: kText1),
                         decoration: InputDecoration(
-                          border: InputBorder.none,
-                          hintText: 'Tik nommer handmatig...',
-                          hintStyle: GoogleFonts.inter(color: kTextMuted),
-                          prefixIcon: const Icon(
-                            Icons.keyboard_alt_outlined,
-                            color: kTextMuted,
-                          ),
-                          suffixIcon: IconButton(
-                            tooltip: 'Soek profiel',
-                            onPressed: _loading ? null : _submitManual,
-                            icon: const Icon(
-                              Icons.search_rounded,
-                              color: kAccent,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: _manualChecking
+                                  ? Colors.orange
+                                  : _manualNommerBestaan == false
+                                      ? Colors.red
+                                      : _manualNommerBestaan == true
+                                          ? (_manualNommerAktief ? Colors.green : Colors.red)
+                                          : Colors.transparent,
+                              width: 1.6,
                             ),
                           ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: _manualChecking
+                                  ? Colors.orange
+                                  : _manualNommerBestaan == false
+                                      ? Colors.red
+                                      : _manualNommerBestaan == true
+                                          ? (_manualNommerAktief ? Colors.green : Colors.red)
+                                          : Colors.transparent,
+                              width: 1.6,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: _manualChecking
+                                  ? Colors.orange
+                                  : _manualNommerBestaan == false
+                                      ? Colors.red
+                                      : _manualNommerBestaan == true
+                                          ? (_manualNommerAktief ? Colors.green : Colors.red)
+                                          : kAccent,
+                              width: 1.8,
+                            ),
+                          ),
+                          hintText: 'Tik student-, personeel- of ID-nommer...',
+                          hintStyle: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
+                          helperText: _manualController.text.trim().isEmpty
+                              ? null
+                              : _manualValidationText,
+                          helperStyle: GoogleFonts.inter(
+                            color: _manualChecking
+                                ? Colors.orange
+                                : _manualNommerBestaan == false
+                                    ? Colors.red
+                                    : _manualNommerBestaan == true
+                                        ? (_manualNommerAktief ? Colors.green : Colors.red)
+                                        : kTextMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          prefixIcon: Icon(
+                            _manualNommerBestaan == false
+                                ? Icons.error_outline_rounded
+                                : _manualNommerBestaan == true
+                                    ? (_manualNommerAktief
+                                        ? Icons.check_circle_outline_rounded
+                                        : Icons.block_rounded)
+                                    : Icons.keyboard_alt_outlined,
+                            color: _manualChecking
+                                ? Colors.orange
+                                : _manualNommerBestaan == false
+                                    ? Colors.red
+                                    : _manualNommerBestaan == true
+                                        ? (_manualNommerAktief ? Colors.green : Colors.red)
+                                        : kTextMuted,
+                          ),
+                          suffixIcon: _manualChecking
+                              ? const Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: 'Soek profiel',
+                                  onPressed: _loading ? null : _submitManual,
+                                  icon: const Icon(
+                                    Icons.search_rounded,
+                                    color: kAccent,
+                                  ),
+                                ),
                         ),
+                        onChanged: _handleManualChanged,
                         onTap: () {
                           _scannerFocusNode.unfocus();
                         },
@@ -996,9 +1169,23 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GlassCard(
-        padding: const EdgeInsets.all(12),
-        child: Row(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _loading || _verified
+              ? null
+              : () {
+                  if (member.isBestuurder) {
+                    _showLargePhoto(member);
+                  } else {
+                    _toggleMember(member, !selected);
+                  }
+                },
+          child: GlassCard(
+            padding: const EdgeInsets.all(12),
+            child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _avatar(member),
@@ -1076,15 +1263,17 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
               ),
             ),
             const SizedBox(width: 6),
-            Checkbox(
-              value: selected,
-              onChanged: member.isBestuurder
-                  ? null
-                  : (value) => _toggleMember(member, value),
-              activeColor: kAccent,
-              checkColor: Colors.black,
-            ),
-          ],
+              IgnorePointer(
+                child: Checkbox(
+                  value: selected,
+                  onChanged: member.isBestuurder ? null : (_) {},
+                  activeColor: kAccent,
+                  checkColor: Colors.black,
+                ),
+              ),
+            ],
+          ),
+          ),
         ),
       ),
     );

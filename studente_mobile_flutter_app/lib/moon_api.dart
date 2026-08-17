@@ -981,6 +981,36 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   return Map<String, dynamic>.from(decoded['data']);
   }
 
+  static Future<Map<String, dynamic>> wagteNommerCheck(String nommer) async {
+    final uri = Uri.parse('$baseUrl/wagte/nommer/check').replace(
+      queryParameters: {'nommer': nommer.trim()},
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception('Kon nie nommer valideer nie');
+    }
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie nommer valideer nie',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data'] as Map);
+  }
+
   static Future<WagteProfileScanDto> wagteProfileScan(
     String scanKode,
   ) async {
@@ -1140,6 +1170,40 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     }
 
     return Map<String, dynamic>.from(decoded['data']);
+  }
+
+
+  static Future<List<Map<String, dynamic>>> fetchOpsigterKampusBesoekers(
+    int kampusId,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/opsigter/kampusse/$kampusId/besoekers'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception('Kon nie kampusbesoekers laai nie');
+    }
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampusbesoekers laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw == null) return [];
+
+    return (raw as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
 
