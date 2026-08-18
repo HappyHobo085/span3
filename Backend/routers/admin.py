@@ -1,6 +1,7 @@
 """Admin utility routes."""
 
 import csv
+import inspect as py_inspect
 import io
 import zipfile
 from datetime import datetime
@@ -70,7 +71,7 @@ def _resolve_table(table_name: str):
         if table.name.lower() == normalized.lower():
             return table
 
-    for model_name, model in inspect.getmembers(models, inspect.isclass):
+    for model_name, model in py_inspect.getmembers(models, py_inspect.isclass):
         if model.__module__ != models.__name__:
             continue
         table = getattr(model, "__table__", None)
