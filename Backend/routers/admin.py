@@ -248,10 +248,12 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
         # Get list of CSV files in ZIP
         csv_files = [name for name in zf.namelist() if name.endswith('.csv')]
         
-        # Map filename to table name
+        # Map filename to table name (handle nested paths by using basename)
         table_files = {}
         for csv_name in csv_files:
-            table_name = csv_name[:-4]  # Remove .csv
+            # Extract basename (filename without folder path)
+            basename = csv_name.split('/')[-1]
+            table_name = basename[:-4]  # Remove .csv
             try:
                 _resolve_table(table_name)  # Validate table exists
                 table_files[table_name] = csv_name
