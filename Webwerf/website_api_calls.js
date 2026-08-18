@@ -360,9 +360,23 @@
     },
 
     /**
+     * GET /events?view=
+     * view: 'komende' (verstek), 'my' of 'vorige'.
+     */
+    // Hierdie funksie roep GET /events — dit kry die lys van gebeure
+    // (events), verstek net dié wat nog voorlê.
+    fetchEvents: async function (view) {
+      const params = new URLSearchParams({ view: view || 'komende' });
+      const r = await apiRequest('/events?' + params.toString(), {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
      * GET /kampusse/status
      * Returns summary scan counts for all campuses. No auth required.
-     * Reserved for future use (e.g. a multi-campus overview dashboard).
+     * Used by the Tuis dashboard (home.js) for the per-campus overview.
      */
     // Hierdie funksie roep GET /kampusse/status — dit kry 'n opsomming van
     // die skandeer-tellings vir al die kampusse.
