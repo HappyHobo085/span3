@@ -323,6 +323,38 @@ def _normalize_import_mode(mode: Optional[str]) -> str:
     return value
 
 
+def _next_student_numbers(db: Session, count: int) -> List[str]:
+    """Generate `count` sequential student numbers starting after the current max."""
+    table = _resolve_table('student')
+    col = table.c.STU_Nommer
+    result = db.execute(select(col)).fetchall()
+    max_num = 0
+    for (val,) in result:
+        if val is not None:
+            try:
+                max_num = max(max_num, int(val))
+            except (ValueError, TypeError):
+                pass
+    return [str(max_num + i + 1) for i in range(count)]
+
+
+def _fill_missing_student_numbers(rows: List[Dict[str, Any]], db: Session) -> List[Dict[str, Any]]:
+    """Auto-generate STU_Nommer for student rows where it is missing or empty."""
+    missing_count = sum(1 for r in rows if not r.get('STU_Nommer'))
+    if missing_count == 0:
+        return rows
+    generated = _next_student_numbers(db, missing_count)
+    gen_idx = 0
+    filled = []
+    for row in rows:
+        row = dict(row)
+        if not row.get('STU_Nommer'):
+            row['STU_Nommer'] = generated[gen_idx]
+            gen_idx += 1
+        filled.append(row)
+    return filled
+
+
 def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]], mode: str = 'merge') -> int:
     """Insert rows using PostgreSQL ON CONFLICT for upsert, with per-row savepoints for constraint violations."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -332,6 +364,10 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
     pk_columns = [column for column in table.columns if column.primary_key]
     conflict_columns = [column.name for column in pk_columns]
     inserted_count = 0
+
+    # Auto-generate STU_Nommer for student table imports
+    if table_name == 'student':
+        rows = _fill_missing_student_numbers(list(rows), db)
 
     for row in rows:
         sanitized = _normalize_insert_row(table, row)
