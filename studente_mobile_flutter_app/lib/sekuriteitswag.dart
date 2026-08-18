@@ -78,13 +78,12 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
+            const AppScreenHeader(
               title: 'Wagte',
-              subtitle: _gekoseKampus?.naam ?? 'Kies kampus',
             ),
 
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: GlassCard(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: _kampusseLoading
@@ -97,7 +96,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                         onTap: () async {
                           final selected = await showMenu<KampusDto>(
                             context: context,
-                            position: const RelativeRect.fromLTRB(16, 160, 16, 0),
+                            position: const RelativeRect.fromLTRB(16, 130, 16, 0),
                             color: kBg,
                             items: _kampusse.map((kampus) {
                               return PopupMenuItem<KampusDto>(
@@ -117,13 +116,41 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                           }
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 15,
+                          ),
                           child: Row(
                             children: [
+                              const Icon(
+                                Icons.location_on_rounded,
+                                color: kAccent,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
-                                  _gekoseKampus?.naam ?? 'Kies kampus',
-                                  style: GoogleFonts.inter(color: kText1),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'KIES KAMPUS',
+                                      style: GoogleFonts.inter(
+                                        color: kTextMuted,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _gekoseKampus?.naam ?? 'Kies kampus',
+                                      style: GoogleFonts.inter(
+                                        color: kText1,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const Icon(
@@ -138,66 +165,73 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
             ),
 
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GlassTapPanel(
-                            label: 'Kampus Skandeer',
-                            subtitle: 'IN / UIT',
-                            icon: '🚪',
-                            onTap: _openKampusScan,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: GlassTapPanel(
-                            label: 'Besoekers',
-                            subtitle: 'OTP verifieer',
-                            icon: '👤',
-                            borderColor: const Color(0x3300C2FF),
-                            onTap: () {
-                              if (_gekoseKampus == null ||
-                                  _gekoseKampus!.kampusId == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Kies eers ’n kampus'),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 190,
+                      child: GlassTapPanel(
+                        label: 'KAMPUS SKANDEER',
+                        subtitle: 'QR • NFC • Handmatig',
+                        icon: '🚪',
+                        onTap: _openKampusScan,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 150,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GlassTapPanel(
+                              label: 'BESOEKERS',
+                              subtitle: 'OTP verifieer',
+                              icon: '👤',
+                              borderColor: const Color(0x3300C2FF),
+                              onTap: () {
+                                if (_gekoseKampus == null ||
+                                    _gekoseKampus!.kampusId == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Kies eers ’n kampus'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => VisitorVerifyPage(
+                                      kampusId: _gekoseKampus!.kampusId!,
+                                      kampusNaam: _gekoseKampus!.naam,
+                                    ),
                                   ),
                                 );
-                                return;
-                              }
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => VisitorVerifyPage(
-                                    kampusId: _gekoseKampus!.kampusId!,
-                                    kampusNaam: _gekoseKampus!.naam,
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: GlassTapPanel(
+                              label: 'ONVERWAGTE\nBESOEKER',
+                              subtitle: 'Lisensie & rede',
+                              icon: '📷',
+                              borderColor: Colors.orangeAccent.withOpacity(0.35),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const OnverwagteBesoekerPage(),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    GlassTapPanel(
-                      label: 'Onverwagte Besoeker',
-                      subtitle: 'Neem lisensie foto en rede',
-                      icon: '📷',
-                      borderColor: const Color(0x3300C2FF),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const OnverwagteBesoekerPage(),
-                          ),
-                        );
-                      },
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -208,6 +242,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
       ),
     );
   }
+
 }
 
 class KampusSkandeerPage extends StatefulWidget {
@@ -1122,157 +1157,190 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
     }
   }
 
-  Widget _avatar(SaamryGateMemberDto member) {
-    final raw = member.fotoUrl?.trim() ?? '';
-
-    return GestureDetector(
-      onTap: () => _showLargePhoto(member),
-      child: Container(
-        width: 72,
-        height: 72,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: member.isBestuurder ? kAccent : Colors.white24,
-            width: member.isBestuurder ? 2 : 1,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: raw.isNotEmpty
-              ? Image.network(
-                  _photoUrl(raw),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.person,
-                    color: kTextMuted,
-                    size: 52,
-                  ),
-                )
-              : const Icon(
-                  Icons.person,
-                  color: kTextMuted,
-                  size: 52,
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _memberCard(SaamryGateMemberDto member) {
+  Widget _memberGridCard(SaamryGateMemberDto member) {
     final selected = _selectedIds.contains(member.gebruikerId);
+    final raw = member.fotoUrl?.trim() ?? '';
     final statusText = member.opKampus ? 'OP KAMPUS' : 'NIE OP KAMPUS';
-    final statusIcon = member.opKampus
-        ? Icons.location_on_rounded
-        : Icons.location_off_rounded;
     final statusColor = member.opKampus ? Colors.green : Colors.orange;
+    final selectionColor = selected ? Colors.green : Colors.white24;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Semantics(
-        button: true,
-        selected: selected,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _loading || _verified
-              ? null
-              : () {
-                  if (member.isBestuurder) {
-                    _showLargePhoto(member);
-                  } else {
-                    _toggleMember(member, !selected);
-                  }
-                },
-          child: GlassCard(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _avatar(member),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          member.volleNaam,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: kText1,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
+    void handleTap() {
+      if (_loading || _verified) return;
+      if (member.isBestuurder) {
+        _showLargePhoto(member);
+        return;
+      }
+      _toggleMember(member, !selected);
+    }
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${member.volleNaam}, ${member.rol}, ${member.nommer}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: handleTap,
+        onLongPress: () => _showLargePhoto(member),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.green.withOpacity(0.08)
+                : Colors.white.withOpacity(0.035),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selectionColor,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 7,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(14),
+                      ),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 160),
+                        opacity: selected ? 1.0 : 0.48,
+                        child: raw.isNotEmpty
+                            ? Image.network(
+                                _photoUrl(raw),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: Colors.white10,
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: kTextMuted,
+                                    size: 82,
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: Colors.white10,
+                                child: const Icon(
+                                  Icons.person,
+                                  color: kTextMuted,
+                                  size: 82,
+                                ),
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.green
+                              : const Color(0xCC111827),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected ? Colors.green : Colors.white38,
                           ),
                         ),
+                        child: Icon(
+                          selected
+                              ? Icons.check_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      if (member.isBestuurder)
-                        Container(
+                    ),
+                    if (member.isBestuurder)
+                      Positioned(
+                        left: 8,
+                        bottom: 8,
+                        child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 4,
+                            horizontal: 8,
+                            vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: kAccent.withOpacity(0.14),
+                            color: Colors.green.withOpacity(0.92),
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: kAccent.withOpacity(0.5),
-                            ),
                           ),
                           child: Text(
                             'BESTUURDER',
                             style: GoogleFonts.inter(
-                              color: kAccent,
+                              color: Colors.white,
                               fontSize: 8,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.4,
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${member.rol} · ${member.nommer}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: kText2,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 4,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(statusIcon, color: statusColor, size: 16),
-                      const SizedBox(width: 5),
                       Text(
-                        statusText,
+                        member.volleNaam,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
-                          color: statusColor,
-                          fontSize: 10,
+                          color: selected ? kText1 : kText2,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
+                          height: 1.15,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${member.rol} · ${member.nommer}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Icon(
+                            member.opKampus
+                                ? Icons.location_on_rounded
+                                : Icons.location_off_rounded,
+                            color: statusColor,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              statusText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: statusColor,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-              IgnorePointer(
-                child: Checkbox(
-                  value: selected,
-                  onChanged: member.isBestuurder ? null : (_) {},
-                  activeColor: kAccent,
-                  checkColor: Colors.black,
                 ),
               ),
             ],
-          ),
           ),
         ),
       ),
@@ -1374,7 +1442,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'Ontmerk enige persoon wat nie in die voertuig is nie. Tik op ’n foto om dit groter te sien.',
+                          'Tik op ’n kaart om ’n passasier te kies of ontkies. Die bestuurder bly altyd gekies. Hou ’n kaart in vir ’n groter foto.',
                           style: GoogleFonts.inter(
                             color: kTextMuted,
                             fontSize: 11,
@@ -1395,8 +1463,21 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  ...widget.preview.lede.map(_memberCard),
-                  const SizedBox(height: 8),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.preview.lede.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.64,
+                    ),
+                    itemBuilder: (context, index) {
+                      return _memberGridCard(widget.preview.lede[index]);
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   if (_verified)
                     Container(
                       width: double.infinity,
