@@ -579,12 +579,75 @@
     container.appendChild(svg);
   }
 
+  /**
+   * Persentasie-sirkel — 'n ring wat een persentasie (0–100) wys, met die
+   * syfer in die middel en die etiket daaronder (bv. die dag se klasbywoning).
+   * Die waarde staan altyd as teks in die middel, so kleur dra nooit alleen
+   * die boodskap nie. percent = null wys strepies (geen klasdata nie).
+   * opts = { label, percent }
+   */
+  function renderPercentRing(container, opts) {
+    if (!container) return;
+
+    var pct = (opts.percent === null || opts.percent === undefined || isNaN(Number(opts.percent)))
+      ? null
+      : Math.max(0, Math.min(100, Number(opts.percent)));
+
+    container.innerHTML = '';
+
+    var size = 68, stroke = 7;
+    var c = size / 2;
+    var r = (size - stroke) / 2;
+    var omtrek = 2 * Math.PI * r;
+
+    var svg = svgEl('svg', {
+      width: size, height: size, viewBox: '0 0 ' + size + ' ' + size,
+      'class': 'viz-ring-svg', role: 'img',
+      'aria-label': (opts.label || '') + ': ' + (pct === null ? '--' : pct + '%')
+    });
+
+    // Die dowwe agtergrond-ring (die "baan").
+    svg.appendChild(svgEl('circle', {
+      cx: c, cy: c, r: r, fill: 'none',
+      stroke: pct === null ? COLORS.grid : 'rgba(123,97,255,0.15)',
+      'stroke-width': stroke
+    }));
+
+    // Die gevulde boog — begin bo (12-uur) en groei kloksgewys.
+    if (pct !== null && pct > 0) {
+      svg.appendChild(svgEl('circle', {
+        cx: c, cy: c, r: r, fill: 'none',
+        stroke: COLORS.accent, 'stroke-width': stroke,
+        'stroke-linecap': pct < 100 ? 'round' : 'butt',
+        'stroke-dasharray': (omtrek * pct / 100) + ' ' + omtrek,
+        transform: 'rotate(-90 ' + c + ' ' + c + ')'
+      }));
+    }
+
+    var txt = svgEl('text', {
+      x: c, y: c + 4.5, 'text-anchor': 'middle',
+      'font-size': 14, 'font-weight': 700, fill: COLORS.ink,
+      style: 'font-variant-numeric:tabular-nums'
+    });
+    txt.textContent = pct === null ? '--' : pct + '%';
+    svg.appendChild(txt);
+    container.appendChild(svg);
+
+    if (opts.label) {
+      var lab = document.createElement('div');
+      lab.className = 'viz-ring-label';
+      lab.textContent = opts.label;
+      container.appendChild(lab);
+    }
+  }
+
   // Maak alles beskikbaar vir die res van die webwerf.
   window.MoonStats = {
     colors: COLORS,
     renderMeter: renderMeter,
     renderSplitBar: renderSplitBar,
     renderTrend: renderTrend,
-    renderColumns: renderColumns
+    renderColumns: renderColumns,
+    renderPercentRing: renderPercentRing
   };
 })();

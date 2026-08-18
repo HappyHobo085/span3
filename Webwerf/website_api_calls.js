@@ -446,6 +446,60 @@
     },
 
     /**
+     * GET /admin/csv/export-all
+     * Returns a ZIP file with all tables as CSVs
+     */
+    exportAllCsvTables: async function () {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(API_BASE_URL + '/admin/csv/export-all', {
+        method: 'GET',
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+      });
+
+      const blob = await response.blob();
+      return {
+        ok: response.ok,
+        status: response.status,
+        blob,
+      };
+    },
+
+    /**
+     * POST /admin/csv/import-all
+     * Accepts a ZIP file with multiple CSVs
+     */
+    importAllCsvTables: async function (zipFile, mode) {
+      const formData = new FormData();
+      formData.append('file', zipFile);
+      formData.append('mode', mode || 'merge');
+
+      const token = localStorage.getItem('access_token');
+      const headers = {};
+      if (token) {
+        headers.Authorization = 'Bearer ' + token;
+      }
+
+      const response = await fetch(API_BASE_URL + '/admin/csv/import-all', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      let body = {};
+      try {
+        body = await response.json();
+      } catch (e) {
+        body = {};
+      }
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        body,
+      };
+    },
+
+    /**
      * GET /kampusse/{kampusId}/status
      * Returns detailed scanned-in/out lists for a specific campus. No auth required.
      */

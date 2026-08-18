@@ -242,6 +242,18 @@
   }
 
   // ----- Dashboard rendering -----
+
+  // Hierdie funksie teken die Bywoning-kaartjie as 'n persentasie-sirkel
+  // (null = geen klasdata nie, wys strepies).
+  function renderPercentCard(persent) {
+    if (!dashPercentCount) return;
+    if (window.MoonStats && MoonStats.renderPercentRing) {
+      MoonStats.renderPercentRing(dashPercentCount, { label: 'Bywoning', percent: persent });
+    } else {
+      dashPercentCount.textContent = 'Bywoning: ' + (persent === null ? '--' : persent + '%');
+    }
+  }
+
   // Hierdie funksie teken die bywoningspaneel: die tellings bo-aan en die
   // twee lyste (ingeskandeer / nie ingeskandeer) vir die gekose dag.
   function renderDashboard() {
@@ -257,7 +269,7 @@
     if (!bywoning) {
       if (dashInCount) dashInCount.textContent = 'Ingeskandeer: --';
       if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: --';
-      if (dashPercentCount) dashPercentCount.textContent = 'Bywoning: --';
+      renderPercentCard(null);
       if (dashInList) renderLeegBoodskap(dashInList, 'Geen klasdata vir hierdie dag nie.');
       if (dashOutList) renderLeegBoodskap(dashOutList, 'Geen klasdata vir hierdie dag nie.');
       return;
@@ -269,7 +281,7 @@
 
     if (dashInCount) dashInCount.textContent = 'Ingeskandeer: ' + bywoning.ingeskandeer.length;
     if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: ' + bywoning.nieIngeskandeer.length;
-    if (dashPercentCount) dashPercentCount.textContent = 'Bywoning: ' + persent + '%';
+    renderPercentCard(persent);
 
     // Vul die lys van studente wat wel ingeskandeer het.
     if (dashInList) {

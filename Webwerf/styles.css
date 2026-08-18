@@ -500,7 +500,17 @@ body{
   letter-spacing:1.5px;color:var(--text-muted);margin-bottom:6px;
 }
 .viz-caption{font-size:10px;color:var(--text-muted)}
+/* Studentbywoning: die opsomming onder die verdeling-balk is effens groter */
+#dash-student-card .viz-caption{font-size:12.5px;line-height:1.5}
 .viz-empty{font-size:11px;color:var(--text-muted);padding:14px 0;text-align:center}
+
+/* persentasie-sirkel (bv. die Bywoning-kaartjie) */
+.viz-ring-card{flex-direction:column;gap:6px;padding:10px 12px}
+.viz-ring-svg{display:block}
+.viz-ring-label{
+  font-size:9px;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.5px;color:var(--text-muted);
+}
 
 /* meter (kapasiteit) */
 .viz-meter-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}

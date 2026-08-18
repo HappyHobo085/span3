@@ -17,7 +17,8 @@
  *   Dynamically adds an "Admin" link in the navbar for admin users only.
  * Part 5 — Personeel gate + nav link:
  *   personeel.html is only for the Personeel role; a "My Klasse" navbar link
- *   is added dynamically for Personeel users only.
+ *   is added dynamically for Personeel users only, and the Kampus/Koshuis/
+ *   Events links are removed from the navbar for them.
  */
 
 // -----------------------------------------------------------------------------
@@ -132,6 +133,15 @@ function insertNavLink(href, text) {
   setActiveNavLink();
 }
 
+// Hierdie funksie haal 'n skakel uit die balk bo (bv. blaaie wat 'n
+// sekere rol nie mag sien nie).
+function removeNavLink(href) {
+  var navbar = document.querySelector('.navbar');
+  if (!navbar) return;
+  var link = navbar.querySelector('a[href="' + href + '"]');
+  if (link) link.remove();
+}
+
 loadSiteHeader();
 
 // -----------------------------------------------------------------------------
@@ -186,10 +196,15 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
     });
   }
 
-  // Wys die "My Klasse" skakel in die balk bo, maar net vir personeel
+  // Wys die "My Klasse" skakel in die balk bo, maar net vir personeel.
+  // Personeel sien net Tuis en My Klasse — die Kampus-, Koshuis- en
+  // Events-skakels word vir hulle uit die balk verwyder.
   // Show the "My Klasse" nav link only for Personeel users
   if (userRole === 'Personeel' && currentPage !== 'login.html') {
     onSiteHeaderReady(function () {
+      removeNavLink('kampus.html');
+      removeNavLink('koshuis.html');
+      removeNavLink('events.html');
       insertNavLink('personeel.html', 'My Klasse');
     });
   }

@@ -9,3 +9,6 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SECRET_KEY = os.getenv("SECRET_KEY", "jou-geheime-sleutel")
+    
+    # Enable/disable CSV import/export functionality (default: enabled)
+    CSV_IMPORT_EXPORT_ENABLED = os.getenv("CSV_IMPORT_EXPORT_ENABLED", "true").lower() == "true"

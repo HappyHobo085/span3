@@ -2,11 +2,12 @@
 
 import csv
 import io
+import zipfile
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
@@ -41,8 +42,19 @@ def _prepare_insert_row_for_new_primary_key(table, current_row: Dict[str, Any], 
 from database import get_db
 import models, schemas, auth
 from services.nfc_service import genereer_unieke_nfc_uid
+from config import Config
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+def check_csv_import_export_enabled():
+    """Dependency to check if CSV import/export is enabled."""
+    if not Config.CSV_IMPORT_EXPORT_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSV import/export functionality is disabled."
+        )
+    return True
 
 
 def _resolve_table(table_name: str):
@@ -149,6 +161,126 @@ def export_table_csv_text(table_name: str, rows: Sequence[Dict[str, Any]]) -> st
 
 def get_available_tables() -> List[str]:
     return [table.name for table in models.Base.metadata.tables.values()]
+
+
+def _build_dependency_graph() -> Dict[str, Set[str]]:
+    """Build a directed graph of table dependencies from FK relationships.
+    Returns: {table_name: set_of_dependent_table_names} (edges: parent -> child)
+    """
+    graph: Dict[str, Set[str]] = {table.name: set() for table in models.Base.metadata.tables.values()}
+    
+    for table in models.Base.metadata.tables.values():
+        for fk in table.foreign_keys:
+            parent_table = fk.column.table.name
+            child_table = table.name
+            if parent_table != child_table:
+                graph[parent_table].add(child_table)
+    
+    return graph
+
+
+def _topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
+    """Kahn's algorithm for topological sorting.
+    Returns tables in dependency order (parents before children).
+    """
+    # Calculate in-degrees
+    in_degree: Dict[str, int] = {node: 0 for node in graph}
+    for node, deps in graph.items():
+        for dep in deps:
+            in_degree[dep] = in_degree.get(dep, 0) + 1
+    
+    # Queue nodes with no dependencies
+    queue = [node for node, deg in in_degree.items() if deg == 0]
+    result = []
+    
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for dep in graph.get(node, set()):
+            in_degree[dep] -= 1
+            if in_degree[dep] == 0:
+                queue.append(dep)
+    
+    # If there are cycles, append remaining nodes (shouldn't happen with FKs)
+    if len(result) < len(graph):
+        remaining = [n for n in graph if n not in result]
+        result.extend(remaining)
+    
+    return result
+
+
+def _get_import_order() -> List[str]:
+    """Get tables sorted by FK dependency order for import."""
+    graph = _build_dependency_graph()
+    return _topological_sort(graph)
+
+
+def _create_export_zip(db: Session) -> io.BytesIO:
+    """Create a ZIP file containing CSV exports of all tables."""
+    zip_buffer = io.BytesIO()
+    table_order = _get_import_order()  # Same order for consistency
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for table_name in table_order:
+            try:
+                rows = _table_rows_for_export(db, table_name)
+                csv_text = export_table_csv_text(table_name, rows)
+                zip_file.writestr(f"{table_name}.csv", csv_text)
+            except Exception as e:
+                # Include error info in a separate file
+                zip_file.writestr(f"{table_name}.error.txt", f"Export failed: {str(e)}")
+    
+    zip_buffer.seek(0)
+    return zip_buffer
+
+
+def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> Dict[str, Any]:
+    """Import all tables from a ZIP file containing CSVs."""
+    import_mode = _normalize_import_mode(mode)
+    results = {"imported": {}, "errors": {}, "skipped": []}
+    
+    # Read ZIP into memory
+    zip_content = zip_file.file.read()
+    zip_buffer = io.BytesIO(zip_content)
+    
+    with zipfile.ZipFile(zip_buffer, 'r') as zf:
+        # Get list of CSV files in ZIP
+        csv_files = [name for name in zf.namelist() if name.endswith('.csv')]
+        
+        # Map filename to table name
+        table_files = {}
+        for csv_name in csv_files:
+            table_name = csv_name[:-4]  # Remove .csv
+            try:
+                _resolve_table(table_name)  # Validate table exists
+                table_files[table_name] = csv_name
+            except ValueError:
+                results["skipped"].append(f"{csv_name}: unknown table")
+        
+        # Import in dependency order
+        import_order = _get_import_order()
+        for table_name in import_order:
+            if table_name not in table_files:
+                continue
+            
+            csv_name = table_files[table_name]
+            try:
+                with zf.open(csv_name) as csv_file:
+                    csv_text = csv_file.read().decode('utf-8-sig')
+                
+                rows = parse_csv_rows(table_name, csv_text)
+                if not rows:
+                    results["skipped"].append(f"{table_name}: no rows")
+                    continue
+                
+                inserted = _insert_csv_rows(db, table_name, rows, mode=import_mode)
+                results["imported"][table_name] = inserted
+                
+            except Exception as e:
+                results["errors"][table_name] = str(e)
+                # Continue with other tables
+    
+    return results
 
 
 def _table_rows_for_export(db: Session, table_name: str) -> List[Dict[str, Any]]:
@@ -271,6 +403,7 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
 def list_csv_tables(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
+    _csv_enabled: bool = Depends(check_csv_import_export_enabled),
 ):
     return schemas.APIResponse(sukses=True, data={"tables": get_available_tables()})
 
@@ -281,6 +414,7 @@ def export_table_csv(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
+    _csv_enabled: bool = Depends(check_csv_import_export_enabled),
 ):
     try:
         actual_table = _resolve_table(table)
@@ -307,6 +441,7 @@ async def import_table_csv(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
+    _csv_enabled: bool = Depends(check_csv_import_export_enabled),
 ):
     try:
         _resolve_table(table)
@@ -338,6 +473,66 @@ async def import_table_csv(
         sukses=True,
         data={"table": _resolve_table(table).name, "imported_rows": inserted, "mode": import_mode},
     )
+
+
+@router.get("/csv/export-all")
+def export_all_tables_csv(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+    _csv_enabled: bool = Depends(check_csv_import_export_enabled),
+):
+    """Export all tables as a ZIP file containing one CSV per table."""
+    try:
+        zip_buffer = _create_export_zip(db)
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"moon_export_{timestamp}.zip"
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Export failed: {str(exc)}",
+        ) from exc
+
+
+@router.post("/csv/import-all")
+async def import_all_tables_csv(
+    file: UploadFile = File(..., description="ZIP file containing CSV files named after tables"),
+    mode: str = Form(default="merge", description="Import strategy: merge or replace"),
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+    _csv_enabled: bool = Depends(check_csv_import_export_enabled),
+):
+    """Import all tables from a ZIP file containing CSVs.
+    
+    The ZIP should contain CSV files named after tables (e.g., 'kampus.csv', 'gebruikers.csv').
+    Tables are imported in dependency order (parents before children) to respect FK constraints.
+    """
+    if not file.filename or not file.filename.endswith('.zip'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please upload a ZIP file containing CSV files.",
+        )
+    
+    try:
+        results = _import_from_zip(db, file, mode)
+        return schemas.APIResponse(sukses=True, data=results)
+    except zipfile.BadZipFile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ZIP file.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {str(exc)}",
+        ) from exc
 
 
 @router.post("/lokasies/genereer-missing-uids")
