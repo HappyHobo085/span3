@@ -280,12 +280,14 @@
     if (!csvActionSelect || !csvSourceSelect) return;
     const action = csvActionSelect.value;
     const isImport = action === 'import';
+    const isImportAll = action === 'import-all';
+    const isExportAll = action === 'export-all';
 
     if (csvSourceGroup) {
-      csvSourceGroup.style.display = isImport ? '' : 'none';
+      csvSourceGroup.style.display = (isImport || isImportAll) ? '' : 'none';
     }
 
-    if (!isImport) {
+    if (!isImport && !isImportAll) {
       if (csvFileGroup) csvFileGroup.style.display = 'none';
       if (csvTextGroup) csvTextGroup.style.display = 'none';
       return;
@@ -293,10 +295,32 @@
 
     const source = csvSourceSelect.value;
     if (csvFileGroup) {
-      csvFileGroup.style.display = source === 'file' ? '' : 'none';
+      // For import-all, only allow file (ZIP) upload
+      if (isImportAll) {
+        csvFileGroup.style.display = source === 'file' ? '' : 'none';
+      } else {
+        csvFileGroup.style.display = source === 'file' ? '' : 'none';
+      }
     }
     if (csvTextGroup) {
-      csvTextGroup.style.display = source === 'text' ? '' : 'none';
+      csvTextGroup.style.display = isImportAll ? 'none' : (source === 'text' ? '' : 'none');
+    }
+    
+    // Update file picker accept attribute for import-all
+    if (csvFilePicker) {
+      if (isImportAll) {
+        csvFilePicker.accept = '.zip';
+        if (csvFileGroup) {
+          const label = csvFileGroup.querySelector('label');
+          if (label) label.textContent = 'ZIP-lêer';
+        }
+      } else {
+        csvFilePicker.accept = '.csv,text/csv';
+        if (csvFileGroup) {
+          const label = csvFileGroup.querySelector('label');
+          if (label) label.textContent = 'CSV-lêer';
+        }
+      }
     }
   }
 
@@ -308,6 +332,83 @@
     const source = csvSourceSelect ? csvSourceSelect.value : 'file';
     const mode = csvModeSelect ? csvModeSelect.value : 'merge';
 
+    // Handle export-all
+    if (action === 'export-all') {
+      const result = await window.MoonApi.exportAllCsvTables();
+      if (!result || !result.ok) {
+        showCsvStatus('Kon nie alle tabelle uitstuur nie.', 'error');
+        return;
+      }
+
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(result.blob);
+      link.href = url;
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      link.download = 'moon_export_' + timestamp + '.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showCsvStatus('Alle tabelle is suksesvol as ZIP afgelaai.', 'success');
+      return;
+    }
+
+    // Handle import-all
+    if (action === 'import-all') {
+      const file = csvFilePicker && csvFilePicker.files && csvFilePicker.files[0] ? csvFilePicker.files[0] : null;
+      
+      if (!file) {
+        showCsvStatus('Kies asseblief ' + 'n ZIP-lêer om op te laai.', 'error');
+        return;
+      }
+      
+      if (!file.name.endsWith('.zip')) {
+        showCsvStatus('Die lêer moet ' + 'n ZIP-lêer wees.', 'error');
+        return;
+      }
+
+      showCsvStatus('Besig om alle tabelle in te voer...', 'success');
+      
+      const result = await window.MoonApi.importAllCsvTables(file, mode);
+      if (!result || !result.ok) {
+        const errMsg = (result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.';
+        showCsvStatus('Invoer misluk: ' + errMsg, 'error');
+        return;
+      }
+
+      if (csvFilePicker) csvFilePicker.value = '';
+
+      const data = result.body && result.body.data ? result.body.data : {};
+      const imported = data.imported || {};
+      const errors = data.errors || {};
+      const skipped = data.skipped || [];
+
+      let msg = 'Invoer voltooi. ';
+      const importedCount = Object.keys(imported).length;
+      if (importedCount > 0) {
+        msg += importedCount + ' tabelle ingevoer: ' + Object.entries(imported).map(([t, c]) => t + ' (' + c + ')').join(', ') + '. ';
+      }
+      if (Object.keys(errors).length > 0) {
+        msg += 'Foute: ' + Object.entries(errors).map(([t, e]) => t + ': ' + e).join('; ') + '. ';
+      }
+      if (skipped.length > 0) {
+        msg += 'Oorgeslaan: ' + skipped.join(', ') + '. ';
+      }
+      
+      showCsvStatus(msg, Object.keys(errors).length > 0 ? 'error' : 'success');
+      
+      // Refresh all admin page data
+      await Promise.all([
+        loadKampusDropdown(),
+        loadLokale(),
+        loadKoshuise(),
+        loadRolleDropdown(),
+        loadGebruikers()
+      ]);
+      return;
+    }
+
+    // Original single-table logic
     if (!table) {
       showCsvStatus('Kies asseblief die tabel wat jy wil gebruik.', 'error');
       return;
