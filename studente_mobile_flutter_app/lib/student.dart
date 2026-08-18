@@ -9,6 +9,41 @@ import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'profile_page.dart';
 
+
+ThemeData _moonPickerTheme(BuildContext context) {
+  final base = Theme.of(context);
+
+  return base.copyWith(
+    brightness: Brightness.dark,
+    colorScheme: base.colorScheme.copyWith(
+      brightness: Brightness.dark,
+      primary: kAccent,
+      onPrimary: Colors.black,
+      surface: const Color(0xFF0F172A),
+      onSurface: Colors.white,
+    ),
+    datePickerTheme: const DatePickerThemeData(
+      backgroundColor: Color(0xFF0F172A),
+      surfaceTintColor: Colors.transparent,
+      headerBackgroundColor: Color(0xFF111827),
+      headerForegroundColor: Colors.white,
+      dividerColor: Color(0xFF334155),
+    ),
+    timePickerTheme: const TimePickerThemeData(
+      backgroundColor: Color(0xFF0F172A),
+      hourMinuteColor: Color(0xFF1E293B),
+      hourMinuteTextColor: Colors.white,
+      dialBackgroundColor: Color(0xFF111827),
+      dialHandColor: kAccent,
+      dialTextColor: Colors.white,
+      entryModeIconColor: kAccent,
+      dayPeriodColor: Color(0xFF1E293B),
+      dayPeriodTextColor: Colors.white,
+    ),
+  );
+}
+
+
 // ─── Student Home — dashboard with bottom nav ────────────────────────────────
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -1455,13 +1490,47 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
       initialDate: _date,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      barrierColor: Colors.black.withOpacity(0.88),
+      helpText: 'KIES DATUM',
+      cancelText: 'KANSELLEER',
+      confirmText: 'KIES',
+      builder: (context, child) {
+        return Theme(
+          data: _moonPickerTheme(context),
+          child: child!,
+        );
+      },
     );
-    if (selected != null) setState(() => _date = selected);
+
+    if (selected != null) {
+      setState(() => _date = selected);
+    }
   }
 
   Future<void> _pickTime() async {
-    final selected = await showTimePicker(context: context, initialTime: _time);
-    if (selected != null) setState(() => _time = selected);
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _time,
+      barrierColor: Colors.black.withOpacity(0.88),
+      helpText: 'KIES TYD',
+      cancelText: 'KANSELLEER',
+      confirmText: 'KIES',
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: true,
+          ),
+          child: Theme(
+            data: _moonPickerTheme(context),
+            child: child!,
+          ),
+        );
+      },
+    );
+
+    if (selected != null) {
+      setState(() => _time = selected);
+    }
   }
 
   Future<void> _create() async {
@@ -1611,9 +1680,10 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.white10,
+          // Meer solied sodat Datum/Tyd nie in die agtergrond verdwyn nie.
+          color: const Color(0xFF182235),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: const Color(0xFF334155)),
         ),
         child: Column(
           children: [

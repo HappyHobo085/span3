@@ -4,6 +4,41 @@ import 'app_shared.dart';
 import 'moon_api.dart';
 import 'profile_page.dart';
 
+
+ThemeData _moonPickerTheme(BuildContext context) {
+  final base = Theme.of(context);
+
+  return base.copyWith(
+    brightness: Brightness.dark,
+    colorScheme: base.colorScheme.copyWith(
+      brightness: Brightness.dark,
+      primary: kAccent,
+      onPrimary: Colors.black,
+      surface: const Color(0xFF0F172A),
+      onSurface: Colors.white,
+    ),
+    datePickerTheme: const DatePickerThemeData(
+      backgroundColor: Color(0xFF0F172A),
+      surfaceTintColor: Colors.transparent,
+      headerBackgroundColor: Color(0xFF111827),
+      headerForegroundColor: Colors.white,
+      dividerColor: Color(0xFF334155),
+    ),
+    timePickerTheme: const TimePickerThemeData(
+      backgroundColor: Color(0xFF0F172A),
+      hourMinuteColor: Color(0xFF1E293B),
+      hourMinuteTextColor: Colors.white,
+      dialBackgroundColor: Color(0xFF111827),
+      dialHandColor: kAccent,
+      dialTextColor: Colors.white,
+      entryModeIconColor: kAccent,
+      dayPeriodColor: Color(0xFF1E293B),
+      dayPeriodTextColor: Colors.white,
+    ),
+  );
+}
+
+
 class OpsigterHomePage extends StatefulWidget {
   const OpsigterHomePage({super.key});
 
@@ -1683,11 +1718,49 @@ class _EventFormPageState extends State<_EventFormPage> {
       initialDate: initial,
       firstDate: DateTime.now().subtract(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 1095)),
+      barrierColor: Colors.black.withOpacity(0.88),
+      helpText: 'KIES DATUM',
+      cancelText: 'KANSELLEER',
+      confirmText: 'KIES',
+      builder: (context, child) {
+        return Theme(
+          data: _moonPickerTheme(context),
+          child: child!,
+        );
+      },
     );
+
     if (date == null || !mounted) return null;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      barrierColor: Colors.black.withOpacity(0.88),
+      helpText: 'KIES TYD',
+      cancelText: 'KANSELLEER',
+      confirmText: 'KIES',
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: true,
+          ),
+          child: Theme(
+            data: _moonPickerTheme(context),
+            child: child!,
+          ),
+        );
+      },
+    );
+
     if (time == null) return null;
-    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
   }
 
   String _dt(DateTime value) {
