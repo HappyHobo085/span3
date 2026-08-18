@@ -103,6 +103,10 @@ html[data-theme="light"] .class-modal select{
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
+html{
+  /* Keer dat selfone in landskap-modus die teks self groter maak */
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+}
 body{
   font-family:'Inter',sans-serif;
   background:var(--bg);
@@ -142,6 +146,8 @@ body{
 .page{
   padding:var(--page-px);
   display:flex;flex-direction:column;gap:var(--panel-gap);
+  /* Op baie breë skerms word die inhoud gemiddeld en nie uitgerek nie */
+  width:100%;max-width:1680px;margin:0 auto;
 }
 
 /* ─── Glass card ─────────────────────────────────────────────────────────── */
