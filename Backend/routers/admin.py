@@ -324,54 +324,17 @@ def _normalize_import_mode(mode: Optional[str]) -> str:
 
 
 def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]], mode: str = 'merge') -> int:
+    """Insert rows using PostgreSQL ON CONFLICT for upsert, with per-row savepoints for constraint violations."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    
     table = _resolve_table(table_name)
     mode_name = _normalize_import_mode(mode)
     pk_columns = [column for column in table.columns if column.primary_key]
-    conflict_columns = {column.name for column in pk_columns}
-    update_rows = []
+    conflict_columns = [column.name for column in pk_columns]
     inserted_count = 0
 
     for row in rows:
         sanitized = _normalize_insert_row(table, row)
-
-        if conflict_columns:
-            matched_values = []
-            for column_name in sorted(conflict_columns):
-                if column_name in sanitized:
-                    matched_values.append((column_name, sanitized[column_name]))
-            if matched_values:
-                conditions = []
-                for column_name, value in matched_values:
-                    conditions.append(getattr(table.c, column_name) == value)
-                existing_row = db.execute(table.select().where(*conditions)).first()
-                if existing_row is not None:
-                    existing_data = dict(existing_row._mapping)
-                    if mode_name == 'replace':
-                        update_values = {
-                            column.name: sanitized[column.name]
-                            for column in table.columns
-                            if column.name in sanitized
-                        }
-                        update_rows.append((conditions, update_values))
-                        continue
-
-                    comparison_row = {
-                        column.name: sanitized.get(column.name)
-                        for column in table.columns
-                        if column.name not in conflict_columns
-                    }
-                    existing_comparison = {
-                        column.name: existing_data.get(column.name)
-                        for column in table.columns
-                        if column.name not in conflict_columns
-                    }
-                    if comparison_row == existing_comparison:
-                        continue
-
-                    prepared_row = _prepare_insert_row_for_new_primary_key(table, sanitized, existing_data)
-                    if not prepared_row:
-                        continue
-                    sanitized = prepared_row
 
         insertable = {
             column.name: sanitized[column.name]
@@ -392,21 +355,42 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
         if missing_required:
             continue
 
-        if insertable:
-            # Insert row by row to catch constraint violations
-            try:
+        if not insertable:
+            continue
+
+        # Use a savepoint per row so constraint violations don't abort the table transaction
+        row_savepoint = db.begin_nested()
+        try:
+            if conflict_columns and mode_name == 'replace':
+                # Upsert: INSERT ... ON CONFLICT DO UPDATE
+                stmt = pg_insert(table).values(**insertable)
+                update_dict = {k: v for k, v in insertable.items() if k not in conflict_columns}
+                if update_dict:
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=conflict_columns,
+                        set_=update_dict
+                    )
+                else:
+                    stmt = stmt.on_conflict_do_nothing(index_elements=conflict_columns)
+                result = db.execute(stmt)
+                if result.rowcount > 0:
+                    inserted_count += 1
+            elif conflict_columns and mode_name == 'merge':
+                # Insert only if not exists: INSERT ... ON CONFLICT DO NOTHING
+                stmt = pg_insert(table).values(**insertable)
+                stmt = stmt.on_conflict_do_nothing(index_elements=conflict_columns)
+                result = db.execute(stmt)
+                if result.rowcount > 0:
+                    inserted_count += 1
+            else:
+                # No primary key or no conflict handling - just insert
                 db.execute(table.insert(), [insertable])
                 inserted_count += 1
-            except Exception as e:
-                # Skip rows that violate constraints (check constraints, FK, etc.)
-                # Log and continue with next row
-                pass
-
-    for conditions, values in update_rows:
-        try:
-            db.execute(table.update().where(*conditions).values(**values))
-            inserted_count += 1
+            
+            row_savepoint.commit()
         except Exception:
+            row_savepoint.rollback()
+            # Skip rows that violate constraints (check constraints, FK, etc.)
             pass
 
     return inserted_count
