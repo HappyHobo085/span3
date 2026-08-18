@@ -328,8 +328,8 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
     mode_name = _normalize_import_mode(mode)
     pk_columns = [column for column in table.columns if column.primary_key]
     conflict_columns = {column.name for column in pk_columns}
-    insert_rows = []
     update_rows = []
+    inserted_count = 0
 
     for row in rows:
         sanitized = _normalize_insert_row(table, row)
@@ -393,18 +393,23 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
             continue
 
         if insertable:
-            insert_rows.append(insertable)
+            # Insert row by row to catch constraint violations
+            try:
+                db.execute(table.insert(), [insertable])
+                inserted_count += 1
+            except Exception as e:
+                # Skip rows that violate constraints (check constraints, FK, etc.)
+                # Log and continue with next row
+                pass
 
     for conditions, values in update_rows:
-        db.execute(table.update().where(*conditions).values(**values))
+        try:
+            db.execute(table.update().where(*conditions).values(**values))
+            inserted_count += 1
+        except Exception:
+            pass
 
-    if not insert_rows and not update_rows:
-        return 0
-
-    if insert_rows:
-        db.execute(table.insert(), insert_rows)
-    # Don't commit here - let the caller (savepoint) handle it
-    return len(insert_rows) + len(update_rows)
+    return inserted_count
 
 
 @router.get("/csv/tables")

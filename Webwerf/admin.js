@@ -289,11 +289,11 @@
       csvSourceGroup.style.display = isImport ? '' : 'none';
     }
 
-    // Hide/show Import Modus (merge/replace) - only for regular import/export
+    // Hide/show Import Modus (merge/replace) - for regular import and import-all
     if (csvModeSelect) {
       const modeGroup = csvModeSelect.closest('.field');
       if (modeGroup) {
-        modeGroup.style.display = isImport ? '' : 'none';
+        modeGroup.style.display = (isImport || isImportAll) ? '' : 'none';
       }
     }
 
