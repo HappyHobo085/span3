@@ -72,6 +72,18 @@ html[data-theme="light"]{
   --shadow-card:  0 1px 2px rgba(23,30,70,0.04), 0 10px 28px rgba(23,30,70,0.07);
   --shadow-hover: 0 2px 4px rgba(23,30,70,0.05), 0 14px 36px rgba(23,30,70,0.11);
 }
+/* Die navbar bly donker, ook in lig modus — dieselfde kleure as donker modus */
+html[data-theme="light"] .navbar{
+  background:#0A1423;
+  border-bottom:1px solid rgba(123,97,255,0.20);
+  box-shadow:0 6px 20px rgba(23,30,70,0.18);
+}
+html[data-theme="light"] .navbar a{color:rgba(255,255,255,0.35)}
+html[data-theme="light"] .navbar a:hover{color:rgba(255,255,255,0.60)}
+html[data-theme="light"] .navbar a.active{color:#ffffff}
+html[data-theme="light"] .navbar .btn-outline{border-color:rgba(123,97,255,0.45);color:rgba(255,255,255,0.60)}
+html[data-theme="light"] .navbar .btn-outline:hover{border-color:var(--accent);color:#ffffff}
+
 /* Ligte fyn verstellings: sagter gloede en skaduwees as in donker modus */
 html[data-theme="light"] .btn-primary{box-shadow:0 4px 16px rgba(123,97,255,0.30)}
 html[data-theme="light"] .btn-primary:hover{opacity:.92;box-shadow:0 4px 22px rgba(123,97,255,0.40)}
