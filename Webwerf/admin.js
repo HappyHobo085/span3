@@ -282,31 +282,50 @@
     const isImport = action === 'import';
     const isImportAll = action === 'import-all';
     const isExportAll = action === 'export-all';
+    const isAllAction = isImportAll || isExportAll;
 
+    // Hide/show CSV Bron (source) group - only for regular import
     if (csvSourceGroup) {
-      csvSourceGroup.style.display = (isImport || isImportAll) ? '' : 'none';
+      csvSourceGroup.style.display = isImport ? '' : 'none';
     }
 
+    // Hide/show Import Modus (merge/replace) - only for regular import/export
+    if (csvModeSelect) {
+      const modeGroup = csvModeSelect.closest('.field');
+      if (modeGroup) {
+        modeGroup.style.display = isImport ? '' : 'none';
+      }
+    }
+
+    // Hide/show Tabel selection - only for regular import/export
+    if (csvTableSelect) {
+      const tableGroup = csvTableSelect.closest('.field');
+      if (tableGroup) {
+        tableGroup.style.display = isImport ? '' : 'none';
+      }
+    }
+
+    // For non-import actions, hide file/text groups
     if (!isImport && !isImportAll) {
       if (csvFileGroup) csvFileGroup.style.display = 'none';
       if (csvTextGroup) csvTextGroup.style.display = 'none';
       return;
     }
 
-    const source = csvSourceSelect.value;
-    if (csvFileGroup) {
-      // For import-all, only allow file (ZIP) upload
-      if (isImportAll) {
-        csvFileGroup.style.display = source === 'file' ? '' : 'none';
-      } else {
-        csvFileGroup.style.display = source === 'file' ? '' : 'none';
-      }
-    }
-    if (csvTextGroup) {
-      csvTextGroup.style.display = isImportAll ? 'none' : (source === 'text' ? '' : 'none');
+    // For import-all: lock to file upload only, hide text area
+    if (isImportAll) {
+      if (csvFileGroup) csvFileGroup.style.display = '';
+      if (csvTextGroup) csvTextGroup.style.display = 'none';
+      // Force source to file
+      if (csvSourceSelect) csvSourceSelect.value = 'file';
+    } else if (isImport) {
+      // Regular import: show file/text based on source selection
+      const source = csvSourceSelect.value;
+      if (csvFileGroup) csvFileGroup.style.display = source === 'file' ? '' : 'none';
+      if (csvTextGroup) csvTextGroup.style.display = source === 'text' ? '' : 'none';
     }
     
-    // Update file picker accept attribute for import-all
+    // Update file picker accept attribute and label
     if (csvFilePicker) {
       if (isImportAll) {
         csvFilePicker.accept = '.zip';
