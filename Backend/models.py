@@ -200,6 +200,8 @@ class Funksie(Base):
     FUN_Kapasiteit  = Column(Integer, nullable=False, default=100)
     FUN_Status      = Column(String(20), nullable=False, default='AKTIEF')
     FUN_Is_Aktief   = Column(Boolean, nullable=False, default=True)
+    # Opaque token vir die publieke deel-skakel.
+    FUN_Deel_Token  = Column(String(80), nullable=True, unique=True)
     Geskep_Op       = Column(DateTime, default=datetime.utcnow, nullable=False)
     Gewysig_Op      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -209,6 +211,11 @@ class Funksie(Base):
     funksie_besoekers = relationship("Funksie_Besoekers", back_populates="funksie")
     rsvps             = relationship(
         "FunksieRSVP",
+        back_populates="funksie",
+        cascade="all, delete-orphan",
+    )
+    publieke_rsvps    = relationship(
+        "FunksiePubliekRSVP",
         back_populates="funksie",
         cascade="all, delete-orphan",
     )
@@ -240,6 +247,31 @@ class FunksieRSVP(Base):
             name='ck_funksie_rsvp_status',
         ),
     )
+
+class FunksiePubliekRSVP(Base):
+    __tablename__ = 'funksie_publiek_rsvp'
+
+    Publiek_RSVP_ID = Column(Integer, primary_key=True, index=True)
+    Funksie_ID       = Column(Integer, ForeignKey('funksie.Funksie_ID'), nullable=False, index=True)
+    Naam              = Column(String(100), nullable=False)
+    Van               = Column(String(100), nullable=False)
+    Selfoon           = Column(String(30), nullable=False)
+    Epos              = Column(String(255), nullable=True)
+    # Die QR bevat net hierdie opaque token; geen PII word in die QR gesit nie.
+    QR_Token          = Column(String(120), nullable=False, unique=True, index=True)
+    RSVP_Status       = Column(String(20), nullable=False, default='GAAN')
+    RSVP_Tyd          = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    funksie = relationship("Funksie", back_populates="publieke_rsvps")
+
+    __table_args__ = (
+        CheckConstraint(
+            '"RSVP_Status" IN (\'GAAN\', \'GEKANSELLEER\')',
+            name='ck_funksie_publiek_rsvp_status',
+        ),
+    )
+
 
 class Funksie_Besoekers(Base):
     __tablename__ = 'funksie_besoekers'

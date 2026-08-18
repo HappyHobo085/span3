@@ -657,3 +657,10 @@ class EventUpdateRequest(BaseModel):
 
 class EventRsvpRequest(BaseModel):
     status: str = "GAAN"
+
+
+class PublicEventRsvpRequest(BaseModel):
+    naam: str
+    van: str
+    selfoon: str
+    epos: Optional[str] = None

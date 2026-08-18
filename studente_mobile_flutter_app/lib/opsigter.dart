@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
 import 'profile_page.dart';
@@ -1897,6 +1898,55 @@ class _OpsigterEventDetailPage extends StatefulWidget {
 
 class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
   bool _changed = false;
+  bool _sharing = false;
+
+  String _shareDateTime(DateTime value) {
+    final d = value.day.toString().padLeft(2, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final h = value.hour.toString().padLeft(2, '0');
+    final min = value.minute.toString().padLeft(2, '0');
+    return '$d/$m/${value.year} $h:$min';
+  }
+
+  Future<void> _shareEvent(BuildContext shareContext) async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      final share = await MoonApi.getEventShareLink(widget.event.eventId);
+      if (!mounted) return;
+      final e = widget.event;
+      final text = [
+        'MOON Event',
+        e.naam,
+        '${_shareDateTime(e.beginTyd)} - ${_shareDateTime(e.eindTyd)}',
+        e.kampusNaam,
+        if ((e.lokasieNaam ?? '').trim().isNotEmpty) e.lokasieNaam!,
+        '',
+        'RSVP hier as jy nie die MOON app het nie:',
+        share.shareUrl,
+      ].join('\n');
+      final renderBox = shareContext.findRenderObject() as RenderBox?;
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: 'MOON Event - ${e.naam}',
+          sharePositionOrigin: renderBox == null
+              ? null
+              : renderBox.localToGlobal(Offset.zero) & renderBox.size,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   Future<void> _edit() async {
     final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _EventFormPage(event: widget.event)));
@@ -1960,6 +2010,22 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
                       ]),
                     ),
                     const SizedBox(height: 14),
+                    Builder(
+                      builder: (shareContext) => OutlinedButton.icon(
+                        onPressed: _sharing ? null : () => _shareEvent(shareContext),
+                        icon: const Icon(Icons.share_rounded, color: kAccent),
+                        label: Text(
+                          _sharing ? 'Skep deel-skakel...' : 'DEEL EVENT',
+                          style: const TextStyle(color: kText1, fontWeight: FontWeight.w800),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          side: BorderSide(color: kAccent.withOpacity(0.65)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     GradientActionButton(label: 'Sien RSVP-Lys', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _EventRsvpListPage(event: e))), height: 50),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(onPressed: _edit, icon: const Icon(Icons.edit_rounded), label: const Text('Wysig Event')),
@@ -2006,8 +2072,64 @@ class _EventRsvpListPageState extends State<_EventRsvpListPage> {
     }
   }
 
+  Widget _rsvpCard(EventRsvpItemDto item) {
+    return GlassCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            item.ekstern ? Icons.public_rounded : Icons.check_circle_rounded,
+            color: item.ekstern ? kAccent : Colors.green,
+            size: 26,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.volleNaam,
+                        style: GoogleFonts.inter(color: kText1, fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (item.ekstern)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: kAccent.withOpacity(0.45)),
+                        ),
+                        child: Text('EKSTERN', style: GoogleFonts.inter(color: kAccent, fontSize: 8, fontWeight: FontWeight.w900)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}',
+                  style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
+                ),
+                if (item.ekstern && (item.epos ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(item.epos!, style: GoogleFonts.inter(color: kText2, fontSize: 10)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appItems = _items.where((item) => !item.ekstern).toList();
+    final externalItems = _items.where((item) => item.ekstern).toList();
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -2021,26 +2143,31 @@ class _EventRsvpListPageState extends State<_EventRsvpListPage> {
                       ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
                       : RefreshIndicator(
                           onRefresh: _load,
-                          child: ListView.separated(
+                          child: ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.all(16),
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final item = _items[index];
-                              return GlassCard(
-                                padding: const EdgeInsets.all(14),
-                                child: Row(children: [
-                                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Text(item.volleNaam, style: GoogleFonts.inter(color: kText1, fontSize: 14, fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 3),
-                                    Text('${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}', style: GoogleFonts.inter(color: kTextMuted, fontSize: 11)),
-                                  ])),
-                                ]),
-                              );
-                            },
+                            children: [
+                              if (_items.isEmpty) ...[
+                                const SizedBox(height: 80),
+                                const Icon(Icons.event_busy_rounded, color: kTextMuted, size: 48),
+                                const SizedBox(height: 12),
+                                Text("Nog geen RSVP's nie", textAlign: TextAlign.center, style: GoogleFonts.inter(color: kTextMuted, fontSize: 13)),
+                              ] else ...[
+                                Text("APP RSVP'S  ·  ${appItems.length}", style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                                const SizedBox(height: 9),
+                                if (appItems.isEmpty)
+                                  Text("Geen app RSVP's nie", style: GoogleFonts.inter(color: kTextMuted, fontSize: 11))
+                                else
+                                  ...appItems.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: _rsvpCard(item))),
+                                const SizedBox(height: 18),
+                                Text('EKSTERNE GASTE  ·  ${externalItems.length}', style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                                const SizedBox(height: 9),
+                                if (externalItems.isEmpty)
+                                  Text("Nog geen eksterne RSVP's via die deel-skakel nie", style: GoogleFonts.inter(color: kTextMuted, fontSize: 11))
+                                else
+                                  ...externalItems.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: _rsvpCard(item))),
+                              ],
+                            ],
                           ),
                         ),
             ),

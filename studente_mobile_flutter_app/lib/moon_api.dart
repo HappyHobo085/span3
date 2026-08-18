@@ -515,6 +515,8 @@ class MoonEventDto {
   final String? beskrywing;
   final int kapasiteit;
   final int rsvpAantal;
+  final int appRsvpAantal;
+  final int eksterneRsvpAantal;
   final int plekkeOor;
   final bool vol;
   final String status;
@@ -533,6 +535,8 @@ class MoonEventDto {
     this.beskrywing,
     required this.kapasiteit,
     required this.rsvpAantal,
+    required this.appRsvpAantal,
+    required this.eksterneRsvpAantal,
     required this.plekkeOor,
     required this.vol,
     required this.status,
@@ -553,6 +557,9 @@ class MoonEventDto {
       beskrywing: json['beskrywing']?.toString(),
       kapasiteit: (json['kapasiteit'] as num?)?.toInt() ?? 0,
       rsvpAantal: (json['rsvp_aantal'] as num?)?.toInt() ?? 0,
+      appRsvpAantal: (json['app_rsvp_aantal'] as num?)?.toInt() ??
+          (json['rsvp_aantal'] as num?)?.toInt() ?? 0,
+      eksterneRsvpAantal: (json['eksterne_rsvp_aantal'] as num?)?.toInt() ?? 0,
       plekkeOor: (json['plekke_oor'] as num?)?.toInt() ?? 0,
       vol: json['vol'] == true,
       status: json['status']?.toString() ?? 'AKTIEF',
@@ -565,27 +572,59 @@ class MoonEventDto {
 }
 
 class EventRsvpItemDto {
-  final int gebruikerId;
+  final int? gebruikerId;
+  final int? publiekRsvpId;
   final String volleNaam;
   final String rol;
   final String nommer;
+  final String? selfoon;
+  final String? epos;
+  final bool ekstern;
   final DateTime rsvpTyd;
 
   EventRsvpItemDto({
     required this.gebruikerId,
+    required this.publiekRsvpId,
     required this.volleNaam,
     required this.rol,
     required this.nommer,
+    required this.selfoon,
+    required this.epos,
+    required this.ekstern,
     required this.rsvpTyd,
   });
 
   factory EventRsvpItemDto.fromJson(Map<String, dynamic> json) {
     return EventRsvpItemDto(
-      gebruikerId: (json['gebruiker_id'] as num).toInt(),
+      gebruikerId: (json['gebruiker_id'] as num?)?.toInt(),
+      publiekRsvpId: (json['publiek_rsvp_id'] as num?)?.toInt(),
       volleNaam: json['volle_naam']?.toString() ?? '',
       rol: json['rol']?.toString() ?? '',
       nommer: json['nommer']?.toString() ?? '',
+      selfoon: json['selfoon']?.toString(),
+      epos: json['epos']?.toString(),
+      ekstern: json['ekstern'] == true,
       rsvpTyd: DateTime.parse(json['rsvp_tyd'].toString()).toLocal(),
+    );
+  }
+}
+
+class EventShareDto {
+  final int eventId;
+  final String shareToken;
+  final String shareUrl;
+
+  EventShareDto({required this.eventId, required this.shareToken, required this.shareUrl});
+
+  factory EventShareDto.fromJson(Map<String, dynamic> json) {
+    final token = json['share_token']?.toString() ?? '';
+    final rawUrl = json['share_url']?.toString().trim() ?? '';
+    return EventShareDto(
+      eventId: (json['event_id'] as num).toInt(),
+      shareToken: token,
+      shareUrl: token.isNotEmpty
+          ? '${MoonApi.baseUrl}/events/public/$token'
+          : rawUrl,
     );
   }
 }
@@ -1756,6 +1795,17 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     return MoonEventDto.fromJson(
       Map<String, dynamic>.from(_decodeEventResponse(response) as Map),
     );
+  }
+
+  static Future<EventShareDto> getEventShareLink(int eventId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/events/$eventId/share'),
+      headers: _eventHeaders(),
+    );
+    final data = Map<String, dynamic>.from(
+      _decodeEventResponse(response) as Map,
+    );
+    return EventShareDto.fromJson(data);
   }
 
   static Future<List<EventRsvpItemDto>> fetchEventRsvps(int eventId) async {

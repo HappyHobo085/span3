@@ -497,3 +497,59 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 011 "
             f"(Events / Funksie RSVP) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 012: Publieke Event Deel-skakels + eksterne RSVP's
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text('''
+                ALTER TABLE funksie
+                ADD COLUMN IF NOT EXISTS "FUN_Deel_Token" VARCHAR(80)
+            '''))
+
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_funksie_deel_token
+                ON funksie ("FUN_Deel_Token")
+                WHERE "FUN_Deel_Token" IS NOT NULL
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS funksie_publiek_rsvp (
+                    "Publiek_RSVP_ID" SERIAL PRIMARY KEY,
+                    "Funksie_ID" INT NOT NULL,
+                    "Naam" VARCHAR(100) NOT NULL,
+                    "Van" VARCHAR(100) NOT NULL,
+                    "Selfoon" VARCHAR(30) NOT NULL,
+                    "Epos" VARCHAR(255),
+                    "QR_Token" VARCHAR(120) NOT NULL UNIQUE,
+                    "RSVP_Status" VARCHAR(20) NOT NULL DEFAULT 'GAAN',
+                    "RSVP_Tyd" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_funksie_publiek_rsvp_funksie
+                        FOREIGN KEY ("Funksie_ID")
+                        REFERENCES funksie("Funksie_ID")
+                        ON DELETE CASCADE,
+                    CONSTRAINT ck_funksie_publiek_rsvp_status
+                        CHECK ("RSVP_Status" IN ('GAAN', 'GEKANSELLEER'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_rsvp_funksie
+                ON funksie_publiek_rsvp ("Funksie_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_rsvp_status
+                ON funksie_publiek_rsvp ("RSVP_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_funksie_publiek_rsvp_qr
+                ON funksie_publiek_rsvp ("QR_Token")
+            '''))
+
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 012 "
+            f"(Publieke Event RSVP) het misluk: {_migrasie_fout}"
+        )
+
