@@ -267,6 +267,8 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
                 continue
             
             csv_name = table_files[table_name]
+            # Use a savepoint for each table so failures don't abort the whole transaction
+            savepoint = db.begin_nested()
             try:
                 with zf.open(csv_name) as csv_file:
                     csv_text = csv_file.read().decode('utf-8-sig')
@@ -274,12 +276,15 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
                 rows = parse_csv_rows(table_name, csv_text)
                 if not rows:
                     results["skipped"].append(f"{table_name}: no rows")
+                    savepoint.rollback()
                     continue
                 
                 inserted = _insert_csv_rows(db, table_name, rows, mode=import_mode)
                 results["imported"][table_name] = inserted
+                savepoint.commit()
                 
             except Exception as e:
+                savepoint.rollback()
                 results["errors"][table_name] = str(e)
                 # Continue with other tables
     
@@ -398,7 +403,7 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
 
     if insert_rows:
         db.execute(table.insert(), insert_rows)
-    db.commit()
+    # Don't commit here - let the caller (savepoint) handle it
     return len(insert_rows) + len(update_rows)
 
 
@@ -472,6 +477,7 @@ async def import_table_csv(
         )
 
     inserted = _insert_csv_rows(db, table, rows, mode=import_mode)
+    db.commit()
     return schemas.APIResponse(
         sukses=True,
         data={"table": _resolve_table(table).name, "imported_rows": inserted, "mode": import_mode},
