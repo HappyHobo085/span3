@@ -7,6 +7,8 @@
 //   - Tel die kampusse en koshuise (GET /kampusse/status en GET /koshuise).
 //   - Wys per kampus hoeveel mense tans ingeskandeer is.
 //   - Wys die komende events (GET /events?view=komende).
+//   - Wys my eie status (GET /dashboard) en die nuutste skanderings
+//     (GET /toegangslogs), en wanneer alles laas opgedateer is.
 // Alle data kom van die bediener — niks op hierdie blad is mock data nie.
 // =============================================================================
 
@@ -23,6 +25,12 @@
   var kampusLys = document.getElementById('kampus-lys');
   var eventsLys = document.getElementById('events-lys');
   var eventsTitel = document.getElementById('events-titel');
+  var myStatus = document.getElementById('my-status');
+  var aktiwiteitLys = document.getElementById('aktiwiteit-lys');
+  var laasOpgedateer = document.getElementById('laas-opgedateer');
+
+  // Hoeveel skanderings die aktiwiteitslys hoogstens wys.
+  var AKTIWITEIT_MAKS = 15;
 
   // Oor hoeveel sekondes die regstreekse syfers weer gaan haal word.
   var VERFRIS_SEKONDES = 10;
@@ -40,9 +48,35 @@
       pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
 
+  // Hierdie funksie skryf net die tyd (bv. "07:42"), met die datum by as
+  // dit nie vandag was nie (bv. "17 Aug 07:42").
+  function formatTydKort(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var tyd = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    var nou = new Date();
+    if (d.getFullYear() === nou.getFullYear() &&
+        d.getMonth() === nou.getMonth() &&
+        d.getDate() === nou.getDate()) {
+      return tyd;
+    }
+    return d.getDate() + ' ' + MAANDE_KORT[d.getMonth()] + ' ' + tyd;
+  }
+
   // Hierdie funksie wys of versteek die "kan nie bediener bereik nie" kaart.
   function wysFout(wys) {
     if (foutKaart) foutKaart.hidden = !wys;
+  }
+
+  // Hierdie funksie wys wanneer die syfers laas suksesvol gelaai is.
+  function stempelOpdatering() {
+    if (!laasOpgedateer) return;
+    var nou = new Date();
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    laasOpgedateer.textContent = 'Laas opgedateer ' +
+      pad(nou.getHours()) + ':' + pad(nou.getMinutes()) + ':' + pad(nou.getSeconds());
+    laasOpgedateer.hidden = false;
   }
 
   // Hierdie funksie wys 'n boodskap in 'n lys-houer (bv. "geen data nie").
@@ -70,6 +104,137 @@
     if (statStudente) statStudente.textContent = json.data.studente_op_kampus;
     if (statPersoneel) statPersoneel.textContent = json.data.personeel_op_kampus;
     if (statToegange) statToegange.textContent = json.data.toegange_vandag;
+    stempelOpdatering();
+  }
+
+  // ----- My status (GET /dashboard) -----
+  // Hierdie funksie wys die ingetekende gebruiker se eie status: op kampus
+  // of nie, en sy/haar laaste kampus- en klas-skanderings.
+  async function laaiMyStatus() {
+    if (!window.MoonApi || !myStatus) return;
+
+    var json = await window.MoonApi.fetchMyDashboard();
+    if (!json || !json.sukses || !json.data) {
+      if (!myStatus.hasChildNodes()) {
+        wysBoodskap(myStatus, 'Kon nie jou status laai nie.');
+      }
+      return;
+    }
+    var data = json.data;
+
+    myStatus.innerHTML = '';
+
+    // Kop: naam en rol links, die status-plakkertjie regs.
+    var kop = document.createElement('div');
+    kop.style.display = 'flex';
+    kop.style.alignItems = 'center';
+    kop.style.justifyContent = 'space-between';
+    kop.style.gap = '10px';
+
+    var info = document.createElement('div');
+    info.className = 'admin-user-info';
+    var naam = document.createElement('div');
+    naam.className = 'admin-user-name';
+    naam.textContent = (data.naam + ' ' + (data.van || '')).trim();
+    info.appendChild(naam);
+    var rol = document.createElement('div');
+    rol.className = 'admin-user-email';
+    rol.textContent = data.rol || '';
+    info.appendChild(rol);
+    kop.appendChild(info);
+
+    var badge = document.createElement('span');
+    badge.className = 'status-badge ' +
+      (data.kampus_status === 'OP_KAMPUS' ? 'status-badge--active' : 'status-badge--inactive');
+    var dot = document.createElement('span');
+    dot.className = 'status-dot';
+    badge.appendChild(dot);
+    badge.appendChild(document.createTextNode(
+      data.kampus_status === 'OP_KAMPUS' ? 'Op kampus' :
+      data.kampus_status === 'NIE_OP_KAMPUS' ? 'Nie op kampus' : 'Onbekend'));
+    kop.appendChild(badge);
+    myStatus.appendChild(kop);
+
+    // Twee reëls: die laaste kampus- en klas-skandering.
+    var lys = document.createElement('ul');
+    lys.className = 'updates-list';
+    lys.style.marginTop = '10px';
+
+    function skanderingReël(etiket, log) {
+      var li = document.createElement('li');
+      var kol = document.createElement('span');
+      kol.className = 'updates-dot';
+      if (log && log.rigting === 'UIT') kol.style.background = 'var(--warning)';
+      if (!log) kol.style.background = 'var(--text-muted)';
+      li.appendChild(kol);
+      var teks = document.createElement('span');
+      teks.textContent = log
+        ? etiket + ': ' + log.rigting + ' by ' + log.lokasie
+        : etiket + ': nog geen skandering nie';
+      li.appendChild(teks);
+      if (log && log.tyd) {
+        var tyd = document.createElement('span');
+        tyd.className = 'viz-caption';
+        tyd.style.marginLeft = 'auto';
+        tyd.textContent = formatTydKort(log.tyd);
+        li.appendChild(tyd);
+      }
+      return li;
+    }
+
+    lys.appendChild(skanderingReël('Laaste kampus-skandering', data.laaste_kampus));
+    lys.appendChild(skanderingReël('Laaste klas-skandering', data.laaste_klas));
+    myStatus.appendChild(lys);
+  }
+
+  // ----- Onlangse aktiwiteit (GET /toegangslogs) -----
+  // Hierdie funksie wys die nuutste in- en uitskanderings oor die stelsel.
+  // Ouer bedieners stuur nie name nie — dan wys ons die ID's.
+  async function laaiAktiwiteit() {
+    if (!window.MoonApi || !aktiwiteitLys) return;
+
+    var json = await window.MoonApi.fetchToegangsLogs();
+    if (!json || !json.sukses || !Array.isArray(json.data)) {
+      if (!aktiwiteitLys.hasChildNodes()) {
+        wysBoodskap(aktiwiteitLys, 'Kon nie die aktiwiteit laai nie.');
+      }
+      return;
+    }
+
+    aktiwiteitLys.innerHTML = '';
+    if (json.data.length === 0) {
+      wysBoodskap(aktiwiteitLys, 'Nog geen skanderings nie.');
+      return;
+    }
+
+    var lys = document.createElement('ul');
+    lys.className = 'updates-list';
+
+    json.data.slice(0, AKTIWITEIT_MAKS).forEach(function (log) {
+      var li = document.createElement('li');
+
+      var kol = document.createElement('span');
+      kol.className = 'updates-dot';
+      kol.style.background = log.Rigting === 'IN' ? 'var(--success)' : 'var(--warning)';
+      li.appendChild(kol);
+
+      var wie = log.Naam || ('Gebruiker #' + log.Gebruiker_ID);
+      var waar = log.Lokasie || ('Lokasie #' + log.Lokasie_ID);
+      var teks = document.createElement('span');
+      teks.textContent = wie + ' · ' + log.Rigting + ' by ' + waar;
+      li.appendChild(teks);
+
+      var tyd = document.createElement('span');
+      tyd.className = 'viz-caption';
+      tyd.style.marginLeft = 'auto';
+      tyd.style.whiteSpace = 'nowrap';
+      tyd.textContent = formatTydKort(log.Tyd);
+      li.appendChild(tyd);
+
+      lys.appendChild(li);
+    });
+
+    aktiwiteitLys.appendChild(lys);
   }
 
   // ----- Kampusse (GET /kampusse/status) -----
@@ -196,14 +361,18 @@
     }
 
     laaiLiveTellings();
+    laaiMyStatus();
     laaiKampusse();
     laaiKoshuise();
     laaiEvents();
+    laaiAktiwiteit();
 
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(function () {
       laaiLiveTellings();
+      laaiMyStatus();
       laaiKampusse();
+      laaiAktiwiteit();
     }, VERFRIS_SEKONDES * 1000);
   }
 

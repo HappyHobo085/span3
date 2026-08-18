@@ -101,6 +101,26 @@
       return r.body;
     },
 
+    // Hierdie funksie roep GET /dashboard — dit kry die ingetekende
+    // gebruiker se eie status (op kampus of nie, laaste skanderings).
+    fetchMyDashboard: async function () {
+      const r = await apiRequest('/dashboard', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
+    // Hierdie funksie roep GET /toegangslogs — dit kry die nuutste
+    // in- en uitskanderings (vir die Tuisblad se aktiwiteitslys).
+    fetchToegangsLogs: async function () {
+      const r = await apiRequest('/toegangslogs', {
+        method: 'GET',
+      });
+
+      return r.body;
+    },
+
     /**
      * GET /kampusse
      */

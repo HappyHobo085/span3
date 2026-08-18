@@ -52,26 +52,43 @@
       </div>
     </div>
 
+    <!-- Wanneer die regstreekse syfers laas suksesvol gelaai is -->
+    <div class="viz-caption" id="laas-opgedateer" style="text-align:right" hidden></div>
+
     <!-- Foutboodskap as die bediener nie bereik kan word nie -->
     <div class="glass-card" id="home-fout" style="padding:12px 16px" hidden>
       <span class="viz-empty" style="padding:0">Kon nie die regstreekse syfers van die bediener laai nie — dit word elke paar sekondes weer probeer.</span>
     </div>
 
-    <!-- Twee panele: per-kampus tellings links, komende events regs -->
+    <!-- Vier panele in twee kolomme:
+         links my eie status en die per-kampus tellings,
+         regs die komende events en die nuutste skanderings -->
     <section class="panels">
-      <article class="glass-card panel" aria-label="Nou op kampus">
-        <h2>Nou op kampus</h2>
-        <div id="kampus-lys" aria-label="Kampus tellings"></div>
-      </article>
-      <article class="glass-card panel" aria-label="Komende Events">
-        <h2 id="events-titel">Komende Events</h2>
-        <div id="events-lys" aria-label="Komende events lys"></div>
-      </article>
+      <div class="panel-column">
+        <article class="glass-card panel" aria-label="My Status">
+          <h2>My Status</h2>
+          <div id="my-status" aria-label="My status besonderhede"></div>
+        </article>
+        <article class="glass-card panel" aria-label="Nou op kampus">
+          <h2>Nou op kampus</h2>
+          <div id="kampus-lys" aria-label="Kampus tellings"></div>
+        </article>
+      </div>
+      <div class="panel-column">
+        <article class="glass-card panel" aria-label="Komende Events">
+          <h2 id="events-titel">Komende Events</h2>
+          <div id="events-lys" aria-label="Komende events lys"></div>
+        </article>
+        <article class="glass-card panel" aria-label="Onlangse Aktiwiteit">
+          <h2>Onlangse Aktiwiteit</h2>
+          <div id="aktiwiteit-lys" class="admin-list" aria-label="Nuutste skanderings"></div>
+        </article>
+      </div>
     </section>
   </main>
 
   <!-- Skripte: main.js (aanmelding en API) en home.js (hierdie blad se logika) -->
   <script src="main.js"></script>
-  <script src="home.js?v=20260818"></script>
+  <script src="home.js?v=20260818b"></script>
 </body>
 </html>

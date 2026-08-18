@@ -247,13 +247,38 @@ def lys_toegangslogs(
         .limit(50)\
         .all()
 
+    # Slaan die name van die gebruikers en lokasies in een slag op sodat die
+    # Tuisblad se aktiwiteitslys name kan wys in plaas van net ID's.
+    user_ids = {l.Gebruiker_ID for l in logs if l.Gebruiker_ID is not None}
+    lok_ids = {l.Lokasie_ID for l in logs if l.Lokasie_ID is not None}
+    gebruikers = {
+        g.Gebruiker_ID: g
+        for g in db.query(models.Gebruikers)
+        .filter(models.Gebruikers.Gebruiker_ID.in_(user_ids)).all()
+    } if user_ids else {}
+    lokasies = {
+        lok.Lokasie_ID: lok
+        for lok in db.query(models.Lokasie)
+        .filter(models.Lokasie.Lokasie_ID.in_(lok_ids)).all()
+    } if lok_ids else {}
+
+    def naam_van(l):
+        g = gebruikers.get(l.Gebruiker_ID)
+        return f"{g.GEB_Naam} {g.GEB_Van}".strip() if g else None
+
+    def lokasie_naam(l):
+        lok = lokasies.get(l.Lokasie_ID)
+        return lok.LOK_Naam if lok else None
+
     return schemas.APIResponse(
         sukses=True,
         data=[
             {
                 "Log_ID": l.Log_ID,
                 "Gebruiker_ID": l.Gebruiker_ID,
+                "Naam": naam_van(l),
                 "Lokasie_ID": l.Lokasie_ID,
+                "Lokasie": lokasie_naam(l),
                 "Rigting": l.TOE_Rigting,
                 "Metode": l.TOE_Metode,
                 "Tyd": l.TOE_Tydstempel.isoformat(),
