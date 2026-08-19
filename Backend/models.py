@@ -399,3 +399,12 @@ class BesoekerUitnodiging(Base):
             name='ck_besoeker_uitnodiging_status',
         ),
     )
+
+# --- INSTELLING (APPLICATION SETTINGS) ---
+
+class Instelling(Base):
+    __tablename__ = 'instellings'
+
+    Sleutel      = Column(String(100), primary_key=True)
+    Waarde       = Column(String(255), nullable=False)
+    Beskrywing   = Column(String(255), nullable=True)
