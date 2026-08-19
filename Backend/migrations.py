@@ -553,3 +553,27 @@ def run_migrations(engine):
             f"(Publieke Event RSVP) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 013: Instellings (settings) tabel
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS instellings (
+                    "Sleutel"    VARCHAR(100) PRIMARY KEY,
+                    "Waarde"     VARCHAR(255) NOT NULL,
+                    "Beskrywing" VARCHAR(255)
+                )
+            '''))
+
+            _conn.execute(text('''
+                INSERT INTO instellings ("Sleutel", "Waarde", "Beskrywing")
+                VALUES ('auto_uitcheck_tydstip', '22:00', 'Tydstip vir outomatiese uitcheck (HH:MM formaat)')
+                ON CONFLICT ("Sleutel") DO NOTHING
+            '''))
+
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 013 "
+            f"(Instellings tabel) het misluk: {_migrasie_fout}"
+        )
+
