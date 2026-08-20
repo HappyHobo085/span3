@@ -99,7 +99,7 @@
   const newUserKoshuis = document.getElementById('new-user-koshuis');
   const studentKoshuisField = document.getElementById('student-koshuis-field');
   const newUserPassword = document.getElementById('new-user-password');
-  const newUserRole = document.getElementById('new-user-role');
+  const newUserRoles = document.getElementById('new-user-roles');
   const userModalTitle = document.getElementById('create-user-title');
   const newUserActive = document.getElementById('newUserActive');
   const userActiveRow = document.getElementById('user-active-row');
@@ -1155,7 +1155,9 @@
       newUserPassword.value = '';
       newUserPassword.placeholder = 'Voer wagwoord in';
     }
-    if (newUserRole) newUserRole.value = '';
+    if (newUserRoles) {
+    newUserRoles.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+  }
     if (newUserIsKoshuis) newUserIsKoshuis.checked = false;
     if (newUserKoshuis) newUserKoshuis.value = '';
     if (studentNumberField) studentNumberField.style.display = 'none';
@@ -1192,7 +1194,11 @@
     if (newUserName) newUserName.value = user.GEB_Naam || '';
     if (newUserSurname) newUserSurname.value = user.GEB_Van || '';
     if (newUserEmail) newUserEmail.value = user.GEB_Epos || '';
-    if (newUserRole) newUserRole.value = String(user.Rol_ID);
+    if (newUserRoles) {
+      newUserRoles.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+        cb.checked = (user.Rol_IDs || []).indexOf(Number(cb.value)) !== -1;
+      });
+    }
 
     // Password stays blank + optional while editing.
     if (newUserPassword) {
@@ -1238,10 +1244,6 @@
     userRoleFilter.innerHTML = '<option value="">Alle Rolle</option>';
   }
 
-  if (newUserRole) {
-    newUserRole.innerHTML = '<option value="">Kies rol...</option>';
-  }
-
   // Sit elke rol in die filter-lys en in die skep-gebruiker-lys.
   json.data.forEach(function (r) {
     const displayName = rolDisplayNames[r.ROL_Naam] || r.ROL_Naam;
@@ -1254,12 +1256,17 @@
       userRoleFilter.appendChild(opt);
     }
 
-    if (newUserRole) {
-      const opt = document.createElement('option');
-      opt.value = String(r.Rol_ID);
-      opt.textContent = displayName;
-      opt.dataset.rolNaam = r.ROL_Naam;
-      newUserRole.appendChild(opt);
+    if (newUserRoles) {
+      const label = document.createElement('label');
+      label.className = 'role-checkbox';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = 'new-user-roles';
+      cb.value = String(r.Rol_ID);
+      cb.dataset.rolNaam = r.ROL_Naam;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + displayName));
+      newUserRoles.appendChild(label);
     }
   });
 }
@@ -1279,7 +1286,7 @@
     json.data.forEach(function (user) {
       // Die Is_Aktief veld uit die databasis bepaal die status in die lys.
       const isAktief = user.Is_Aktief !== false;
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_ID, isAktief);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_IDs || [user.Rol_ID], isAktief);
     });
   }
 
@@ -1301,9 +1308,10 @@
   /** Create a user row in the list. */
   // Hierdie funksie voeg een gebruiker-ry by die lys: naam, e-pos,
   // status, rol-etiket en 'n "Wysig"-knoppie.
-  function addUserRow(userId, naam, van, epos, rolId, isAktief) {
+  function addUserRow(userId, naam, van, epos, rolIds, isAktief) {
     if (!userList) return;
 
+    var roleIdsArr = Array.isArray(rolIds) ? rolIds : (rolIds ? [rolIds] : []);
     const row = document.createElement('div');
     row.className = 'admin-user-row';
 
@@ -1330,11 +1338,13 @@
     const rolesDiv = document.createElement('div');
     rolesDiv.className = 'admin-user-roles';
 
-    const rolNaam = rolleMap[String(rolId)] || 'Onbekend';
-    const badge = document.createElement('span');
-    badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
-    badge.textContent = rolNaam;
-    rolesDiv.appendChild(badge);
+    roleIdsArr.forEach(function(rolId) {
+      const rolNaam = rolleMap[String(rolId)] || 'Onbekend';
+      const badge = document.createElement('span');
+      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
+      badge.textContent = rolNaam;
+      rolesDiv.appendChild(badge);
+    });
 
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'admin-user-actions';
@@ -1348,7 +1358,7 @@
 
     // Store IDs for filtering + editing
     row.dataset.userId = String(userId);
-    row.dataset.rolId = String(rolId);
+    row.dataset.rolIds = JSON.stringify(roleIdsArr);
     row.dataset.search = `${naam} ${van} ${epos}`.toLowerCase();
 
     row.appendChild(infoDiv);
@@ -1372,13 +1382,14 @@
   // Kyk vir elke ry of dit by die soekwoord én die rol-filter pas.
   rows.forEach(function (row) {
     const searchable = row.dataset.search || '';
-    const rolId = row.dataset.rolId || '';
+    let userRoleIds = [];
+    try { userRoleIds = JSON.parse(row.dataset.rolIds || '[]'); } catch(e) {}
 
     const matchesSearch =
       query === '' || searchable.includes(query);
 
     const matchesRole =
-      roleFilter === '' || rolId === roleFilter;
+      roleFilter === '' || userRoleIds.indexOf(Number(roleFilter)) !== -1;
 
     row.style.display = (matchesSearch && matchesRole) ? '' : 'none';
   });
@@ -1390,11 +1401,8 @@
   // Hierdie funksie wys of versteek die studentenommer- en koshuis-velde,
   // afhangend of die gekose rol "Student" is.
   function toggleStudentField() {
-  if (!newUserRole || !studentNumberField) return;
-
-  const selected = newUserRole.options[newUserRole.selectedIndex];
-  const rolNaam = selected ? selected.dataset.rolNaam : '';
-  const isStudent = rolNaam === 'Student';
+  if (!newUserRoles || !studentNumberField) return;
+  var isStudent = newUserRoles.querySelector('input[data-rol-naam="Student"]:checked') !== null;
 
   studentNumberField.style.display = isStudent ? 'block' : 'none';
   // Die koshuis-merkblokkie wys slegs vir studente; die dropdown volg die merkblokkie.
@@ -1423,23 +1431,22 @@
     const van = newUserSurname ? newUserSurname.value.trim() : '';
     const epos = newUserEmail ? newUserEmail.value.trim() : '';
     const wagwoord = newUserPassword ? newUserPassword.value.trim() : '';
-    const rolId = newUserRole ? Number(newUserRole.value) : null;
+    const rolIds = newUserRoles ? [...newUserRoles.querySelectorAll('input:checked')].map(function(cb) { return Number(cb.value); }) : [];
     const studentNr = newUserStudentNr ? newUserStudentNr.value.trim() : '';
 
     // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
-    const selected = newUserRole ? newUserRole.options[newUserRole.selectedIndex] : null;
-    const rolNaam = selected ? selected.dataset.rolNaam : '';
+    const isStudent = newUserRoles ? newUserRoles.querySelector('input[data-rol-naam="Student"]:checked') !== null : false;
 
     // ===== EDIT MODE =====
     // As ons besig is om 'n bestaande gebruiker te wysig, gaan na submitEditUser.
     if (editingUserId !== null) {
-      await submitEditUser({ naam, van, epos, wagwoord, rolId, studentNr, rolNaam });
+      await submitEditUser({ naam, van, epos, wagwoord, rolIds, studentNr, isStudent });
       return;
     }
 
     // ===== CREATE MODE =====
     // Kyk dat al die verpligte velde ingevul is.
-    if (!naam || !van || !epos || !wagwoord || !rolId) {
+    if (!naam || !van || !epos || !wagwoord || rolIds.length === 0) {
       alert('Voltooi asseblief alle verpligte velde.');
       return;
     }
@@ -1449,12 +1456,12 @@ const payload = {
   GEB_Van: van,
   GEB_Epos: epos,
   GEB_Wagwoord: wagwoord,
-  Rol_ID: rolId,
+  Rol_IDs: rolIds,
   Is_Aktief: true,
 };
 
 // Studente het ekstra inligting nodig: 'n studentenommer en dalk 'n koshuis.
-if (rolNaam === 'Student') {
+if (isStudent) {
   if (!studentNr) {
     alert('Voer asseblief die studentenommer in.');
     return;
@@ -1473,10 +1480,10 @@ if (rolNaam === 'Student') {
 }
 
 else if (
-    rolNaam === 'Personeel' ||
-    rolNaam === 'Sekuriteit_Wag' ||
-    rolNaam === 'Kampus_Opsigter' ||
-    rolNaam === 'Administrateur'
+    rolIds.some(function(rid) {
+      var n = rolleMap[String(rid)] || '';
+      return n === 'Personeel' || n === 'Sekuriteits Wag' || n === 'Opsigter' || n === 'Admin';
+    })
 ) {
     // Werknemers login met e-pos.
     // PER_Nommer word outomaties deur die backend geskep.
@@ -1496,7 +1503,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       closeUserModal(); // also resets the form back to create mode
 
       // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
-      addUserRow(nuweId, naam, van, epos, rolId, payload.Is_Aktief);
+      addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief);
       capListHeight(userList, '.admin-user-row');
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
@@ -1507,10 +1514,10 @@ const json = await window.MoonApi.createGebruiker(payload);
   // Hierdie funksie stuur die wysigings van 'n bestaande gebruiker
   // na die bediener en werk dan die ry in die lys by.
   async function submitEditUser(fields) {
-    const { naam, van, epos, wagwoord, rolId, studentNr, rolNaam } = fields;
+    const { naam, van, epos, wagwoord, rolIds, studentNr, isStudent } = fields;
 
     // Kyk dat al die verpligte velde ingevul is.
-    if (!naam || !van || !epos || !rolId) {
+    if (!naam || !van || !epos || rolIds.length === 0) {
       alert('Voltooi asseblief alle verpligte velde.');
       return;
     }
@@ -1519,7 +1526,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       GEB_Naam: naam,
       GEB_Van: van,
       GEB_Epos: epos,
-      Rol_ID: rolId,
+      Rol_IDs: rolIds,
       Is_Aktief: newUserActive ? newUserActive.checked : true,
     };
 
@@ -1528,7 +1535,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       payload.GEB_Wagwoord = wagwoord;
     }
 
-    if (rolNaam === 'Student') {
+    if (isStudent) {
       if (!studentNr) {
         alert('Voer asseblief die studentenommer in.');
         return;
@@ -1555,7 +1562,7 @@ const json = await window.MoonApi.createGebruiker(payload);
         naam: data.GEB_Naam || naam,
         van: data.GEB_Van || van,
         epos: data.GEB_Epos || epos,
-        rolId: data.Rol_ID || rolId,
+        rolIds: data.Rol_IDs || rolIds,
         isAktief: data.Is_Aktief ?? payload.Is_Aktief,
     });
       closeUserModal(); // resets the form back to create mode
@@ -1575,15 +1582,21 @@ const json = await window.MoonApi.createGebruiker(payload);
 
     const nameSpan = row.querySelector('.admin-user-name-text');
     const emailDiv = row.querySelector('.admin-user-email');
-    const badge = row.querySelector('.role-badge');
+    const rolesDiv = row.querySelector('.admin-user-roles');
 
     if (nameSpan) nameSpan.textContent = info.naam + ' ' + info.van;
     if (emailDiv) emailDiv.textContent = info.epos;
 
-    const rolNaam = rolleMap[String(info.rolId)] || 'Onbekend';
-    if (badge) {
-      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
-      badge.textContent = rolNaam;
+    if (rolesDiv) {
+      rolesDiv.innerHTML = '';
+      var roleIdsArr = Array.isArray(info.rolIds) ? info.rolIds : (info.rolIds ? [info.rolIds] : []);
+      roleIdsArr.forEach(function(rolId) {
+        const rolNaam = rolleMap[String(rolId)] || 'Onbekend';
+        const badge = document.createElement('span');
+        badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
+        badge.textContent = rolNaam;
+        rolesDiv.appendChild(badge);
+      });
     }
 
     const oldBadge = row.querySelector('.status-badge');
@@ -1591,7 +1604,7 @@ const json = await window.MoonApi.createGebruiker(payload);
         oldBadge.replaceWith(buildStatusBadge(info.isAktief !== false));
     }
 
-    row.dataset.rolId = String(info.rolId);
+    row.dataset.rolIds = JSON.stringify(info.rolIds || []);
     row.dataset.search = `${info.naam} ${info.van} ${info.epos}`.toLowerCase();
   }
 
@@ -1763,8 +1776,8 @@ const json = await window.MoonApi.createGebruiker(payload);
     });
   }
   // As die rol verander, wys of versteek die student-velde.
-  if (newUserRole) {
-    newUserRole.addEventListener('change', toggleStudentField);
+  if (newUserRoles) {
+    newUserRoles.addEventListener('change', toggleStudentField);
   }
   // As die koshuis-blokkie gemerk word, wys of versteek die koshuis-keuselys.
   if (newUserIsKoshuis) {
@@ -1802,7 +1815,7 @@ async function refreshDashboard() {
 }
 
   // =====================================================================
-  //  OUTO-UITSKANDERING (demo — geen backend, geen stoor nie)
+  //  OUTO-UITSKANDERING (gekoppel aan instellings-API)
   // =====================================================================
 
   // Die velde en knoppie vir die outo-uitskandering paneel.
@@ -1810,10 +1823,22 @@ async function refreshDashboard() {
   var saveAutoScanoutBtn = document.getElementById('save-auto-scanout');
   var autoScanoutMsg = document.getElementById('auto-scanout-msg');
 
-  // Die "Stoor Tyd" knoppie: wys net 'n boodskap met die gekose tyd.
-  // (Dit is nog 'n demonstrasie — niks word regtig gestoor nie.)
+  // Laai die gestelde tyd van die bediener af by bladsylaaityd.
+  async function loadAutoUitcheckTydstip() {
+    if (!window.MoonApi || !autoScanoutTime) return;
+    try {
+      var json = await window.MoonApi.fetchInstelling('auto_uitcheck_tydstip');
+      if (json.sukses && json.data && json.data.Waarde) {
+        autoScanoutTime.value = json.data.Waarde;
+      }
+    } catch (e) {
+      console.error('Kon nie auto-uitcheck tyd laai nie:', e);
+    }
+  }
+
+  // Stoor die tyd via die instellings-API.
   if (saveAutoScanoutBtn) {
-    saveAutoScanoutBtn.addEventListener('click', function () {
+    saveAutoScanoutBtn.addEventListener('click', async function () {
       var tyd = autoScanoutTime ? autoScanoutTime.value : '';
 
       if (!tyd) {
@@ -1821,9 +1846,29 @@ async function refreshDashboard() {
         return;
       }
 
-      if (autoScanoutMsg) {
-        autoScanoutMsg.textContent = 'Outo-uitskandering gestel vir ' + tyd + '.';
-        autoScanoutMsg.style.display = 'block';
+      if (!window.MoonApi) return;
+
+      try {
+        saveAutoScanoutBtn.disabled = true;
+        var json = await window.MoonApi.updateInstelling('auto_uitcheck_tydstip', { Waarde: tyd });
+
+        if (autoScanoutMsg) {
+          if (json.sukses) {
+            autoScanoutMsg.textContent = 'Outo-uitcheck tyd gestel vir ' + tyd + '.';
+          } else {
+            autoScanoutMsg.textContent = json.fout || 'Stoor het misluk.';
+          }
+          autoScanoutMsg.style.display = 'block';
+          setTimeout(function () { autoScanoutMsg.style.display = 'none'; }, 3000);
+        }
+      } catch (e) {
+        console.error('Kon nie auto-uitcheck tyd stoor nie:', e);
+        if (autoScanoutMsg) {
+          autoScanoutMsg.textContent = 'Fout tydens stoor.';
+          autoScanoutMsg.style.display = 'block';
+        }
+      } finally {
+        saveAutoScanoutBtn.disabled = false;
       }
     });
   }
@@ -1848,6 +1893,8 @@ async function refreshDashboard() {
 
   await loadGebruikers();
   applyUserFilter();
+
+  await loadAutoUitcheckTydstip();
 
   await refreshDashboard();
 

@@ -40,6 +40,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     GEB_Wagwoord: str
+    Rol_ID: Optional[int] = None
+    Rol_IDs: Optional[List[int]] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: bool = False
     Koshuis_ID: Optional[int] = None
@@ -61,6 +63,7 @@ class UserUpdate(BaseModel):
     GEB_Selfoon_Nr: Optional[str] = None
     GEB_Profiel_Foto: Optional[str] = None
     Rol_ID: Optional[int] = None
+    Rol_IDs: Optional[List[int]] = None
     Is_Aktief: Optional[bool] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: Optional[bool] = None
@@ -664,3 +667,18 @@ class PublicEventRsvpRequest(BaseModel):
     van: str
     selfoon: str
     epos: Optional[str] = None
+
+
+# --- INSTELLINGS SCHEMAS ---
+
+class InstellingRead(BaseModel):
+    Sleutel:    str
+    Waarde:     str
+    Beskrywing: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class InstellingUpdate(BaseModel):
+    Waarde:     str
+    Beskrywing: Optional[str] = None

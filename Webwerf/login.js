@@ -18,6 +18,7 @@
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');
+  localStorage.removeItem('user_roles');
 
   // Hierdie funksie kry die adres van die bediener waarheen ons die data stuur.
   function getApiBaseUrl() {
@@ -96,9 +97,12 @@
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             localStorage.setItem('user_role', payload.rol_naam || '');
+            const roles = Array.isArray(payload.roles) ? payload.roles : [];
+            localStorage.setItem('user_roles', JSON.stringify(roles));
           } catch (decodeErr) {
             // As ons nie die rol kan lees nie, stoor 'n leë rol
             localStorage.setItem('user_role', '');
+            localStorage.setItem('user_roles', '[]');
           }
 
           // Stuur die gebruiker na die tuisblad

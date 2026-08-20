@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from contextlib import asynccontextmanager
+from auto_uitcheck import maak_scheduler_aan, sluit_scheduler_af
 
 import auth, schemas
 from database import engine
@@ -15,6 +17,7 @@ from migrations import run_pre_migrations, run_migrations
 from routers import (
     auth_routes, gebruikers, kampus, koshuis, lokasie,
     nfc, wagte, student, dashboard, admin, saamry, besoekers, events,
+    instellings,
 )
 
 # Rename legacy misspelled event tables BEFORE SQLAlchemy checks/creates tables.
@@ -26,10 +29,17 @@ models.Base.metadata.create_all(bind=engine)
 # Idempotent startup migrations
 run_migrations(engine)
 
+@asynccontextmanager
+async def lewensduur(app):
+    scheduler = maak_scheduler_aan()
+    yield
+    sluit_scheduler_af(scheduler)
+
 app = FastAPI(
     title="MOON Admin API",
     description="Louis se Admin API vir die MOON projek.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lewensduur,
 )
 
 # Static files
@@ -84,6 +94,7 @@ app.include_router(admin.router)
 app.include_router(saamry.router)
 app.include_router(besoekers.router)
 app.include_router(events.router)
+app.include_router(instellings.router)
 
 # --- Root ---
 

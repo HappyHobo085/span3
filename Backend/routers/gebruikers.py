@@ -55,6 +55,7 @@ def skep_gebruiker(
         db.flush()
 
         sync_gebruiker_roles(db, db_user, role_ids, primary_role_id=primary_role_id)
+        db.flush()
         sync_gebruiker_subrekords(db, db_user, get_user_role_names(db, db_user), user_data, creating=True)
         sync_gebruiker_nfc_tag(db, db_user.Gebruiker_ID, user_data)
 
@@ -162,20 +163,21 @@ def lees_gebruikers(
 ):
     query = db.query(models.Gebruikers)
     role_names = get_user_role_names(db, current_user)
+    is_admin = "Administrateur" in role_names
 
-    if "Kampus_Opsigter" in role_names:
+    if not is_admin and "Kampus_Opsigter" in role_names:
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         if not opsigter_info:
             raise HTTPException(status_code=403, detail="Opsigter is nie aan 'n kampus gekoppel nie.")
         query = query.join(models.Kampus_Opsigter, models.Gebruikers.Gebruiker_ID == models.Kampus_Opsigter.Gebruiker_ID)\
                      .filter(models.Kampus_Opsigter.Kampus_ID == opsigter_info.Kampus_ID)
-    elif kampus_id:
+    elif not is_admin and kampus_id:
         query = query.join(models.Kampus_Opsigter, models.Gebruikers.Gebruiker_ID == models.Kampus_Opsigter.Gebruiker_ID)\
                      .filter(models.Kampus_Opsigter.Kampus_ID == kampus_id)
 
     gebruikers = query.offset(skip).limit(limit).all()
 
-    if "Sekuriteit_Wag" in role_names:
+    if not is_admin and "Sekuriteit_Wag" in role_names:
         return schemas.APIResponse(
             sukses=True,
             data=[
@@ -209,14 +211,15 @@ def lees_gebruiker(
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
     role_names = get_user_role_names(db, current_user)
+    is_admin = "Administrateur" in role_names
 
-    if "Kampus_Opsigter" in role_names:
+    if not is_admin and "Kampus_Opsigter" in role_names:
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         teiken_opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == user_id).first()
         if teiken_opsigter_info and teiken_opsigter_info.Kampus_ID != opsigter_info.Kampus_ID:
             raise HTTPException(status_code=403, detail="Jy het nie toegang tot hierdie gebruiker nie.")
 
-    if "Sekuriteit_Wag" in role_names:
+    if not is_admin and "Sekuriteit_Wag" in role_names:
         return schemas.APIResponse(
             sukses=True,
             data={

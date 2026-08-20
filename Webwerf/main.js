@@ -144,6 +144,12 @@ function removeNavLink(href) {
 
 loadSiteHeader();
 
+// Multi-role helper: check if the current user has a specific role.
+function hasRole(roleName) {
+  var roles = JSON.parse(localStorage.getItem('user_roles') || '[]');
+  return roles.indexOf(roleName) !== -1;
+}
+
 // -----------------------------------------------------------------------------
 // Login gate + Admin gate + Admin nav link
 // -----------------------------------------------------------------------------
@@ -161,12 +167,11 @@ loadSiteHeader();
     return;
   }
 
-  // Kry die gebruiker se rol (bv. Administrateur, Personeel of Student)
-  var userRole = localStorage.getItem('user_role') || '';
+  // Rolle word via hasRole() hieronder getoets (sien user_roles array in localStorage)
 
   // Studente mag nie die website gebruik nie.
 // Hulle gebruik slegs die Flutter app.
-if (userRole === 'Student' && currentPage !== 'login.html') {
+if (hasRole('Student') && currentPage !== 'login.html') {
   alert('Studente gebruik asseblief die Moon Flutter app.');
   logOut();
   return;
@@ -175,7 +180,7 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
   // As iemand wat nie 'n admin is nie die admin-blad probeer oopmaak,
   // stuur ons hom/haar stilweg terug na die tuisblad
   // Silently redirect non-admins away from admin.html
-  if (currentPage === 'admin.html' && userRole !== 'Administrateur') {
+  if (currentPage === 'admin.html' && !hasRole('Administrateur')) {
     window.location.href = 'home.html';
     return;
   }
@@ -183,28 +188,33 @@ if (userRole === 'Student' && currentPage !== 'login.html') {
   // Silently redirect non-personeel away from personeel.html.
   // Slegs die Personeel-rol (nie Admin, Sekuriteit_Wag of Kampus_Opsigter nie)
   // mag die klas-bywoning blad sien.
-  if (currentPage === 'personeel.html' && userRole !== 'Personeel') {
+  if (currentPage === 'personeel.html' && !hasRole('Personeel')) {
     window.location.href = 'home.html';
     return;
   }
 
   // Wys die "Admin" skakel in die balk bo, maar net vir admin-gebruikers
   // Show the Admin nav link only for admin users
-  if (userRole === 'Administrateur' && currentPage !== 'login.html') {
+  if (hasRole('Administrateur') && currentPage !== 'login.html') {
     onSiteHeaderReady(function () {
       insertNavLink('admin.html', 'Admin');
     });
   }
 
   // Wys die "My Klasse" skakel in die balk bo, maar net vir personeel.
-  // Personeel sien net Tuis en My Klasse — die Kampus-, Koshuis- en
-  // Events-skakels word vir hulle uit die balk verwyder.
-  // Show the "My Klasse" nav link only for Personeel users
-  if (userRole === 'Personeel' && currentPage !== 'login.html') {
+  // As die gebruiker slegs Personeel-rol het (nie Admin, Kampus_Opsigter
+  // of Sekuriteit_Wag nie), verwyder die Kampus-, Koshuis- en Events-skakels.
+  // Show the "My Klasse" nav link for Personeel users
+  if (hasRole('Personeel') && currentPage !== 'login.html') {
     onSiteHeaderReady(function () {
-      removeNavLink('kampus.html');
-      removeNavLink('koshuis.html');
-      removeNavLink('events.html');
+      // Only strip nav links if user is ONLY Personeel — not if they also
+      // have Admin, Kampus_Opsigter, or Sekuriteit_Wag
+      var onlyPersoneel = !hasRole('Administrateur') && !hasRole('Kampus_Opsigter') && !hasRole('Sekuriteit_Wag');
+      if (onlyPersoneel) {
+        removeNavLink('kampus.html');
+        removeNavLink('koshuis.html');
+        removeNavLink('events.html');
+      }
       insertNavLink('personeel.html', 'My Klasse');
     });
   }
@@ -217,6 +227,7 @@ function logOut() {
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');
+  localStorage.removeItem('user_roles');
   // Stuur die gebruiker na die inteken-blad
   window.location.href = 'login.html';
 }

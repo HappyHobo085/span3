@@ -559,6 +559,40 @@
       return r.body;
     },
 
+    // =====================================================================
+    //  INSTELLINGS (settings)
+    // =====================================================================
+
+    /**
+     * GET /instellings
+     * Returns all settings.
+     */
+    fetchInstellings: async function () {
+      const r = await apiRequest('/instellings', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * GET /instellings/{sleutel}
+     * Returns a single setting by key.
+     */
+    fetchInstelling: async function (sleutel) {
+      const r = await apiRequest('/instellings/' + encodeURIComponent(sleutel), { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * PUT /instellings/{sleutel}
+     * Updates a setting value.
+     */
+    updateInstelling: async function (sleutel, data) {
+      const r = await apiRequest('/instellings/' + encodeURIComponent(sleutel), {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return r.body;
+    },
+
   };
 
 })();
