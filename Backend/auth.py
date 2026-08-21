@@ -3,6 +3,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 import os
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 import database, models
-from services.gebruiker_service import get_user_role_names
+from services.gebruiker_service import get_user_role_names, kies_primere_rol
 
 load_dotenv()
 
@@ -99,7 +100,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     request.state.user = fallback
                     request.state.roles = get_user_role_names(db, fallback)
                     if request.state.roles:
-                        request.state.role = request.state.roles[0]
+                        request.state.role = kies_primere_rol(request.state.roles)
             except Exception:
                 pass
             finally:
@@ -132,17 +133,29 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # As ons 'n geldige user_id het, haal gebruiker en rol uit databasis
         if user_id:
             db = database.SessionLocal()
+            onaktief = False
             try:
                 user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
+                if user and not user.Is_Aktief:
+                    # Gedeaktiveerde gebruikers mag nie toegang behou nie.
+                    onaktief = True
+                    user = None
                 if user:
                     request.state.user = user
                     request.state.roles = get_user_role_names(db, user)
                     if request.state.roles:
-                        request.state.role = request.state.roles[0]
+                        request.state.role = kies_primere_rol(request.state.roles)
             except Exception:
                 pass
             finally:
                 db.close()
+
+            if onaktief:
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Gebruiker is gedeaktiveer"},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
         response = await call_next(request)
         return response
@@ -166,11 +179,18 @@ async def get_current_user(
             user_id = payload.get("sub")
             if user_id:
                 user = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == int(user_id)).first()
+                if user and not user.Is_Aktief:
+                    # Gedeaktiveerde gebruikers mag nie toegang behou nie.
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Gebruiker is gedeaktiveer",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
                 if user:
                     request.state.user = user
                     request.state.roles = get_user_role_names(db, user)
                     if request.state.roles:
-                        request.state.role = request.state.roles[0]
+                        request.state.role = kies_primere_rol(request.state.roles)
                     return user
         except JWTError:
             pass
@@ -204,7 +224,7 @@ class RoleChecker:
         if not role_names:
             raise HTTPException(status_code=403, detail="Gebruiker het geen geldige rol nie")
 
-        request.state.role = role_names[0]
+        request.state.role = kies_primere_rol(role_names)
 
         # Admins het universele toegang
         if "Administrateur" in role_names:
@@ -237,7 +257,7 @@ async def verifieer_kampus_toegang(
         role_names = get_user_role_names(db, current_user)
         request.state.roles = role_names
 
-    request.state.role = role_names[0] if role_names else None
+    request.state.role = kies_primere_rol(role_names) if role_names else None
 
     if "Administrateur" in role_names:
         return True

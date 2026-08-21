@@ -667,10 +667,18 @@ class MoonApi {
       );
     }
 
-    final token = decoded['data']['access_token'] as String;
-    bearerToken = token;
+    final data = decoded['data'];
+    final rawToken = data is Map ? data['access_token'] : null;
 
-    return Map<String, dynamic>.from(decoded['data']);
+    if (rawToken is! String || rawToken.isEmpty) {
+      throw Exception(
+        'Aanmelding het misluk: geen toegangstoken ontvang nie.',
+      );
+    }
+
+    bearerToken = rawToken;
+
+    return Map<String, dynamic>.from(data);
   }
   /// -------------------------
   /// Kampusse

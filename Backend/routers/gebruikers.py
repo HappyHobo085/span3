@@ -1,5 +1,7 @@
 """Gebruikers (Users) CRUD routes."""
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Any, Optional
@@ -14,10 +16,23 @@ from services.gebruiker_service import (
     kontroleer_unieke_gebruiker_velde,
     kry_rol,
     get_user_role_names,
+    get_user_role_ids,
 )
 from services.nfc_service import deaktiveer_nfc_tags
 
 router = APIRouter(prefix="/gebruikers", tags=["Gebruikers"])
+
+
+def _genereer_id_nommer(db: Session) -> str:
+    """Genereer 'n unieke 13-syfer ID-nommer wanneer geen verskaf word nie."""
+    while True:
+        kandidaat = str(int(time.time() * 1000))[-13:]
+        bestaan = db.query(models.Gebruikers).filter(
+            models.Gebruikers.GEB_ID_Nommer == kandidaat
+        ).first()
+        if not bestaan:
+            return kandidaat
+        time.sleep(0.001)
 
 
 @router.post("", response_model=schemas.APIResponse[Any], status_code=status.HTTP_201_CREATED)
@@ -27,10 +42,12 @@ def skep_gebruiker(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
+    # Genereer 'n unieke ID-nommer wanneer geen verskaf word nie.
+    id_nommer = user_in.GEB_ID_Nommer or _genereer_id_nommer(db)
     kontroleer_unieke_gebruiker_velde(
         db,
         epos=str(user_in.GEB_Epos),
-        id_nommer=user_in.GEB_ID_Nommer,
+        id_nommer=id_nommer,
     )
     user_data = user_in.dict(exclude_unset=True)
     role_ids = user_data.get("Rol_IDs") or ([user_data["Rol_ID"]] if user_data.get("Rol_ID") is not None else [])
@@ -42,7 +59,7 @@ def skep_gebruiker(
         db_user = models.Gebruikers(
             GEB_Naam=user_in.GEB_Naam,
             GEB_Van=user_in.GEB_Van,
-            GEB_ID_Nommer=user_in.GEB_ID_Nommer,
+            GEB_ID_Nommer=id_nommer,
             GEB_Epos=str(user_in.GEB_Epos),
             GEB_Wagwoord=auth.get_password_hash(user_in.GEB_Wagwoord),
             GEB_Selfoon_Nr=user_in.GEB_Selfoon_Nr,
@@ -97,8 +114,19 @@ def opdateer_gebruiker(
     role_ids = None
     if "Rol_IDs" in update_data:
         role_ids = update_data.pop("Rol_IDs")
+        if not role_ids:
+            # Elke gebruiker moet ten minste een rol hê (Gebruikers.Rol_ID is
+            # verpligtend). Verwyder toegang deur die gebruiker te deaktiveer.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ten minste een rol moet verskaf word — deaktiveer die gebruiker om toegang te verwyder"
+            )
     elif "Rol_ID" in update_data:
-        role_ids = [update_data["Rol_ID"]]
+        # Slegs die primêre rol word verander — behou die gebruiker se bestaande
+        # ekstra rolle sodat 'n multi-rol gebruiker nie stilweg rolle verloor nie.
+        bestaande_ids = get_user_role_ids(db, db_user)
+        nuwe_id = update_data["Rol_ID"]
+        role_ids = list(dict.fromkeys([*bestaande_ids, nuwe_id]))
 
     gewone_velde = {
         "GEB_Naam", "GEB_Van", "GEB_ID_Nommer", "GEB_Epos",
@@ -238,11 +266,20 @@ def lees_gebruiker(
 @router.patch("/{user_id}/status", response_model=schemas.APIResponse[dict])
 def opdateer_gebruiker_status(
     user_id: int,
-    is_aktief: bool,
+    update: Optional[schemas.GebruikerStatusUpdate] = None,
+    is_aktief: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin)
 ):
+    # Liggaam ({"Is_Aktief": ...}) geniet voorrang bo die vraagparameter.
+    if update is not None:
+        is_aktief = update.Is_Aktief
+    if is_aktief is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Geen 'Is_Aktief' waarde verskaf nie (liggaam of vraagparameter)"
+        )
     gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == user_id).first()
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")

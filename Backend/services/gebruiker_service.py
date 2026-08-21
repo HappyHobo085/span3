@@ -8,6 +8,17 @@ from sqlalchemy.orm import Session
 
 import models
 
+# Kanonieke prioriteitsvolgorde wanneer 'n enkele primêre rol gekies word.
+ROL_PRIORITEIT = ["Administrateur", "Kampus_Opsigter", "Sekuriteit_Wag", "Personeel", "Student"]
+
+
+def kies_primere_rol(rol_namen):
+    """Kies 'n deterministiese primêre rol volgens prioriteit."""
+    for rol in ROL_PRIORITEIT:
+        if rol in rol_namen:
+            return rol
+    return rol_namen[0] if rol_namen else "Onbekend"
+
 
 def kry_rol(db: Session, rol_id: int) -> models.Rolle:
     rol = db.query(models.Rolle).filter(models.Rolle.Rol_ID == rol_id).first()
@@ -177,7 +188,7 @@ def sync_gebruiker_subrekords(
     is_sekuriteit = "Sekuriteit_Wag" in role_name_set
 
     # --- Student ---
-    if is_student or "STU_Nommer" in data or "STU_Is_Koshhuis" in data or "Koshuis_ID" in data:
+    if is_student or "STU_Nommer" in data or "STU_Is_Koshuis" in data or "Koshuis_ID" in data:
         student = db.query(models.Student).filter(
             models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID
         ).first()
@@ -385,7 +396,7 @@ def gebruiker_to_dict(g: models.Gebruikers) -> dict:
         "GEB_Profiel_Foto": g.GEB_Profiel_Foto,
         "Rol_ID": g.Rol_ID,
         "Rol_IDs": role_ids,
-        "Rol_Naam": role_names[0] if role_names else None,
+        "Rol_Naam": kies_primere_rol(role_names) if role_names else None,
         "Rol_Namen": role_names,
         "Is_Aktief": g.Is_Aktief,
         "Geskep_Op": g.Geskep_Op.isoformat() if g.Geskep_Op else None,

@@ -110,23 +110,72 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
+  static const _numberKeys = [
+    'student_nommer',
+    'personeel_nommer',
+    'opsigter_nommer',
+    'wag_nommer',
+  ];
+
+  String? _numberKeyForRole(String rol) {
+    switch (rol) {
+      case 'Student':
+        return 'student_nommer';
+      case 'Personeel':
+        return 'personeel_nommer';
+      case 'Kampus_Opsigter':
+        return 'opsigter_nommer';
+      case 'Sekuriteit_Wag':
+        return 'wag_nommer';
+      default:
+        return null;
+    }
+  }
+
+  /// Kies die nommersleutel wat by die gebruiker se rol pas; val terug op die
+  /// vaste volgorde wanneer die rol-sleutel ontbreek of leeg is.
+  String? _chosenNumberKey(Map<String, dynamic> p) {
+    final rolKey = _numberKeyForRole(p['rol']?.toString() ?? '');
+
+    if (rolKey != null && p[rolKey] != null) {
+      return rolKey;
+    }
+
+    for (final key in _numberKeys) {
+      if (p[key] != null) {
+        return key;
+      }
+    }
+
+    return null;
+  }
+
   String _displayNumber(Map<String, dynamic> p) {
-    return p['student_nommer']?.toString() ??
-        p['personeel_nommer']?.toString() ??
-        p['opsigter_nommer']?.toString() ??
-        p['wag_nommer']?.toString() ??
-        'Nie beskikbaar';
+    final key = _chosenNumberKey(p);
+
+    if (key == null) return 'Nie beskikbaar';
+
+    return p[key]?.toString() ?? 'Nie beskikbaar';
   }
 
   String _numberLabel(Map<String, dynamic> p) {
-    final rol = p['rol']?.toString() ?? '';
+    // Bly konsekwent met die sleutel wat gekies is; sonder enige nommer val
+    // dit terug op die etiket wat by die rol pas.
+    final key = _chosenNumberKey(p) ??
+        _numberKeyForRole(p['rol']?.toString() ?? '');
 
-    if (rol == 'Student') return 'Studentnommer';
-    if (rol == 'Personeel') return 'Personeelnommer';
-    if (rol == 'Kampus_Opsigter') return 'Opsigternommer';
-    if (rol == 'Sekuriteit_Wag') return 'Wagnommer';
-
-    return 'Nommer';
+    switch (key) {
+      case 'student_nommer':
+        return 'Studentnommer';
+      case 'personeel_nommer':
+        return 'Personeelnommer';
+      case 'opsigter_nommer':
+        return 'Opsigternommer';
+      case 'wag_nommer':
+        return 'Wagnommer';
+      default:
+        return 'Nommer';
+    }
   }
 
   @override

@@ -95,7 +95,11 @@
           // Lees die gebruiker se rol uit die token en stoor dit
           // Decode the JWT payload to get the role
           try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            // JWT gebruik base64url-kodering ('-' en '_' i.p.v. '+' en '/');
+            // normaliseer eers, anders gooi atob 'n fout vir geldige tokens.
+            const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const payload = JSON.parse(atob(padded));
             localStorage.setItem('user_role', payload.rol_naam || '');
             const roles = Array.isArray(payload.roles) ? payload.roles : [];
             localStorage.setItem('user_roles', JSON.stringify(roles));

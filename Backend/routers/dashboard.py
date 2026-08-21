@@ -11,7 +11,7 @@ from sqlalchemy import func
 
 from database import get_db
 import models, schemas, auth
-from services.gebruiker_service import get_user_role_names
+from services.gebruiker_service import get_user_role_names, kies_primere_rol
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -47,7 +47,7 @@ def kry_my_profiel(
             "naam": current_user.GEB_Naam,
             "van": current_user.GEB_Van,
             "rol_id": current_user.Rol_ID,
-            "rol": role_names[0] if role_names else "Onbekend",
+            "rol": kies_primere_rol(role_names),
             "rol_namen": role_names,
             "epos": current_user.GEB_Epos,
             "selfoon": current_user.GEB_Selfoon_Nr,
@@ -144,7 +144,7 @@ def kry_my_dashboard(
             "gebruiker_id": current_user.Gebruiker_ID,
             "naam": current_user.GEB_Naam,
             "van": current_user.GEB_Van,
-            "rol": role_names[0] if role_names else "Onbekend",
+            "rol": kies_primere_rol(role_names),
             "rol_namen": role_names,
             "kampus_status": kampus_status,
             "laaste_kampus": log_to_dict(laaste_kampus_log),

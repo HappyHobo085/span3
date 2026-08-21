@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 import models, schemas, auth
-from services.gebruiker_service import get_user_role_names
+from services.gebruiker_service import get_user_role_names, kies_primere_rol
 
 router = APIRouter(tags=["Auth"])
 
@@ -34,9 +34,13 @@ def login_vir_toegang_token(
         ).first()
 
         if student:
-            user = db.query(models.Gebruikers).filter(
+            kandidaat = db.query(models.Gebruikers).filter(
                 models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
             ).first()
+            # Slegs 'n gebruiker wat tans nog die Student-rol het mag met sy
+            # studentenommer aanmeld (voormalige studente val deur na 401).
+            if kandidaat and "Student" in get_user_role_names(db, kandidaat):
+                user = kandidaat
 
     if not user or not auth.verify_password(form_data.password, user.GEB_Wagwoord):
         from fastapi import HTTPException
@@ -46,7 +50,17 @@ def login_vir_toegang_token(
         )
 
     role_names = get_user_role_names(db, user)
-    rol_naam = role_names[0] if role_names else "Onbekend"
+
+    # Gebruikers sonder enige rol (bv. voormalige studente wie se Student-rol
+    # verwyder is) mag nie aanmeld nie.
+    if not role_names:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Verkeerde gebruikersnaam of wagwoord"
+        )
+
+    rol_naam = kies_primere_rol(role_names)
 
     access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(

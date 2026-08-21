@@ -1286,7 +1286,10 @@
     json.data.forEach(function (user) {
       // Die Is_Aktief veld uit die databasis bepaal die status in die lys.
       const isAktief = user.Is_Aktief !== false;
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, user.Rol_IDs || [user.Rol_ID], isAktief);
+      // 'n Leë Rol_IDs-lys is "truthy" — val net terug na die legacy Rol_ID
+      // as daar werklik geen rolle in die nuwe stelsel nie.
+      const gebruikerRolIds = Array.isArray(user.Rol_IDs) && user.Rol_IDs.length ? user.Rol_IDs : [user.Rol_ID];
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, gebruikerRolIds, isAktief);
     });
   }
 
@@ -1341,7 +1344,9 @@
     roleIdsArr.forEach(function(rolId) {
       const rolNaam = rolleMap[String(rolId)] || 'Onbekend';
       const badge = document.createElement('span');
-      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
+      // Strip spasies EN onderstrepe sodat rou DB-rolname (bv. Kampus_Opsigter)
+      // na dieselfde CSS-klasse as vertoonname (bv. "Kampus Opsigter") map.
+      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/[\s_]+/g, '');
       badge.textContent = rolNaam;
       rolesDiv.appendChild(badge);
     });
@@ -1593,7 +1598,9 @@ const json = await window.MoonApi.createGebruiker(payload);
       roleIdsArr.forEach(function(rolId) {
         const rolNaam = rolleMap[String(rolId)] || 'Onbekend';
         const badge = document.createElement('span');
-        badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/\s+/g, '');
+        // Strip spasies EN onderstrepe sodat rou DB-rolname (bv. Kampus_Opsigter)
+      // na dieselfde CSS-klasse as vertoonname (bv. "Kampus Opsigter") map.
+      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/[\s_]+/g, '');
         badge.textContent = rolNaam;
         rolesDiv.appendChild(badge);
       });

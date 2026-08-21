@@ -14,6 +14,7 @@ import auth
 import database
 import models
 import schemas
+from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -35,16 +36,14 @@ def _require_active(current_user: models.Gebruikers) -> None:
         raise HTTPException(status_code=403, detail="Jou gebruiker is nie aktief nie")
 
 
-def _require_opsigter(db: Session, current_user: models.Gebruikers) -> models.Kampus_Opsigter:
+def _require_opsigter(db: Session, current_user: models.Gebruikers) -> None:
+    """Magtekening geskied op rolle, nie op subrekords nie — so 'n gebruiker
+    wie se Opsigter-rol verwyder is, verloor ook die reg, en 'n Administrateur
+    sonder 'n subrekord kry steeds toegang (konsekwent met RoleChecker)."""
     _require_active(current_user)
-    opsigter = (
-        db.query(models.Kampus_Opsigter)
-        .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
-    if opsigter is None:
+    rol_namen = get_user_role_names(db, current_user)
+    if "Administrateur" not in rol_namen and "Kampus_Opsigter" not in rol_namen:
         raise HTTPException(status_code=403, detail="Slegs 'n Opsigter mag events bestuur")
-    return opsigter
 
 
 def _require_rsvp_user(db: Session, current_user: models.Gebruikers) -> None:

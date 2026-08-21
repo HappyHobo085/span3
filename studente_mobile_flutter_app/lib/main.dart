@@ -23,7 +23,38 @@ Map<String, dynamic> _decodeJwtPayload(String token) {
 
   final payload = base64Url.normalize(parts[1]);
   final decoded = utf8.decode(base64Url.decode(payload));
-  return jsonDecode(decoded) as Map<String, dynamic>;
+  final json = jsonDecode(decoded);
+
+  if (json is! Map<String, dynamic>) {
+    throw Exception('Ongeldige token: ongeldige lading');
+  }
+
+  return json;
+}
+
+/// Kies die rol vir roetering uit die JWT se `roles`-lys volgens prioriteit.
+/// Onbekende rolle word geïgnoreer; val terug op `rol_naam` indien nodig.
+String _pickRole(Map<String, dynamic> payload) {
+  const priority = [
+    'Administrateur',
+    'Kampus_Opsigter',
+    'Sekuriteit_Wag',
+    'Personeel',
+    'Student',
+  ];
+
+  final rolesRaw = payload['roles'];
+  final roles = (rolesRaw is List && rolesRaw.isNotEmpty)
+      ? rolesRaw.map((r) => r.toString()).toList()
+      : <String>[payload['rol_naam']?.toString() ?? ''];
+
+  for (final rol in priority) {
+    if (roles.contains(rol)) {
+      return rol;
+    }
+  }
+
+  throw Exception('Onbekende rol: ${roles.join(', ')}');
 }
 
 class MyApp extends StatelessWidget {
@@ -96,9 +127,17 @@ class _LoginPageState extends State<LoginPage> {
         password: password,
       );
 
-      final token = loginData['access_token'] as String;
+      final rawToken = loginData['access_token'];
+
+      if (rawToken is! String || rawToken.isEmpty) {
+        throw Exception(
+          'Aanmelding het misluk: geen toegangstoken ontvang nie.',
+        );
+      }
+
+      final token = rawToken;
       final payload = _decodeJwtPayload(token);
-      final rolNaam = payload['rol_naam']?.toString() ?? '';
+      final rolNaam = _pickRole(payload);
 
       Widget nextPage;
 

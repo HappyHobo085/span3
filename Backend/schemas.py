@@ -40,6 +40,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     GEB_Wagwoord: str
+    # Opsioneel: word outomaties gegenereer indien nie verskaf nie.
+    GEB_ID_Nommer: Optional[str] = None
     Rol_ID: Optional[int] = None
     Rol_IDs: Optional[List[int]] = None
     STU_Nommer: Optional[str] = None
@@ -53,6 +55,10 @@ class UserCreate(UserBase):
     NFC_UID: Optional[str] = None
     NFC_Tipe: str = "Gebruiker"
     NFC_Is_Aktief: bool = True
+
+class GebruikerStatusUpdate(BaseModel):
+    """Liggaam vir PATCH /gebruikers/{id}/status."""
+    Is_Aktief: bool
 
 class UserUpdate(BaseModel):
     GEB_Naam: Optional[str] = None

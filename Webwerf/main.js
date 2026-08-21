@@ -145,9 +145,15 @@ function removeNavLink(href) {
 loadSiteHeader();
 
 // Multi-role helper: check if the current user has a specific role.
+// Faal toe (fail-closed): as user_roles korrup of ongeldig is, behandel ons
+// die gebruiker as rolloos sodat die hekke TOE bly in plaas van oop te breek.
 function hasRole(roleName) {
-  var roles = JSON.parse(localStorage.getItem('user_roles') || '[]');
-  return roles.indexOf(roleName) !== -1;
+  try {
+    var roles = JSON.parse(localStorage.getItem('user_roles') || '[]');
+    return Array.isArray(roles) && roles.indexOf(roleName) !== -1;
+  } catch (err) {
+    return false;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -171,7 +177,15 @@ function hasRole(roleName) {
 
   // Studente mag nie die website gebruik nie.
 // Hulle gebruik slegs die Flutter app.
-if (hasRole('Student') && currentPage !== 'login.html') {
+// LET WEL: 'n gebruiker met 'n Student-rol SAAM met 'n personeelrol
+// (Administrateur, Personeel, Kampus_Opsigter of Sekuriteit_Wag) is wel Welkom
+// op die website — slegs suiwer studente word hier uitgekeer.
+var isSuwerStudent = hasRole('Student')
+  && !hasRole('Administrateur')
+  && !hasRole('Personeel')
+  && !hasRole('Kampus_Opsigter')
+  && !hasRole('Sekuriteit_Wag');
+if (isSuwerStudent && currentPage !== 'login.html') {
   alert('Studente gebruik asseblief die Moon Flutter app.');
   logOut();
   return;
