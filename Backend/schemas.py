@@ -688,3 +688,53 @@ class InstellingRead(BaseModel):
 class InstellingUpdate(BaseModel):
     Waarde:     str
     Beskrywing: Optional[str] = None
+
+
+# --- KLAS / MODULE / GROEP SCHEMAS ---
+
+class ModuleCreate(BaseModel):
+    MOD_Kode: str
+    MOD_Naam: Optional[str] = None
+
+
+class GroepCreate(BaseModel):
+    GRO_Naam: str
+
+
+class KlasCreate(BaseModel):
+    Module_ID: int
+    KLA_Lokaal: Optional[str] = None
+    KLA_Dag: Optional[str] = None
+    KLA_Begin_Tyd: Optional[str] = None
+    KLA_Eind_Tyd: Optional[str] = None
+
+
+class KlasGroepAssign(BaseModel):
+    Groep_ID: int
+
+
+class StudentGroepAssign(BaseModel):
+    Groep_ID: int
+
+
+class StudentModuleAssign(BaseModel):
+    Module_ID: int
+
+
+class StudentKlasAssign(BaseModel):
+    Klas_ID: int
+
+
+class PersoneelModuleAssign(BaseModel):
+    Module_ID: int
+
+
+class PersoneelKlasAssign(BaseModel):
+    Klas_ID: int
+
+
+class KlasImportResult(BaseModel):
+    modules_geskep: int = 0
+    groepe_geskep: int = 0
+    klasse_geskep: int = 0
+    foute: List[str] = []

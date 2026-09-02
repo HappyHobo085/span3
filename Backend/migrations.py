@@ -577,3 +577,99 @@ def run_migrations(engine):
             f"(Instellings tabel) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 014: Klas / Module / Groep / rooster-koppelingstabelle
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS module (
+                    "Module_ID" SERIAL PRIMARY KEY,
+                    "MOD_Kode" VARCHAR(20) NOT NULL UNIQUE,
+                    "MOD_Naam" VARCHAR(200)
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS groep (
+                    "Groep_ID" SERIAL PRIMARY KEY,
+                    "GRO_Naam" VARCHAR(50) NOT NULL UNIQUE
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS klas (
+                    "Klas_ID" SERIAL PRIMARY KEY,
+                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
+                    "KLA_Lokaal" VARCHAR(100),
+                    "KLA_Dag" VARCHAR(20),
+                    "KLA_Begin_Tyd" VARCHAR(10),
+                    "KLA_Eind_Tyd" VARCHAR(10)
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS klas_groep (
+                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
+                    "Groep_ID" INT NOT NULL REFERENCES groep("Groep_ID"),
+                    PRIMARY KEY ("Klas_ID", "Groep_ID")
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS student_groep (
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Groep_ID" INT NOT NULL REFERENCES groep("Groep_ID"),
+                    PRIMARY KEY ("Gebruiker_ID", "Groep_ID")
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS student_module (
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
+                    PRIMARY KEY ("Gebruiker_ID", "Module_ID")
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS personeel_module (
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
+                    PRIMARY KEY ("Gebruiker_ID", "Module_ID")
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS student_klas (
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
+                    PRIMARY KEY ("Gebruiker_ID", "Klas_ID")
+                )
+            """))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS personeel_klas (
+                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
+                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
+                    PRIMARY KEY ("Gebruiker_ID", "Klas_ID")
+                )
+            """))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_klas_module ON klas ("Module_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_klas_groep_groep ON klas_groep ("Groep_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_student_groep_groep ON student_groep ("Groep_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_student_module_module ON student_module ("Module_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_personeel_module_module ON personeel_module ("Module_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_student_klas_klas ON student_klas ("Klas_ID")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_personeel_klas_klas ON personeel_klas ("Klas_ID")'
+            ))
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 014 "
+            f"(Klas / Module / Groep) het misluk: {_migrasie_fout}"
+        )
+
