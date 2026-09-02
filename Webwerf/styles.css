@@ -839,3 +839,51 @@ img,svg,video{max-width:100%}
   .admin-user-row,.admin-venue-row{flex-wrap:wrap}
   .admin-user-roles{margin:0}
 }
+
+/* ─── Personeel (My Klasse): geen bladsy-blaai; net die lyste blaai ─────── */
+/* Die bladsy vul presies die skerm: boonste balk + inhoud = 100vh. Die
+   panele deel die oorblywende hoogte; binne elke paneel is die grafiek,
+   kalender en soekveld vas en die lys (studente links, klasregister regs)
+   vul die res en blaai. */
+body.personeel-blad{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+body.personeel-blad .topbar{flex-shrink:0}
+#personeel-page{
+  box-sizing:border-box;
+  height:calc(100vh - var(--tb-h));height:calc(100dvh - var(--tb-h));
+  min-height:0;overflow:hidden;
+}
+#personeel-page .top-controls,
+#personeel-page .stat-grid{flex-shrink:0}
+#personeel-page .panels{
+  flex:1 1 auto;min-height:0;
+  grid-template-rows:minmax(0,1fr);
+}
+#personeel-page .panel{
+  display:flex;flex-direction:column;
+  min-height:0;overflow:hidden;box-sizing:border-box;
+}
+#personeel-page .panel h2{flex-shrink:0}
+/* Linkerpaneel */
+#personeel-page .dashboard-grid{
+  flex:1 1 auto;min-height:0;
+  display:flex;flex-direction:column;gap:10px;
+}
+#personeel-page #dash-stats-card,
+#personeel-page #dash-student-card{flex-shrink:0}
+#personeel-page #dash-module-card{flex:1 1 auto;min-height:120px;overflow:hidden}
+#personeel-page .module-student-list{flex:1 1 auto;min-height:0;max-height:none}
+/* Regterpaneel */
+#personeel-page .kalender,
+#personeel-page .list-search{flex-shrink:0}
+#personeel-page #roster-list{flex:1 1 auto;min-height:80px;max-height:none}
+
+@media (max-width:1100px){
+  /* Panele onder mekaar: elk kry die helfte van die hoogte, lyste blaai steeds */
+  #personeel-page .panels{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+}
+@media (max-width:640px){
+  /* Klein skerms: die bladsy blaai steeds nie; as 'n paneel se vaste dele
+     (grafiek, kalender) nie inpas nie, blaai daardie paneel self. */
+  #personeel-page .panel{overflow-y:auto}
+  #personeel-page .kalender-dag{height:26px}
+}
