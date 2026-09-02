@@ -1,17 +1,26 @@
 // personeel.js — Hierdie lêer beheer die "My Klasse" bladsy vir personeel.
-// Dit wys watter studente op 'n gekose dag by die klas ingeskandeer het,
-// 'n kalender om die dag te kies, en die volle klaslys met 'n soekblokkie.
-// Let wel: al die klasdata hier is voorbeeld-data (nie regte data nie).
+// Dit laai die personeellid se regte klasse (rooster) van die bediener,
+// wys watter studente op 'n gekose dag by die klas ingeskandeer het,
+// 'n kalender om die dag te kies, en die volle klasregister met 'n soekblokkie.
 /**
  * personeel.js — logic for personeel.html only.
  *
- * DEMO: alle klas- en bywoningsdata op hierdie blad is mock data.
- * Die backend het nog geen personeel↔klas koppeling of klasregister nie.
- * Bywoning word deterministies gegenereer (seed = klas + datum) sodat
- * dieselfde dag altyd dieselfde resultaat wys, sonder enige stoor.
+ * REGTE DATA (backend, routers/klasse.py, prefix /rooster):
+ *   - Klasse in die "Kies Klas" keuselys kom van
+ *       GET /rooster/personeel/{id}/rooster   (eie rooster: module + direk)
+ *     of, vir 'n gebruiker met die Administrateur-rol,
+ *       GET /rooster/klasse                   (alle klassessies).
+ *   - Die klasregister (regterpaneel) kom van
+ *       GET /rooster/klasse/{id}/studente     (groep + module + direk, gededupeer).
+ *
+ * NOG DEMO: die bywoning (ingeskandeer / nie ingeskandeer) word steeds
+ * deterministies gegenereer (seed = klas + datum) oor die REGTE klasregister,
+ * omdat skanderings nog nie aan 'n klassessie gekoppel word nie. Dieselfde
+ * dag wys dus altyd dieselfde resultaat, sonder enige stoor.
  *
  * Depends on:
- *   - main.js (login gate + Personeel gate)
+ *   - main.js (login gate + Personeel gate; laai website_api_calls.js → MoonApi;
+ *     verskaf hasRole())
  *   - styles.css (.kalender* klasse)
  *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
  *     dash-total-count, dash-percent-count, dash-in-list, dash-out-list,
@@ -23,61 +32,12 @@
 // Al die kode loop binne een omhulsel sodat die veranderlikes hier
 // nie met die res van die webwerf deurmekaar raak nie.
 (function () {
-  // ----- Mock klasse met klasregisters (demo data) -----
-  // Voorbeeld-klasse met hul studente wat net vir die demo gebruik word.
-  var MOCK_KLASSE = [
-    {
-      id: 'WIS114',
-      naam: 'WIS114 — Klaskamer A',
-      studente: [
-        { naam: 'Anika',   van: 'Botha',           nommer: 'STU2024001' },
-        { naam: 'Dewald',  van: 'Pretorius',       nommer: 'STU2024002' },
-        { naam: 'Elmarie', van: 'van der Merwe',   nommer: 'STU2024003' },
-        { naam: 'Francois', van: 'Joubert',        nommer: 'STU2024004' },
-        { naam: 'Hannelie', van: 'Coetzee',        nommer: 'STU2024005' },
-        { naam: 'Jaco',    van: 'Steyn',           nommer: 'STU2024006' },
-        { naam: 'Karla',   van: 'du Plessis',      nommer: 'STU2024007' },
-        { naam: 'Lourens', van: 'Venter',          nommer: 'STU2024008' },
-        { naam: 'Mariska', van: 'Nel',             nommer: 'STU2024009' },
-        { naam: 'Pieter',  van: 'Fourie',          nommer: 'STU2024010' },
-        { naam: 'Rentia',  van: 'Swanepoel',       nommer: 'STU2024011' },
-        { naam: 'Tiaan',   van: 'Kruger',          nommer: 'STU2024012' }
-      ]
-    },
-    {
-      id: 'FIS121',
-      naam: 'FIS121 — Klaskamer B',
-      studente: [
-        { naam: 'Bernadette', van: 'Olivier',      nommer: 'STU2024013' },
-        { naam: 'Christiaan', van: 'Bezuidenhout', nommer: 'STU2024014' },
-        { naam: 'Elsabe',  van: 'Meyer',           nommer: 'STU2024015' },
-        { naam: 'Gideon',  van: 'Erasmus',         nommer: 'STU2024016' },
-        { naam: 'Ilse',    van: 'van Rensburg',    nommer: 'STU2024017' },
-        { naam: 'Kobus',   van: 'Scholtz',         nommer: 'STU2024018' },
-        { naam: 'Lizelle', van: 'Barnard',         nommer: 'STU2024019' },
-        { naam: 'Neels',   van: 'Terblanche',      nommer: 'STU2024020' },
-        { naam: 'Ronel',   van: 'Grobler',         nommer: 'STU2024021' },
-        { naam: 'Wian',    van: 'de Klerk',        nommer: 'STU2024022' }
-      ]
-    },
-    {
-      id: 'RKN214',
-      naam: 'RKN214 — Lokaal C',
-      studente: [
-        { naam: 'Adele',   van: 'Ferreira',        nommer: 'STU2024023' },
-        { naam: 'Braam',   van: 'Viljoen',         nommer: 'STU2024024' },
-        { naam: 'Chanel',  van: 'Roux',            nommer: 'STU2024025' },
-        { naam: 'Divan',   van: 'Lombard',         nommer: 'STU2024026' },
-        { naam: 'Este',    van: 'Marais',          nommer: 'STU2024027' },
-        { naam: 'Gerhard', van: 'Odendaal',        nommer: 'STU2024028' },
-        { naam: 'Janke',   van: 'Visagie',         nommer: 'STU2024029' },
-        { naam: 'Marnus',  van: 'Bester',          nommer: 'STU2024030' },
-        { naam: 'Nadia',   van: 'Strydom',         nommer: 'STU2024031' },
-        { naam: 'Ruan',    van: 'le Roux',         nommer: 'STU2024032' },
-        { naam: 'Zander',  van: 'Human',           nommer: 'STU2024033' }
-      ]
-    }
-  ];
+  // ----- Klasse (regte data van die bediener) -----
+  // Elke klas lyk so: { id, klasId, kode, moduleNaam, dag, dagIndeks, begin,
+  // eind, lokaal, label }. Die klasregister word apart per klas gelaai en
+  // in `studenteKas` gehou sodat ons dit net een keer per klas afhaal.
+  var klasse = [];
+  var studenteKas = {}; // klasId -> [{ id, naam, van, nommer }]
 
   // ----- Cached DOM nodes (null-safe checks before use) -----
   // Kry al die dele van die bladsy (keuselys, lyste, knoppies, ens.)
@@ -109,8 +69,8 @@
   var vandag = new Date();
   vandag.setHours(0, 0, 0, 0);
 
-  var currentKlas = MOCK_KLASSE[0];
-  var selectedStudent = null; // student wat in die klasregister gekies is
+  var currentKlas = null;      // null totdat die klasse gelaai is
+  var selectedStudent = null;  // student wat in die klasregister gekies is
   var selectedDate = new Date(vandag);
 
   // Oor hoeveel klasdae die gekose student se bywoning bereken word.
@@ -121,6 +81,134 @@
   var MAANDE = ['Januarie', 'Februarie', 'Maart', 'April', 'Mei', 'Junie',
                 'Julie', 'Augustus', 'September', 'Oktober', 'November', 'Desember'];
   var DAG_NAME = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Sa', 'So'];
+
+  // Dagname (Afrikaans en Engels, soos in die Lantiv-CSV) → JS weekdag-indeks
+  // (0 = Sondag ... 6 = Saterdag).
+  var DAG_INDEKS = {
+    sondag: 0, maandag: 1, dinsdag: 2, woensdag: 3, donderdag: 4, vrydag: 5, saterdag: 6,
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
+  };
+
+  // ----- Omskakeling van bediener-data -----
+
+  // Hierdie funksie skakel 'n dagnaam ("Maandag") om na 'n weekdag-indeks,
+  // of null as ons die naam nie ken nie.
+  function dagNaIndeks(dag) {
+    if (!dag) return null;
+    var sleutel = String(dag).trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(DAG_INDEKS, sleutel) ? DAG_INDEKS[sleutel] : null;
+  }
+
+  // Hierdie funksie maak 'n klas-objek vir die bladsy uit een ry van die
+  // bediener se rooster-antwoord (_klas_na_dict in routers/klasse.py).
+  function klasVanApi(k) {
+    var kode = k.MOD_Kode || ('Module ' + k.Module_ID);
+    var tyd = '';
+    if (k.KLA_Begin_Tyd && k.KLA_Eind_Tyd) tyd = k.KLA_Begin_Tyd + '–' + k.KLA_Eind_Tyd;
+    else if (k.KLA_Begin_Tyd) tyd = k.KLA_Begin_Tyd;
+
+    // Etiket in die keuselys, bv. "EBREK370 — Maandag 8:00–9:00 · GH117 A (50)"
+    var wanneer = [k.KLA_Dag, tyd].filter(Boolean).join(' ');
+    var label = kode;
+    if (wanneer) label += ' — ' + wanneer;
+    if (k.KLA_Lokaal) label += ' · ' + k.KLA_Lokaal;
+
+    return {
+      id: String(k.Klas_ID),
+      klasId: k.Klas_ID,
+      kode: kode,
+      moduleNaam: k.MOD_Naam || '',
+      dag: k.KLA_Dag || '',
+      dagIndeks: dagNaIndeks(k.KLA_Dag),
+      begin: k.KLA_Begin_Tyd || '',
+      eind: k.KLA_Eind_Tyd || '',
+      lokaal: k.KLA_Lokaal || '',
+      label: label
+    };
+  }
+
+  // Hierdie funksie maak 'n student-objek uit een ry van die klasregister.
+  function studentVanApi(s) {
+    return {
+      id: s.Gebruiker_ID,
+      naam: s.GEB_Naam || '',
+      van: s.GEB_Van || '',
+      nommer: s.STU_Nommer || ('#' + s.Gebruiker_ID)
+    };
+  }
+
+  // Sorteer klasse op dag, dan begintyd, dan modulekode sodat die keuselys
+  // die week se volgorde volg.
+  function vergelykKlasse(a, b) {
+    var da = a.dagIndeks === null ? 7 : (a.dagIndeks === 0 ? 7 : a.dagIndeks);
+    var db = b.dagIndeks === null ? 7 : (b.dagIndeks === 0 ? 7 : b.dagIndeks);
+    if (da !== db) return da - db;
+    var ta = tydNaMinute(a.begin);
+    var tb = tydNaMinute(b.begin);
+    if (ta !== tb) return ta - tb;
+    return a.kode.localeCompare(b.kode);
+  }
+
+  // "8:00" → 480; onbekend → groot getal sodat dit agter sorteer.
+  function tydNaMinute(tyd) {
+    var m = /^(\d{1,2}):(\d{2})/.exec(tyd || '');
+    if (!m) return 24 * 60 + 1;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  // Hierdie funksie gee die gelaaide klasregister van 'n klas (leeg as dit
+  // nog nie gelaai is nie).
+  function studenteVir(klas) {
+    return (klas && studenteKas[klas.klasId]) || [];
+  }
+
+  // ----- Bediener-oproepe -----
+
+  // Hierdie funksie gee die foutboodskap uit 'n bediener-antwoord, of 'n
+  // verstekboodskap.
+  function foutVanAntwoord(res, verstek) {
+    if (res && typeof res.detail === 'string') return res.detail;
+    if (res && typeof res.boodskap === 'string') return res.boodskap;
+    return verstek;
+  }
+
+  // Hierdie funksie laai die klasse wat in die keuselys moet verskyn:
+  // 'n admin sien alle klasse; personeel sien net hul eie rooster.
+  function laaiKlasse() {
+    if (!window.MoonApi) {
+      return Promise.reject(new Error('Die API-kliënt (MoonApi) is nie gelaai nie.'));
+    }
+    var isAdmin = typeof hasRole === 'function' && hasRole('Administrateur');
+    var versoek;
+    if (isAdmin) {
+      versoek = MoonApi.fetchRoosterKlasse();
+    } else {
+      var gebruikerId = MoonApi.getCurrentUserId();
+      if (!gebruikerId) {
+        return Promise.reject(new Error('Kon nie jou gebruiker-ID uit die aanmeldbewys lees nie.'));
+      }
+      versoek = MoonApi.fetchPersoneelRooster(gebruikerId);
+    }
+    return versoek.then(function (res) {
+      if (!res || !res.sukses) {
+        throw new Error(foutVanAntwoord(res, 'Kon nie klasse van die bediener laai nie.'));
+      }
+      return (res.data || []).map(klasVanApi).sort(vergelykKlasse);
+    });
+  }
+
+  // Hierdie funksie laai (en kas) die klasregister van 'n klas.
+  function laaiStudente(klas) {
+    if (studenteKas[klas.klasId]) return Promise.resolve(studenteKas[klas.klasId]);
+    return MoonApi.fetchKlasStudente(klas.klasId).then(function (res) {
+      if (!res || !res.sukses) {
+        throw new Error(foutVanAntwoord(res, 'Kon nie die klasregister laai nie.'));
+      }
+      var lys = (res.data || []).map(studentVanApi);
+      studenteKas[klas.klasId] = lys;
+      return lys;
+    });
+  }
 
   // ----- Deterministiese "random" (seed = klas + datum) -----
 
@@ -162,36 +250,48 @@
     return d.getDate() + ' ' + MAANDE[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  // Hierdie funksie kyk of 'n dag 'n klasdag is: Maandag tot Vrydag,
-  // en nie 'n dag in die toekoms nie.
-  /** Klasdae: weeksdae (Ma–Vr) wat nie in die toekoms lê nie. */
+  // Hierdie funksie kyk of 'n dag 'n klasdag vir die gekose klas is: die
+  // klas se weekdag (bv. elke Maandag) as ons dit ken, anders Maandag tot
+  // Vrydag; en nooit 'n dag in die toekoms nie.
+  /** Klasdae: die klas se weekdag (of Ma–Vr) wat nie in die toekoms lê nie. */
   function isKlasdag(d) {
+    if (d.getTime() > vandag.getTime()) return false;
     var dag = d.getDay(); // 0 = Sondag ... 6 = Saterdag
-    return dag >= 1 && dag <= 5 && d.getTime() <= vandag.getTime();
+    if (currentKlas && currentKlas.dagIndeks !== null) {
+      return dag === currentKlas.dagIndeks;
+    }
+    return dag >= 1 && dag <= 5;
   }
 
   /**
    * Deterministiese bywoning vir 'n klas op 'n datum.
-   * Return null as daar geen klasdata is nie (naweek / toekoms), anders
-   * { ingeskandeer: [{ student, tyd }], nieIngeskandeer: [student] }.
+   * Return null as daar geen klasdata is nie (nie 'n klasdag / toekoms),
+   * anders { ingeskandeer: [{ student, tyd }], nieIngeskandeer: [student] }.
    */
   // Hierdie funksie werk uit watter studente op 'n dag ingeskandeer het
-  // en watter nie (voorbeeld-data, nie regte skanderings nie).
+  // en watter nie (voorbeeld-data oor die regte klasregister; nie regte
+  // skanderings nie).
   function kryBywoning(klas, datum) {
-    if (!isKlasdag(datum)) return null;
+    if (!klas || !isKlasdag(datum)) return null;
 
     var rand = mulberry32(hashString(klas.id + '|' + isoDate(datum)));
     var ingeskandeer = [];
     var nieIngeskandeer = [];
 
+    // Die klas se begintyd (bv. "8:00") bepaal die skandeertyd; anders 08:00.
+    var beginMinute = tydNaMinute(klas.begin);
+    if (beginMinute > 24 * 60) beginMinute = 8 * 60;
+
     // Vir elke student: omtrent 78% kans dat hy/sy ingeskandeer het,
-    // met 'n tyd kort na 08:00; anders gaan die student op die afwesig-lys.
-    klas.studente.forEach(function (s) {
+    // met 'n tyd kort na die klas se begintyd; anders op die afwesig-lys.
+    studenteVir(klas).forEach(function (s) {
       if (rand() < 0.78) {
-        var minuut = Math.floor(rand() * 25);
+        var totaalMinute = beginMinute + Math.floor(rand() * 25);
+        var uur = Math.floor(totaalMinute / 60) % 24;
+        var minuut = totaalMinute % 60;
         ingeskandeer.push({
           student: s,
-          tyd: '08:' + (minuut < 10 ? '0' : '') + minuut
+          tyd: (uur < 10 ? '0' : '') + uur + ':' + (minuut < 10 ? '0' : '') + minuut
         });
       } else {
         nieIngeskandeer.push(s);
@@ -228,6 +328,7 @@
 
   // Hierdie funksie wys 'n boodskap in 'n lys as daar niks is om te wys nie.
   function renderLeegBoodskap(container, boodskap) {
+    if (!container) return;
     container.innerHTML = '';
     var empty = document.createElement('div');
     empty.className = 'user-card';
@@ -254,29 +355,47 @@
     }
   }
 
+  // Hierdie funksie wys strepies en 'n boodskap in die bywoningspaneel
+  // (geen klas gekies, geen klasdag, of 'n fout).
+  function renderDashboardLeeg(boodskap) {
+    if (dashInCount) dashInCount.textContent = 'Ingeskandeer: --';
+    if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: --';
+    renderPercentCard(null);
+    renderLeegBoodskap(dashInList, boodskap);
+    renderLeegBoodskap(dashOutList, boodskap);
+  }
+
   // Hierdie funksie teken die bywoningspaneel: die tellings bo-aan en die
   // twee lyste (ingeskandeer / nie ingeskandeer) vir die gekose dag.
   function renderDashboard() {
     // Teken eers die bywoning-grafiek oor (dit volg die gekose klas en dag).
     renderStats();
 
+    if (dashDatum) dashDatum.textContent = formatDatum(selectedDate);
+
+    // Geen klas gekies (nog besig om te laai, of niks toegewys nie).
+    if (!currentKlas) {
+      if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: --';
+      renderDashboardLeeg('Geen klas gekies nie.');
+      return;
+    }
+
+    var studente = studenteVir(currentKlas);
     var bywoning = kryBywoning(currentKlas, selectedDate);
 
-    if (dashDatum) dashDatum.textContent = formatDatum(selectedDate);
-    if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: ' + currentKlas.studente.length;
+    if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: ' + studente.length;
 
-    // Geen klasdata (naweek of toekoms): wys strepies en 'n boodskap.
+    // Geen klasdata (nie 'n klasdag nie, of toekoms): strepies en boodskap.
     if (!bywoning) {
-      if (dashInCount) dashInCount.textContent = 'Ingeskandeer: --';
-      if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: --';
-      renderPercentCard(null);
-      if (dashInList) renderLeegBoodskap(dashInList, 'Geen klasdata vir hierdie dag nie.');
-      if (dashOutList) renderLeegBoodskap(dashOutList, 'Geen klasdata vir hierdie dag nie.');
+      var rede = currentKlas.dag
+        ? 'Hierdie klas is op ' + currentKlas.dag + '. Geen klasdata vir hierdie dag nie.'
+        : 'Geen klasdata vir hierdie dag nie.';
+      renderDashboardLeeg(rede);
       return;
     }
 
     // Werk uit watter persentasie van die klas ingeskandeer het.
-    var totaal = currentKlas.studente.length;
+    var totaal = studente.length;
     var persent = totaal > 0 ? Math.round((bywoning.ingeskandeer.length / totaal) * 100) : 0;
 
     if (dashInCount) dashInCount.textContent = 'Ingeskandeer: ' + bywoning.ingeskandeer.length;
@@ -286,7 +405,9 @@
     // Vul die lys van studente wat wel ingeskandeer het.
     if (dashInList) {
       dashInList.innerHTML = '';
-      if (bywoning.ingeskandeer.length === 0) {
+      if (totaal === 0) {
+        renderLeegBoodskap(dashInList, 'Geen studente is aan hierdie klas gekoppel nie.');
+      } else if (bywoning.ingeskandeer.length === 0) {
         renderLeegBoodskap(dashInList, 'Geen studente ingeskandeer nie.');
       } else {
         bywoning.ingeskandeer.forEach(function (b) {
@@ -300,7 +421,9 @@
     // Vul die lys van studente wat nie ingeskandeer het nie.
     if (dashOutList) {
       dashOutList.innerHTML = '';
-      if (bywoning.nieIngeskandeer.length === 0) {
+      if (totaal === 0) {
+        renderLeegBoodskap(dashOutList, 'Geen studente is aan hierdie klas gekoppel nie.');
+      } else if (bywoning.nieIngeskandeer.length === 0) {
         renderLeegBoodskap(dashOutList, 'Alle studente is ingeskandeer.');
       } else {
         bywoning.nieIngeskandeer.forEach(function (s) {
@@ -312,13 +435,14 @@
 
   // ----- Statistieke: bywoning oor die laaste klasdae -----
 
-  // Hierdie funksie gee die laaste `n` klasdae (Ma–Vr, tot en met vandag),
-  // met die oudste dag eerste.
+  // Hierdie funksie gee die laaste `n` klasdae (tot en met vandag),
+  // met die oudste dag eerste. 'n Klas wat een keer per week plaasvind
+  // se laaste 10 klasdae strek dus oor 10 weke.
   function kryLaasteKlasdae(n) {
     var dae = [];
     var d = new Date(vandag);
     var guard = 0; // keer dat die lus ooit vashaak
-    var maxGuard = n * 2 + 10; // genoeg kalenderdae vir n weeksdae (plus naweke)
+    var maxGuard = n * 7 + 14; // genoeg kalenderdae vir n weeklikse klasdae
     while (dae.length < n && guard < maxGuard) {
       if (isKlasdag(d)) dae.unshift(new Date(d));
       d.setDate(d.getDate() - 1);
@@ -335,8 +459,14 @@
   function renderStats() {
     if (!window.MoonStats || !statChart) return;
 
+    if (!currentKlas) {
+      MoonStats.renderColumns(statChart, { items: [], selectedIndex: -1 });
+      if (statAvg) statAvg.textContent = '';
+      return;
+    }
+
     var dae = kryLaasteKlasdae(10);
-    var totaal = currentKlas.studente.length;
+    var totaal = studenteVir(currentKlas).length;
     var som = 0;
 
     var items = dae.map(function (d) {
@@ -393,7 +523,7 @@
       var byw = kryBywoning(klas, d);
       if (!byw) return;
       var was_in = byw.ingeskandeer.some(function (b) {
-        return b.student.nommer === student.nommer;
+        return b.student.id === student.id;
       });
       if (was_in) bygewoon++; else gemis++;
     });
@@ -409,7 +539,7 @@
   function renderStudentStats() {
     if (!studentCard) return;
 
-    if (!selectedStudent) {
+    if (!selectedStudent || !currentKlas) {
       studentCard.hidden = true;
       return;
     }
@@ -420,7 +550,7 @@
     if (studentTitel) {
       studentTitel.textContent = 'Studentbywoning — ' +
         selectedStudent.naam + ' ' + selectedStudent.van +
-        ' (' + currentKlas.id + ')';
+        ' (' + currentKlas.kode + ')';
     }
 
     if (window.MoonStats && studentSplit) {
@@ -444,13 +574,13 @@
   // Hierdie funksie kies 'n student (of ontkies met 'n tweede klik) en
   // werk die uitgeligte kaartjie in die klasregister by.
   function selectStudent(student) {
-    var selfde = selectedStudent && selectedStudent.nommer === student.nommer;
+    var selfde = selectedStudent && selectedStudent.id === student.id;
     selectedStudent = selfde ? null : student;
 
     if (rosterList) {
       rosterList.querySelectorAll('.user-card').forEach(function (row) {
         row.classList.toggle('user-card--gekies',
-          !!selectedStudent && row.dataset.nommer === selectedStudent.nommer);
+          !!selectedStudent && row.dataset.id === String(selectedStudent.id));
       });
     }
     renderStudentStats();
@@ -520,20 +650,35 @@
   }
 
   // ----- Klasregister (regterpaneel-lys) -----
-  // Hierdie funksie wys die volle klaslys van die gekose klas. Elke kaartjie
-  // is klikbaar: kies 'n student om sy/haar bywoningstatistieke links te sien.
+  // Hierdie funksie wys die volle klasregister van die gekose klas. Elke
+  // kaartjie is klikbaar: kies 'n student om sy/haar bywoningstatistieke
+  // links te sien.
   function renderRoster() {
     if (!rosterList) return;
     rosterList.innerHTML = '';
-    currentKlas.studente.forEach(function (s) {
+
+    if (!currentKlas) {
+      renderLeegBoodskap(rosterList, 'Geen klas gekies nie.');
+      return;
+    }
+
+    var studente = studenteVir(currentKlas);
+    if (studente.length === 0) {
+      renderLeegBoodskap(rosterList,
+        'Geen studente is aan hierdie klas gekoppel nie. ' +
+        'Vra die administrateur om groepe of studente aan die module toe te wys.');
+      return;
+    }
+
+    studente.forEach(function (s) {
       var card = createStudentCard(s, s.nommer);
       card.classList.add('user-card--klikbaar');
-      card.dataset.nommer = s.nommer;
+      card.dataset.id = String(s.id);
       card.setAttribute('role', 'button');
       card.setAttribute('tabindex', '0');
       card.setAttribute('aria-label',
         'Wys bywoningstatistieke vir ' + s.naam + ' ' + s.van);
-      if (selectedStudent && selectedStudent.nommer === s.nommer) {
+      if (selectedStudent && selectedStudent.id === s.id) {
         card.classList.add('user-card--gekies');
       }
       card.addEventListener('click', function () { selectStudent(s); });
@@ -563,15 +708,54 @@
   }
 
   // ----- Klas dropdown -----
-  // Hierdie funksie vul die "Kies Klas" keuselys met al die klasse.
-  function populateKlasSelect() {
+  // Hierdie funksie vul die "Kies Klas" keuselys met al die gelaaide klasse
+  // (of 'n enkele gedeaktiveerde boodskap as daar niks is nie).
+  function populateKlasSelect(boodskap) {
     if (!klasSelect) return;
     klasSelect.innerHTML = '';
-    MOCK_KLASSE.forEach(function (k) {
+
+    if (klasse.length === 0) {
+      var leeg = document.createElement('option');
+      leeg.value = '';
+      leeg.textContent = boodskap || 'Geen klasse toegewys nie';
+      leeg.disabled = true;
+      leeg.selected = true;
+      klasSelect.appendChild(leeg);
+      klasSelect.disabled = true;
+      return;
+    }
+
+    klasSelect.disabled = false;
+    klasse.forEach(function (k) {
       var opt = document.createElement('option');
       opt.value = k.id;
-      opt.textContent = k.naam;
+      opt.textContent = k.label;
+      if (k.moduleNaam) opt.title = k.moduleNaam;
       klasSelect.appendChild(opt);
+    });
+    if (currentKlas) klasSelect.value = currentKlas.id;
+  }
+
+  // Hierdie funksie maak 'n klas die huidige een, laai sy klasregister van
+  // die bediener en teken dan alles oor. As die gebruiker intussen 'n ander
+  // klas kies, word die ou antwoord geïgnoreer.
+  function kiesKlas(klas) {
+    currentKlas = klas;
+    // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
+    selectedStudent = null;
+    renderStudentStats();
+    renderKalender(); // klasdae hang van die klas se weekdag af
+    renderDashboard();
+    renderLeegBoodskap(rosterList, 'Laai klasregister...');
+
+    return laaiStudente(klas).then(function () {
+      if (currentKlas !== klas) return;
+      renderDashboard();
+      renderRoster();
+    }).catch(function (err) {
+      if (currentKlas !== klas) return;
+      renderDashboardLeeg('Kon nie die klasregister laai nie.');
+      renderLeegBoodskap(rosterList, 'Kon nie die klasregister laai nie: ' + err.message);
     });
   }
 
@@ -579,15 +763,10 @@
   // As die gebruiker 'n ander klas kies, wys die nuwe klas se data.
   if (klasSelect) {
     klasSelect.addEventListener('change', function () {
-      var gekies = MOCK_KLASSE.filter(function (k) {
+      var gekies = klasse.filter(function (k) {
         return k.id === klasSelect.value;
       })[0];
-      if (gekies) currentKlas = gekies;
-      // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
-      selectedStudent = null;
-      renderStudentStats();
-      renderDashboard();
-      renderRoster();
+      if (gekies) kiesKlas(gekies);
     });
   }
 
@@ -628,11 +807,30 @@
   });
 
   // ----- Bootstrap -----
-  // Sodra die bladsy klaar gelaai het, word alles die eerste keer geteken.
+  // Sodra die bladsy klaar gelaai het, teken ons die leë raamwerk, laai dan
+  // die klasse van die bediener en kies die eerste een.
   document.addEventListener('DOMContentLoaded', function () {
-    populateKlasSelect();
     renderKalender();
     renderDashboard();
-    renderRoster();
+    populateKlasSelect('Laai klasse...');
+    renderLeegBoodskap(rosterList, 'Laai klasse...');
+
+    laaiKlasse().then(function (lys) {
+      klasse = lys;
+      populateKlasSelect();
+      if (klasse.length === 0) {
+        renderDashboardLeeg('Geen klasse is aan jou toegewys nie.');
+        renderLeegBoodskap(rosterList,
+          'Geen klasse is aan jou toegewys nie. ' +
+          'Vra die administrateur om modules aan jou toe te wys.');
+        return;
+      }
+      return kiesKlas(klasse[0]);
+    }).catch(function (err) {
+      klasse = [];
+      populateKlasSelect('Kon nie klasse laai nie');
+      renderDashboardLeeg('Kon nie klasse laai nie.');
+      renderLeegBoodskap(rosterList, 'Kon nie klasse laai nie: ' + err.message);
+    });
   });
 })();

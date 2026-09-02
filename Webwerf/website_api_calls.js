@@ -9,6 +9,9 @@
  *   - baseUrl
  *   - fetchKampusse()
  *   - createKlas()
+ *   - rooster-helpers: getCurrentUserId(), fetchModules(), fetchGroepe(),
+ *     fetchRoosterKlasse(), fetchPersoneelRooster(), fetchStudentRooster(),
+ *     fetchKlasStudente(), create-/assign-toewysings, importKlasseCsv()
  */
 
 (function () {
@@ -589,6 +592,211 @@
       const r = await apiRequest('/instellings/' + encodeURIComponent(sleutel), {
         method: 'PUT',
         body: JSON.stringify(data),
+      });
+      return r.body;
+    },
+
+    // =====================================================================
+    //  ROOSTER (klasse / modules / groepe) — routers/klasse.py, prefix /rooster
+    // =====================================================================
+
+    /**
+     * Lees die aangemelde gebruiker se Gebruiker_ID uit die JWT ("sub").
+     * Gee null terug as daar geen (geldige) token is nie.
+     */
+    // Hierdie funksie lees die gebruiker se ID uit die gestoorde aanmeldbewys,
+    // sodat bladsye soos My Klasse weet wie se rooster om te vra.
+    getCurrentUserId: function () {
+      const token = localStorage.getItem('access_token');
+      if (!token) return null;
+      try {
+        const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+        const payload = JSON.parse(atob(padded));
+        const id = parseInt(payload.sub, 10);
+        return Number.isFinite(id) ? id : null;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    /**
+     * GET /rooster/modules  (slegs Admin)
+     * Alle modules: [{ Module_ID, MOD_Kode, MOD_Naam }]
+     */
+    fetchModules: async function () {
+      const r = await apiRequest('/rooster/modules', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/groepe  (slegs Admin)
+     * Alle groepe: [{ Groep_ID, GRO_Naam }]
+     */
+    fetchGroepe: async function () {
+      const r = await apiRequest('/rooster/groepe', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/klasse  (slegs Admin)
+     * Alle klassessies: [{ Klas_ID, Module_ID, MOD_Kode, MOD_Naam,
+     *                      KLA_Lokaal, KLA_Dag, KLA_Begin_Tyd, KLA_Eind_Tyd }]
+     * (Nie te verwar met fetch van /klasse in lokasie.py, wat lokale lys.)
+     */
+    fetchRoosterKlasse: async function () {
+      const r = await apiRequest('/rooster/klasse', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/modules  (slegs Admin)
+     * data: { MOD_Kode, MOD_Naam? }
+     */
+    createModule: async function (data) {
+      const r = await apiRequest('/rooster/modules', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/groepe  (slegs Admin)
+     * data: { GRO_Naam }
+     */
+    createGroep: async function (data) {
+      const r = await apiRequest('/rooster/groepe', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/klasse  (slegs Admin)
+     * data: { Module_ID, KLA_Lokaal?, KLA_Dag?, KLA_Begin_Tyd?, KLA_Eind_Tyd? }
+     */
+    createRoosterKlas: async function (data) {
+      const r = await apiRequest('/rooster/klasse', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/klasse/{klasId}/groepe  (slegs Admin)
+     * Koppel 'n groep aan 'n klassessie.
+     */
+    assignGroepToKlas: async function (klasId, groepId) {
+      const r = await apiRequest('/rooster/klasse/' + encodeURIComponent(klasId) + '/groepe', {
+        method: 'POST',
+        body: JSON.stringify({ Groep_ID: groepId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/studente/{userId}/groepe  (slegs Admin)
+     */
+    assignStudentGroep: async function (userId, groepId) {
+      const r = await apiRequest('/rooster/studente/' + encodeURIComponent(userId) + '/groepe', {
+        method: 'POST',
+        body: JSON.stringify({ Groep_ID: groepId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/studente/{userId}/modules  (slegs Admin)
+     */
+    assignStudentModule: async function (userId, moduleId) {
+      const r = await apiRequest('/rooster/studente/' + encodeURIComponent(userId) + '/modules', {
+        method: 'POST',
+        body: JSON.stringify({ Module_ID: moduleId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/studente/{userId}/klasse  (slegs Admin)
+     */
+    assignStudentKlas: async function (userId, klasId) {
+      const r = await apiRequest('/rooster/studente/' + encodeURIComponent(userId) + '/klasse', {
+        method: 'POST',
+        body: JSON.stringify({ Klas_ID: klasId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/personeel/{userId}/modules  (slegs Admin)
+     */
+    assignPersoneelModule: async function (userId, moduleId) {
+      const r = await apiRequest('/rooster/personeel/' + encodeURIComponent(userId) + '/modules', {
+        method: 'POST',
+        body: JSON.stringify({ Module_ID: moduleId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/personeel/{userId}/klasse  (slegs Admin)
+     */
+    assignPersoneelKlas: async function (userId, klasId) {
+      const r = await apiRequest('/rooster/personeel/' + encodeURIComponent(userId) + '/klasse', {
+        method: 'POST',
+        body: JSON.stringify({ Klas_ID: klasId }),
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/studente/{userId}/rooster
+     * Student se eie rooster (of Admin vir enige student).
+     */
+    fetchStudentRooster: async function (userId) {
+      const r = await apiRequest('/rooster/studente/' + encodeURIComponent(userId) + '/rooster', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/personeel/{userId}/rooster
+     * Personeellid se eie rooster (of Admin vir enige personeellid):
+     * alle klassessies (module-toewysing + direkte toewysing, gededupeer).
+     */
+    fetchPersoneelRooster: async function (userId) {
+      const r = await apiRequest('/rooster/personeel/' + encodeURIComponent(userId) + '/rooster', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/klasse/{klasId}/studente
+     * Klasregister: [{ Gebruiker_ID, GEB_Naam, GEB_Van, STU_Nommer }].
+     * Personeel net vir klasse op hul eie rooster; Admin vir enige klas.
+     */
+    fetchKlasStudente: async function (klasId) {
+      const r = await apiRequest('/rooster/klasse/' + encodeURIComponent(klasId) + '/studente', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/klasse/import  (slegs Admin)
+     * Laai 'n Lantiv-uitvoer-CSV op; skep modules, groepe en klasse.
+     */
+    importKlasseCsv: async function (file) {
+      const formData = new FormData();
+      formData.append('l\u00eaer', file);
+      const r = await apiRequest('/rooster/klasse/import', {
+        method: 'POST',
+        body: formData,
       });
       return r.body;
     },

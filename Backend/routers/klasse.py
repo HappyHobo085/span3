@@ -178,6 +178,71 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     return resultaat
 
 
+def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
+    """Studente wat 'n spesifieke klas moet bywoon (gededupeer uit 3 bronne).
+
+    Spieëlbeeld van resolver_student_rooster: groep-lidmaatskap via
+    Klas_Groep -> Student_Groep, module-inskrywing via Student_Module op die
+    klas se module, en direkte toewysing via Student_Klas.
+    """
+    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
+    if klas is None:
+        return []
+
+    gebruiker_ids: set[int] = set()
+
+    # 1. Groep-gebaseer: Klas_Groep -> Student_Groep
+    groep_ids = [
+        g[0]
+        for g in db.query(models.Klas_Groep.Groep_ID)
+        .filter(models.Klas_Groep.Klas_ID == klas_id)
+        .all()
+    ]
+    if groep_ids:
+        for (gid,) in (
+            db.query(models.Student_Groep.Gebruiker_ID)
+            .filter(models.Student_Groep.Groep_ID.in_(groep_ids))
+            .all()
+        ):
+            gebruiker_ids.add(gid)
+
+    # 2. Module-inskrywing: Student_Module op die klas se module
+    for (gid,) in (
+        db.query(models.Student_Module.Gebruiker_ID)
+        .filter(models.Student_Module.Module_ID == klas.Module_ID)
+        .all()
+    ):
+        gebruiker_ids.add(gid)
+
+    # 3. Direkte toewysing: Student_Klas
+    for (gid,) in (
+        db.query(models.Student_Klas.Gebruiker_ID)
+        .filter(models.Student_Klas.Klas_ID == klas_id)
+        .all()
+    ):
+        gebruiker_ids.add(gid)
+
+    if not gebruiker_ids:
+        return []
+
+    rye = (
+        db.query(models.Gebruikers, models.Student)
+        .outerjoin(models.Student, models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID)
+        .filter(models.Gebruikers.Gebruiker_ID.in_(gebruiker_ids))
+        .order_by(models.Gebruikers.GEB_Van, models.Gebruikers.GEB_Naam)
+        .all()
+    )
+    return [
+        {
+            "Gebruiker_ID": gebruiker.Gebruiker_ID,
+            "GEB_Naam": gebruiker.GEB_Naam,
+            "GEB_Van": gebruiker.GEB_Van,
+            "STU_Nommer": student.STU_Nommer if student else None,
+        }
+        for gebruiker, student in rye
+    ]
+
+
 # --- ADMIN LYS-EINDPUNTE ---
 
 @router.get("/modules")
@@ -454,6 +519,30 @@ def personeel_rooster(
             raise HTTPException(status_code=403, detail="Jy mag net jou eie rooster sien")
     rooster = resolver_personeel_rooster(db, gebruiker_id)
     return schemas.APIResponse(sukses=True, data=rooster)
+
+
+@router.get("/klasse/{klas_id}/studente")
+def klas_studente(
+    klas_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Klasregister: die studente wat hierdie klas moet bywoon.
+
+    Admin sien enige klas; personeel sien net klasse op hul eie rooster.
+    """
+    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
+    if not klas:
+        raise HTTPException(status_code=404, detail="Klas nie gevind nie")
+
+    rolle = list(getattr(request.state, "roles", []) or [])
+    if "Administrateur" not in rolle:
+        eie_rooster = resolver_personeel_rooster(db, current_user.Gebruiker_ID)
+        if not any(k["Klas_ID"] == klas_id for k in eie_rooster):
+            raise HTTPException(status_code=403, detail="Jy mag net jou eie klasse se register sien")
+
+    return schemas.APIResponse(sukses=True, data=resolver_klas_studente(db, klas_id))
 
 
 # --- CSV-INVOER (admin) ---

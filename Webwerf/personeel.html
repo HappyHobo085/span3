@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <!-- personeel.html — Die "My Klasse" bladsy vir personeel: wys klasbywoning,
-     'n kalender en die klasregister. Die logika sit in personeel.js. -->
+     'n kalender en die klasregister. Die klasse en die klasregister kom van die
+     bediener (/rooster-roetes); die logika sit in personeel.js. -->
 <!-- Kop-gedeelte: bladsy-titel, lettertipe en die styl-lêer word hier gelaai -->
 <head>
   <meta charset="UTF-8">
@@ -93,9 +94,12 @@
             onclick="window.location.href='home.html'">← Terug</button>
   </div>
 
-  <!-- Skripte: main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
+  <!-- Skripte: website_api_calls.js (praat met die bediener; eksplisiet gelaai
+       sodat MoonApi klaar bestaan wanneer personeel.js die klasse laai),
+       main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
+  <script src="website_api_calls.js?v=20260902"></script>
   <script src="main.js"></script>
   <script src="stats.js?v=20260818"></script>
-  <script src="personeel.js?v=20260818"></script>
+  <script src="personeel.js?v=20260902"></script>
 </body>
 </html>

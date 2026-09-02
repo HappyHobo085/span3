@@ -4,7 +4,12 @@ import pytest
 
 import models
 import auth
-from routers.klasse import parse_lantiv_csv, resolver_student_rooster, resolver_personeel_rooster
+from routers.klasse import (
+    parse_lantiv_csv,
+    resolver_student_rooster,
+    resolver_personeel_rooster,
+    resolver_klas_studente,
+)
 
 
 def skep_module(db, kode, naam=None):
@@ -118,6 +123,46 @@ class TestPersoneelRoosterResolusie:
         assert len(rooster) == 1  # gededupeer
         assert rooster[0]["MOD_Kode"] == "GKOMB370"
 
+
+
+class TestKlasStudenteResolusie:
+    def test_merge_groep_module_en_direk_dedupeer(self, db, maak_gebruiker):
+        via_groep = maak_gebruiker("Student")
+        via_module = maak_gebruiker("Student")
+        via_direk = maak_gebruiker("Student")
+        oral = maak_gebruiker("Student")  # via al drie bronne -> een keer
+        buitestaander = maak_gebruiker("Student")
+        module = skep_module(db, "EBREK370")
+        ander_module = skep_module(db, "EFREK370")
+        groep = skep_groep(db, "ER 2")
+        klas = skep_klas(db, module)
+        ander_klas = skep_klas(db, ander_module, dag="Dinsdag")
+        db.add(models.Klas_Groep(Klas_ID=klas.Klas_ID, Groep_ID=groep.Groep_ID))
+        db.add(models.Student_Groep(Gebruiker_ID=via_groep.Gebruiker_ID, Groep_ID=groep.Groep_ID))
+        db.add(models.Student_Module(Gebruiker_ID=via_module.Gebruiker_ID, Module_ID=module.Module_ID))
+        db.add(models.Student_Klas(Gebruiker_ID=via_direk.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        db.add(models.Student_Groep(Gebruiker_ID=oral.Gebruiker_ID, Groep_ID=groep.Groep_ID))
+        db.add(models.Student_Module(Gebruiker_ID=oral.Gebruiker_ID, Module_ID=module.Module_ID))
+        db.add(models.Student_Klas(Gebruiker_ID=oral.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        db.add(models.Student_Klas(Gebruiker_ID=buitestaander.Gebruiker_ID, Klas_ID=ander_klas.Klas_ID))
+        db.add(models.Student(Gebruiker_ID=via_groep.Gebruiker_ID, STU_Nommer="STU0001"))
+        db.flush()
+
+        studente = resolver_klas_studente(db, klas.Klas_ID)
+        ids = {s["Gebruiker_ID"] for s in studente}
+        assert ids == {
+            via_groep.Gebruiker_ID,
+            via_module.Gebruiker_ID,
+            via_direk.Gebruiker_ID,
+            oral.Gebruiker_ID,
+        }
+        assert len(studente) == 4  # gededupeer
+        nommers = {s["Gebruiker_ID"]: s["STU_Nommer"] for s in studente}
+        assert nommers[via_groep.Gebruiker_ID] == "STU0001"
+        assert nommers[via_module.Gebruiker_ID] is None
+
+    def test_onbekende_klas_gee_leeg(self, db):
+        assert resolver_klas_studente(db, 9999) == []
 
 class TestCSVInvoerIdempotensie:
     def test_herinvoer_skep_nie_duplikate_nie(self, db):
@@ -291,3 +336,54 @@ class TestRoosterHTTPAuth:
             headers=self._headers(student_a),
         )
         assert resp.status_code == 403
+
+    def test_personeel_sien_eie_klas_register_200(self, http_db):
+        personeel = self._maak_gebruiker(http_db, "Personeel", 1)
+        student = self._maak_gebruiker(http_db, "Student", 2)
+        module = skep_module(http_db, "EBREK370")
+        klas = skep_klas(http_db, module)
+        http_db.add(models.Personeel_Module(Gebruiker_ID=personeel.Gebruiker_ID, Module_ID=module.Module_ID))
+        http_db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        http_db.flush()
+
+        client = self._bou_client(http_db)
+        resp = client.get(
+            f"/rooster/klasse/{klas.Klas_ID}/studente",
+            headers=self._headers(personeel),
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert [s["Gebruiker_ID"] for s in data] == [student.Gebruiker_ID]
+
+    def test_personeel_sien_ander_klas_register_403(self, http_db):
+        personeel = self._maak_gebruiker(http_db, "Personeel", 1)
+        module = skep_module(http_db, "EBREK370")
+        klas = skep_klas(http_db, module)
+        http_db.flush()
+
+        client = self._bou_client(http_db)
+        resp = client.get(
+            f"/rooster/klasse/{klas.Klas_ID}/studente",
+            headers=self._headers(personeel),
+        )
+        assert resp.status_code == 403
+
+    def test_admin_sien_enige_klas_register_200(self, http_db):
+        admin = self._maak_gebruiker(http_db, "Administrateur", 1)
+        module = skep_module(http_db, "EBREK370")
+        klas = skep_klas(http_db, module)
+        http_db.flush()
+
+        client = self._bou_client(http_db)
+        resp = client.get(
+            f"/rooster/klasse/{klas.Klas_ID}/studente",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"] == []
+
+    def test_klas_register_onbekende_klas_404(self, http_db):
+        admin = self._maak_gebruiker(http_db, "Administrateur", 1)
+        client = self._bou_client(http_db)
+        resp = client.get("/rooster/klasse/9999/studente", headers=self._headers(admin))
+        assert resp.status_code == 404
