@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 
@@ -169,14 +169,14 @@ def _build_dependency_graph() -> Dict[str, Set[str]]:
     Returns: {table_name: set_of_dependent_table_names} (edges: parent -> child)
     """
     graph: Dict[str, Set[str]] = {table.name: set() for table in models.Base.metadata.tables.values()}
-    
+
     for table in models.Base.metadata.tables.values():
         for fk in table.foreign_keys:
             parent_table = fk.column.table.name
             child_table = table.name
             if parent_table != child_table:
                 graph[parent_table].add(child_table)
-    
+
     return graph
 
 
@@ -189,11 +189,11 @@ def _topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
     for node, deps in graph.items():
         for dep in deps:
             in_degree[dep] = in_degree.get(dep, 0) + 1
-    
+
     # Queue nodes with no dependencies
     queue = [node for node, deg in in_degree.items() if deg == 0]
     result = []
-    
+
     while queue:
         node = queue.pop(0)
         result.append(node)
@@ -201,12 +201,12 @@ def _topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
             in_degree[dep] -= 1
             if in_degree[dep] == 0:
                 queue.append(dep)
-    
+
     # If there are cycles, append remaining nodes (shouldn't happen with FKs)
     if len(result) < len(graph):
         remaining = [n for n in graph if n not in result]
         result.extend(remaining)
-    
+
     return result
 
 
@@ -220,7 +220,7 @@ def _create_export_zip(db: Session) -> io.BytesIO:
     """Create a ZIP file containing CSV exports of all tables."""
     zip_buffer = io.BytesIO()
     table_order = _get_import_order()  # Same order for consistency
-    
+
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         for table_name in table_order:
             try:
@@ -230,7 +230,7 @@ def _create_export_zip(db: Session) -> io.BytesIO:
             except Exception as e:
                 # Include error info in a separate file
                 zip_file.writestr(f"{table_name}.error.txt", f"Export failed: {str(e)}")
-    
+
     zip_buffer.seek(0)
     return zip_buffer
 
@@ -238,16 +238,16 @@ def _create_export_zip(db: Session) -> io.BytesIO:
 def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> Dict[str, Any]:
     """Import all tables from a ZIP file containing CSVs."""
     import_mode = _normalize_import_mode(mode)
-    results = {"imported": {}, "errors": {}, "skipped": []}
-    
+    results: Dict[str, Any] = {"imported": {}, "errors": {}, "skipped": [], "details": {}}
+
     # Read ZIP into memory
     zip_content = zip_file.file.read()
     zip_buffer = io.BytesIO(zip_content)
-    
+
     with zipfile.ZipFile(zip_buffer, 'r') as zf:
         # Get list of CSV files in ZIP
         csv_files = [name for name in zf.namelist() if name.endswith('.csv')]
-        
+
         # Map filename to table name (handle nested paths by using basename)
         table_files = {}
         for csv_name in csv_files:
@@ -259,35 +259,47 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
                 table_files[table_name] = csv_name
             except ValueError:
                 results["skipped"].append(f"{csv_name}: unknown table")
-        
+
         # Import in dependency order
         import_order = _get_import_order()
         for table_name in import_order:
             if table_name not in table_files:
                 continue
-            
+
             csv_name = table_files[table_name]
             # Use a savepoint for each table so failures don't abort the whole transaction
             savepoint = db.begin_nested()
             try:
                 with zf.open(csv_name) as csv_file:
                     csv_text = csv_file.read().decode('utf-8-sig')
-                
+
                 rows = parse_csv_rows(table_name, csv_text)
                 if not rows:
                     results["skipped"].append(f"{table_name}: no rows")
                     savepoint.rollback()
                     continue
-                
-                inserted = _insert_csv_rows(db, table_name, rows, mode=import_mode)
+
+                verslag: Dict[str, Any] = {}
+                inserted = _insert_csv_rows(db, table_name, rows, mode=import_mode, report=verslag)
                 results["imported"][table_name] = inserted
+                results["details"][table_name] = verslag
                 savepoint.commit()
-                
+
             except Exception as e:
                 savepoint.rollback()
-                results["errors"][table_name] = str(e)
+                results["errors"][table_name] = _fout_boodskap(e)
                 # Continue with other tables
-    
+
+    # Die savepoints hierbo leef binne die sessie se buitenste transaksie;
+    # sonder hierdie commit rol alles terug wanneer die sessie toemaak en
+    # rapporteer die eindpunt 'n invoer wat nooit gestoor is nie.
+    db.commit()
+
+    # Rye is met eksplisiete ID's ingevoeg; skuif die Postgres-sequences
+    # verby die hoogste ID sodat nuwe rekords nie op "duplicate key" val nie.
+    _reset_sequences(db, list(results["imported"].keys()))
+    db.commit()
+
     return results
 
 
@@ -355,10 +367,85 @@ def _fill_missing_student_numbers(rows: List[Dict[str, Any]], db: Session) -> Li
     return filled
 
 
-def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]], mode: str = 'merge') -> int:
-    """Insert rows using PostgreSQL ON CONFLICT for upsert, with per-row savepoints for constraint violations."""
+def _fout_boodskap(exc: Exception) -> str:
+    """Kort, leesbare foutboodskap: die databasis se eie boodskap as daar een is."""
+    orig = getattr(exc, "orig", None)
+    boodskap = str(orig) if orig is not None else str(exc)
+    return boodskap.strip().splitlines()[0][:300] if boodskap.strip() else exc.__class__.__name__
+
+
+def _hash_plain_passwords(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Hash GEB_Wagwoord-waardes wat nie reeds bcrypt-hashes is nie.
+
+    Uitgevoerde CSV's dra bcrypt-hashes ($2a$/$2b$/$2y$) en gaan onveranderd
+    deur; handgeskrewe CSV's dra gewone teks, wat gehash moet word anders kan
+    die ingevoerde gebruikers nooit aanmeld nie.
+    """
+    hashed_rows = []
+    for row in rows:
+        row = dict(row)
+        wagwoord = row.get('GEB_Wagwoord')
+        if wagwoord and not str(wagwoord).startswith(('$2a$', '$2b$', '$2y$')):
+            row['GEB_Wagwoord'] = auth.get_password_hash(str(wagwoord))
+        hashed_rows.append(row)
+    return hashed_rows
+
+
+def _reset_sequences(db: Session, table_names: Iterable[str]) -> None:
+    """Skuif elke tabel se ID-sequence verby die hoogste ingevoerde ID (slegs Postgres).
+
+    CSV-rye word met hul oorspronklike ID's ingevoeg, wat die SERIAL-sequence
+    nie vorentoe skuif nie; die volgende "Skep Gebruiker" sou dan met
+    'duplicate key' misluk.
+    """
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != 'postgresql':
+        return
+    for table_name in table_names:
+        try:
+            table = _resolve_table(table_name)
+        except ValueError:
+            continue
+        pk_columns = [column for column in table.columns if column.primary_key]
+        if len(pk_columns) != 1:
+            continue  # saamgestelde sleutels het geen sequence nie
+        column = pk_columns[0]
+        if getattr(column.type, "python_type", None) is not int:
+            continue
+        savepoint = db.begin_nested()
+        try:
+            db.execute(
+                text(
+                    'SELECT setval(pg_get_serial_sequence(:tabel, :kolom), '
+                    f'COALESCE((SELECT MAX("{column.name}") FROM "{table.name}"), 0) + 1, false)'
+                ),
+                {"tabel": table.name, "kolom": column.name},
+            )
+            savepoint.commit()
+        except Exception:
+            savepoint.rollback()
+
+
+def _insert_csv_rows(
+    db: Session,
+    table_name: str,
+    rows: Iterable[Dict[str, Any]],
+    mode: str = 'merge',
+    report: Optional[Dict[str, Any]] = None,
+) -> int:
+    """Insert rows using PostgreSQL ON CONFLICT for upsert, with per-row savepoints for constraint violations.
+
+    As `report` gegee word, word dit gevul met: rye (totaal), nuut, bestaan_reeds
+    (ON CONFLICT DO NOTHING het niks ingevoeg nie), misluk, ontbrekende_velde,
+    en foute (die eerste paar ry-foutboodskappe) — sodat 'n invoer wat "0"
+    rapporteer verduidelik kan word.
+    """
     from sqlalchemy.dialects.postgresql import insert as pg_insert
-    
+
+    if report is None:
+        report = {}
+    report.update({"rye": 0, "nuut": 0, "bestaan_reeds": 0, "misluk": 0, "ontbrekende_velde": 0, "foute": []})
+
     table = _resolve_table(table_name)
     mode_name = _normalize_import_mode(mode)
     pk_columns = [column for column in table.columns if column.primary_key]
@@ -369,7 +456,12 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
     if table_name == 'student':
         rows = _fill_missing_student_numbers(list(rows), db)
 
-    for row in rows:
+    # Hash plaintext passwords for user table imports
+    if table_name == 'gebruikers':
+        rows = _hash_plain_passwords(list(rows))
+
+    for ry_nr, row in enumerate(rows, start=2):  # ry 1 is die kop-ry
+        report["rye"] += 1
         sanitized = _normalize_insert_row(table, row)
 
         insertable = {
@@ -389,9 +481,13 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
         ]
 
         if missing_required:
+            report["ontbrekende_velde"] += 1
+            if len(report["foute"]) < 5:
+                report["foute"].append(f"Ry {ry_nr}: ontbrekende verpligte velde {', '.join(missing_required)}")
             continue
 
         if not insertable:
+            report["ontbrekende_velde"] += 1
             continue
 
         # Use a savepoint per row so constraint violations don't abort the table transaction
@@ -411,6 +507,8 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
                 result = db.execute(stmt)
                 if result.rowcount > 0:
                     inserted_count += 1
+                else:
+                    report["bestaan_reeds"] += 1
             elif conflict_columns and mode_name == 'merge':
                 # Insert only if not exists: INSERT ... ON CONFLICT DO NOTHING
                 stmt = pg_insert(table).values(**insertable)
@@ -418,17 +516,23 @@ def _insert_csv_rows(db: Session, table_name: str, rows: Iterable[Dict[str, Any]
                 result = db.execute(stmt)
                 if result.rowcount > 0:
                     inserted_count += 1
+                else:
+                    report["bestaan_reeds"] += 1
             else:
                 # No primary key or no conflict handling - just insert
                 db.execute(table.insert(), [insertable])
                 inserted_count += 1
-            
-            row_savepoint.commit()
-        except Exception:
-            row_savepoint.rollback()
-            # Skip rows that violate constraints (check constraints, FK, etc.)
-            pass
 
+            row_savepoint.commit()
+        except Exception as exc:
+            row_savepoint.rollback()
+            # Rye wat beperkings oortree (unieke sleutels, FK's, checks) word
+            # oorgeslaan, maar getel en die eerste paar redes word gerapporteer.
+            report["misluk"] += 1
+            if len(report["foute"]) < 5:
+                report["foute"].append(f"Ry {ry_nr}: {_fout_boodskap(exc)}")
+
+    report["nuut"] = inserted_count
     return inserted_count
 
 
@@ -501,11 +605,19 @@ async def import_table_csv(
             detail="No CSV rows were found to import.",
         )
 
-    inserted = _insert_csv_rows(db, table, rows, mode=import_mode)
+    verslag: Dict[str, Any] = {}
+    inserted = _insert_csv_rows(db, table, rows, mode=import_mode, report=verslag)
+    db.commit()
+    _reset_sequences(db, [_resolve_table(table).name])
     db.commit()
     return schemas.APIResponse(
         sukses=True,
-        data={"table": _resolve_table(table).name, "imported_rows": inserted, "mode": import_mode},
+        data={
+            "table": _resolve_table(table).name,
+            "imported_rows": inserted,
+            "mode": import_mode,
+            "details": verslag,
+        },
     )
 
 
@@ -521,7 +633,7 @@ def export_all_tables_csv(
         zip_buffer = _create_export_zip(db)
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename = f"moon_export_{timestamp}.zip"
-        
+
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
@@ -544,7 +656,7 @@ async def import_all_tables_csv(
     _csv_enabled: bool = Depends(check_csv_import_export_enabled),
 ):
     """Import all tables from a ZIP file containing CSVs.
-    
+
     The ZIP should contain CSV files named after tables (e.g., 'kampus.csv', 'gebruikers.csv').
     Tables are imported in dependency order (parents before children) to respect FK constraints.
     """
@@ -553,7 +665,7 @@ async def import_all_tables_csv(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please upload a ZIP file containing CSV files.",
         )
-    
+
     try:
         results = _import_from_zip(db, file, mode)
         return schemas.APIResponse(sukses=True, data=results)

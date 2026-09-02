@@ -324,7 +324,7 @@
       if (csvFileGroup) csvFileGroup.style.display = source === 'file' ? '' : 'none';
       if (csvTextGroup) csvTextGroup.style.display = source === 'text' ? '' : 'none';
     }
-    
+
     // Update file picker accept attribute and label
     if (csvFilePicker) {
       if (isImportAll) {
@@ -375,19 +375,19 @@
     // Handle import-all
     if (action === 'import-all') {
       const file = csvFilePicker && csvFilePicker.files && csvFilePicker.files[0] ? csvFilePicker.files[0] : null;
-      
+
       if (!file) {
         showCsvStatus('Kies asseblief ' + 'n ZIP-lêer om op te laai.', 'error');
         return;
       }
-      
+
       if (!file.name.endsWith('.zip')) {
         showCsvStatus('Die lêer moet ' + 'n ZIP-lêer wees.', 'error');
         return;
       }
 
       showCsvStatus('Besig om alle tabelle in te voer...', 'success');
-      
+
       const result = await window.MoonApi.importAllCsvTables(file, mode);
       if (!result || !result.ok) {
         const errMsg = (result && result.body && (result.body.fout || result.body.detail)) || 'CSV-oplaai het misluk.';
@@ -401,21 +401,10 @@
       const imported = data.imported || {};
       const errors = data.errors || {};
       const skipped = data.skipped || [];
+      const details = data.details || {};
 
-      let msg = 'Invoer voltooi. ';
-      const importedCount = Object.keys(imported).length;
-      if (importedCount > 0) {
-        msg += importedCount + ' tabelle ingevoer: ' + Object.entries(imported).map(([t, c]) => t + ' (' + c + ')').join(', ') + '. ';
-      }
-      if (Object.keys(errors).length > 0) {
-        msg += 'Foute: ' + Object.entries(errors).map(([t, e]) => t + ': ' + e).join('; ') + '. ';
-      }
-      if (skipped.length > 0) {
-        msg += 'Oorgeslaan: ' + skipped.join(', ') + '. ';
-      }
-      
-      showCsvStatus(msg, Object.keys(errors).length > 0 ? 'error' : 'success');
-      
+      showCsvStatus(bouInvoerOpsomming(imported, errors, skipped, details), Object.keys(errors).length > 0 ? 'error' : 'success');
+
       // Refresh all admin page data
       await Promise.all([
         loadKampusDropdown(),
@@ -480,8 +469,49 @@
     if (csvFilePicker) csvFilePicker.value = '';
     if (csvTextArea) csvTextArea.value = '';
 
-    showCsvStatus('CSV is suksesvol opgelaai na ' + table + ' in ' + mode + '-modus.', 'success');
+    const enkel = result.body && result.body.data ? result.body.data : {};
+    const enkelDetails = {};
+    if (enkel.details) enkelDetails[table] = enkel.details;
+    showCsvStatus(
+      'CSV opgelaai na ' + table + ' in ' + mode + '-modus. ' +
+      bouInvoerOpsomming({ [table]: enkel.imported_rows || 0 }, {}, [], enkelDetails),
+      'success'
+    );
     await reloadAdminPageDataAfterImport(table);
+  }
+
+  // Hierdie funksie bou die opsomming van 'n CSV/ZIP-invoer: per tabel hoeveel
+  // rye nuut is, reeds bestaan het of misluk het, plus die eerste ry-foute,
+  // sodat 'n invoer wat "0" wys verduidelik word.
+  function bouInvoerOpsomming(imported, errors, skipped, details) {
+    let totNuut = 0, totBestaan = 0, totMisluk = 0;
+    const dele = [];
+    const ryFoute = [];
+
+    Object.keys(imported).forEach(function (t) {
+      const d = details[t] || {};
+      const nuut = d.nuut !== undefined ? d.nuut : (imported[t] || 0);
+      const bestaan = d.bestaan_reeds || 0;
+      const misluk = (d.misluk || 0) + (d.ontbrekende_velde || 0);
+      totNuut += nuut; totBestaan += bestaan; totMisluk += misluk;
+      let deel = t + ': ' + nuut + ' nuut';
+      if (bestaan) deel += ', ' + bestaan + ' bestaan reeds';
+      if (misluk) deel += ', ' + misluk + ' misluk';
+      dele.push(deel);
+      (d.foute || []).slice(0, 2).forEach(function (f) { ryFoute.push(t + ' — ' + f); });
+    });
+
+    let msg = 'Invoer voltooi: ' + totNuut + ' nuwe rye';
+    if (totBestaan) msg += ', ' + totBestaan + ' het reeds bestaan';
+    if (totMisluk) msg += ', ' + totMisluk + ' misluk';
+    msg += '. ';
+    if (dele.length) msg += dele.join('; ') + '. ';
+    if (Object.keys(errors).length > 0) {
+      msg += 'Tabelfoute: ' + Object.entries(errors).map(function (e) { return e[0] + ': ' + e[1]; }).join('; ') + '. ';
+    }
+    if (ryFoute.length) msg += 'Ry-foute: ' + ryFoute.slice(0, 4).join(' | ') + '. ';
+    if (skipped.length > 0) msg += 'Oorgeslaan: ' + skipped.join(', ') + '. ';
+    return msg;
   }
 
   // =====================================================================
