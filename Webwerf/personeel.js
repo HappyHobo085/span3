@@ -1,6 +1,6 @@
 // personeel.js — Hierdie lêer beheer die "My Klasse" bladsy vir personeel.
 // Dit laai die personeellid se regte klasse (rooster) van die bediener,
-// wys watter studente op 'n gekose dag by die klas ingeskandeer het,
+// wys die module se studente met hul bywoning as vorderingsbalke,
 // 'n kalender om die dag te kies, en die volle klasregister met 'n soekblokkie.
 /**
  * personeel.js — logic for personeel.html only.
@@ -25,7 +25,7 @@
  *     verskaf hasRole())
  *   - styles.css (.kalender* klasse)
  *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
- *     dash-total-count, dash-percent-count, dash-in-list, dash-out-list,
+ *     dash-total-count, dash-percent-count,
  *     module-student-list, module-student-titel, module-student-caption,
  *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list,
  *     dash-student-card, student-stats-titel, stat-student-split,
@@ -51,8 +51,6 @@
   var dashOutCount = document.getElementById('dash-out-count');
   var dashTotalCount = document.getElementById('dash-total-count');
   var dashPercentCount = document.getElementById('dash-percent-count');
-  var dashInList = document.getElementById('dash-in-list');
-  var dashOutList = document.getElementById('dash-out-list');
   var kalTitle = document.getElementById('kal-title');
   var kalPrev = document.getElementById('kal-prev');
   var kalNext = document.getElementById('kal-next');
@@ -371,18 +369,16 @@
     }
   }
 
-  // Hierdie funksie wys strepies en 'n boodskap in die bywoningspaneel
-  // (geen klas gekies, geen klasdag, of 'n fout).
-  function renderDashboardLeeg(boodskap) {
+  // Hierdie funksie wys strepies op die KPI-teëls (geen klas gekies, geen
+  // klasdag, of 'n fout). Die studentelys wys self die rede.
+  function renderDashboardLeeg() {
     if (dashInCount) dashInCount.textContent = '--';
     if (dashOutCount) dashOutCount.textContent = '--';
     renderPercentCard(null);
-    renderLeegBoodskap(dashInList, boodskap);
-    renderLeegBoodskap(dashOutList, boodskap);
   }
 
-  // Hierdie funksie teken die bywoningspaneel: die tellings bo-aan en die
-  // twee lyste (ingeskandeer / nie ingeskandeer) vir die gekose dag.
+  // Hierdie funksie teken die bywoningspaneel: die KPI-teëls bo-aan, die
+  // grafiek en die studentelys met vorderingsbalke vir die gekose dag.
   function renderDashboard() {
     // Teken eers die bywoning-grafiek oor (dit volg die gekose klas en dag).
     renderStats();
@@ -392,7 +388,7 @@
     // Geen klas gekies (nog besig om te laai, of niks toegewys nie).
     if (!currentKlas) {
       if (dashTotalCount) dashTotalCount.textContent = '--';
-      renderDashboardLeeg('Geen klas gekies nie.');
+      renderDashboardLeeg();
       renderModuleStudente();
       return;
     }
@@ -408,7 +404,7 @@
 
     // Geen klasdata (naweek of toekoms): strepies en boodskap.
     if (!bywoning) {
-      renderDashboardLeeg('Geen klasdata vir hierdie dag nie.');
+      renderDashboardLeeg();
       return;
     }
 
@@ -419,36 +415,6 @@
     if (dashInCount) dashInCount.textContent = String(bywoning.ingeskandeer.length);
     if (dashOutCount) dashOutCount.textContent = String(bywoning.nieIngeskandeer.length);
     renderPercentCard(persent);
-
-    // Vul die lys van studente wat wel ingeskandeer het.
-    if (dashInList) {
-      dashInList.innerHTML = '';
-      if (totaal === 0) {
-        renderLeegBoodskap(dashInList, 'Geen studente is aan hierdie klas gekoppel nie.');
-      } else if (bywoning.ingeskandeer.length === 0) {
-        renderLeegBoodskap(dashInList, 'Geen studente ingeskandeer nie.');
-      } else {
-        bywoning.ingeskandeer.forEach(function (b) {
-          dashInList.appendChild(
-            createStudentCard(b.student, b.student.nommer + ' · ingeskandeer ' + b.tyd)
-          );
-        });
-      }
-    }
-
-    // Vul die lys van studente wat nie ingeskandeer het nie.
-    if (dashOutList) {
-      dashOutList.innerHTML = '';
-      if (totaal === 0) {
-        renderLeegBoodskap(dashOutList, 'Geen studente is aan hierdie klas gekoppel nie.');
-      } else if (bywoning.nieIngeskandeer.length === 0) {
-        renderLeegBoodskap(dashOutList, 'Alle studente is ingeskandeer.');
-      } else {
-        bywoning.nieIngeskandeer.forEach(function (s) {
-          dashOutList.appendChild(createStudentCard(s, s.nommer));
-        });
-      }
-    }
   }
 
   // ----- Statistieke: bywoning oor die laaste klasdae -----
@@ -901,7 +867,7 @@
       renderRoster();
     }).catch(function (err) {
       if (currentKlas !== klas) return;
-      renderDashboardLeeg('Kon nie die klasregister laai nie.');
+      renderDashboardLeeg();
       renderLeegBoodskap(rosterList, 'Kon nie die klasregister laai nie: ' + err.message);
     });
   }
@@ -966,7 +932,7 @@
       klasse = lys;
       populateKlasSelect();
       if (klasse.length === 0) {
-        renderDashboardLeeg('Geen klasse is aan jou toegewys nie.');
+        renderDashboardLeeg();
         renderLeegBoodskap(rosterList,
           'Geen klasse is aan jou toegewys nie. ' +
           'Vra die administrateur om modules aan jou toe te wys.');
@@ -976,7 +942,7 @@
     }).catch(function (err) {
       klasse = [];
       populateKlasSelect('Kon nie klasse laai nie');
-      renderDashboardLeeg('Kon nie klasse laai nie.');
+      renderDashboardLeeg();
       renderLeegBoodskap(rosterList, 'Kon nie klasse laai nie: ' + err.message);
     });
   });
