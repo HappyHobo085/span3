@@ -16,7 +16,9 @@
  * NOG DEMO: die bywoning (ingeskandeer / nie ingeskandeer) word steeds
  * deterministies gegenereer (seed = klas + datum) oor die REGTE klasregister,
  * omdat skanderings nog nie aan 'n klassessie gekoppel word nie. Dieselfde
- * dag wys dus altyd dieselfde resultaat, sonder enige stoor.
+ * dag wys dus altyd dieselfde resultaat, sonder enige stoor. Elke weeksdag
+ * (Ma–Vr) tel as 'n klasdag, soos in die oorspronklike ontwerp, sodat die
+ * linkerpaneel se lyste en grafiek altyd gevul is.
  *
  * Depends on:
  *   - main.js (login gate + Personeel gate; laai website_api_calls.js → MoonApi;
@@ -250,17 +252,14 @@
     return d.getDate() + ' ' + MAANDE[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  // Hierdie funksie kyk of 'n dag 'n klasdag vir die gekose klas is: die
-  // klas se weekdag (bv. elke Maandag) as ons dit ken, anders Maandag tot
-  // Vrydag; en nooit 'n dag in die toekoms nie.
-  /** Klasdae: die klas se weekdag (of Ma–Vr) wat nie in die toekoms lê nie. */
+  // Hierdie funksie kyk of 'n dag 'n klasdag is: Maandag tot Vrydag,
+  // en nie 'n dag in die toekoms nie. (Soos die oorspronklike ontwerp: elke
+  // weeksdag wys bywoning, ongeag op watter dag die klas op die rooster staan,
+  // sodat die linkerpaneel altyd data het om te wys.)
+  /** Klasdae: weeksdae (Ma–Vr) wat nie in die toekoms lê nie. */
   function isKlasdag(d) {
-    if (d.getTime() > vandag.getTime()) return false;
     var dag = d.getDay(); // 0 = Sondag ... 6 = Saterdag
-    if (currentKlas && currentKlas.dagIndeks !== null) {
-      return dag === currentKlas.dagIndeks;
-    }
-    return dag >= 1 && dag <= 5;
+    return dag >= 1 && dag <= 5 && d.getTime() <= vandag.getTime();
   }
 
   /**
@@ -386,12 +385,9 @@
     // Die KPI-teëls wys net die syfers — die etikette staan reeds op die teëls.
     if (dashTotalCount) dashTotalCount.textContent = String(studente.length);
 
-    // Geen klasdata (nie 'n klasdag nie, of toekoms): strepies en boodskap.
+    // Geen klasdata (naweek of toekoms): strepies en boodskap.
     if (!bywoning) {
-      var rede = currentKlas.dag
-        ? 'Hierdie klas is op ' + currentKlas.dag + '. Geen klasdata vir hierdie dag nie.'
-        : 'Geen klasdata vir hierdie dag nie.';
-      renderDashboardLeeg(rede);
+      renderDashboardLeeg('Geen klasdata vir hierdie dag nie.');
       return;
     }
 
@@ -436,14 +432,13 @@
 
   // ----- Statistieke: bywoning oor die laaste klasdae -----
 
-  // Hierdie funksie gee die laaste `n` klasdae (tot en met vandag),
-  // met die oudste dag eerste. 'n Klas wat een keer per week plaasvind
-  // se laaste 10 klasdae strek dus oor 10 weke.
+  // Hierdie funksie gee die laaste `n` klasdae (Ma–Vr, tot en met vandag),
+  // met die oudste dag eerste.
   function kryLaasteKlasdae(n) {
     var dae = [];
     var d = new Date(vandag);
     var guard = 0; // keer dat die lus ooit vashaak
-    var maxGuard = n * 7 + 14; // genoeg kalenderdae vir n weeklikse klasdae
+    var maxGuard = n * 2 + 10; // genoeg kalenderdae vir n weeksdae (plus naweke)
     while (dae.length < n && guard < maxGuard) {
       if (isKlasdag(d)) dae.unshift(new Date(d));
       d.setDate(d.getDate() - 1);
@@ -745,7 +740,6 @@
     // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
     selectedStudent = null;
     renderStudentStats();
-    renderKalender(); // klasdae hang van die klas se weekdag af
     renderDashboard();
     renderLeegBoodskap(rosterList, 'Laai klasregister...');
 
