@@ -153,19 +153,19 @@
 
     // As die bediener nie geantwoord het nie, wys strepies in plaas van getalle
     if (!json || !json.sukses || !json.data) {
-      if (inCount) inCount.textContent = 'Studente ingeteken: --';
-      if (outCount) outCount.textContent = 'Studente uitgeteken: --';
-      if (kapasiteitCard) kapasiteitCard.textContent = 'Inwoners: -- / --';
+      if (inCount) inCount.textContent = '--';
+      if (outCount) outCount.textContent = '--';
+      if (kapasiteitCard) kapasiteitCard.textContent = '--';
       return;
     }
 
     var data = json.data;
 
-    // Werk die telling-blokkies en die inwoner-kaart op die paneelbord by
-    if (inCount) inCount.textContent = 'Studente ingeteken: ' + data.scanned_in_count;
-    if (outCount) outCount.textContent = 'Studente uitgeteken: ' + data.scanned_out_count;
+    // Die KPI-teëls wys net die syfers — die etikette staan reeds op die teëls.
+    if (inCount) inCount.textContent = data.scanned_in_count;
+    if (outCount) outCount.textContent = data.scanned_out_count;
     if (kapasiteitCard) {
-      kapasiteitCard.textContent = 'Inwoners: ' + data.inwoner_count + ' / ' + data.KOS_Kapasiteit;
+      kapasiteitCard.textContent = data.inwoner_count + ' / ' + data.KOS_Kapasiteit;
     }
 
     // Werk die twee naamlyste (ingeteken en uitgeteken) op die paneelbord by

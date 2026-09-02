@@ -1,43 +1,59 @@
-<!-- kampus.html — Die Kampus-bladsy. Wys wie tans op die kampus is (studente en personeel) en lyste wat mens kan deursoek. -->
+<!-- kampus.html — Die Kampus-bladsy. Wys wie tans op die kampus is (studente en personeel), statistieke en soekbare lyste. -->
 <!DOCTYPE html>
-<html lang="en">
-<!-- Kop van die bladsy: titel, lettertipes en stylblad -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — Kampus</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Shared header placeholder -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoofdeel van die bladsy -->
-  <main class="page" id="home-page">
+  <main class="page" id="kampus-page">
     <!-- Boonste beheer: keuselys om 'n kampus te kies -->
     <section class="top-controls space-between" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="data-select">Kies Kampus</label>
-        <select class="glass-select" id="data-select" name="data-select" style="width:220px">
-          <option value="Leriba">Leriba</option>
-          <option value="Peerl">Peerl</option>
-          <option value="Gerhard">Gerhard</option>
-        </select>
+        <select class="glass-select" id="data-select" name="data-select" style="width:220px"></select>
       </div>
+      <span class="live-chip"><span class="live-dot" aria-hidden="true"></span>Regstreeks · elke 5s</span>
     </section>
 
-    <!-- Twee panele langs mekaar: paneelbord links, lyste regs -->
+    <!-- KPI-teëls: die vier tellings van die gekose kampus -->
+    <div class="stat-grid" aria-label="Kampus tellings">
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
+        <div class="stat-label">Studente ingeteken</div>
+        <div class="stat-value" id="dash-student-in-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Studente uitgeteken</div>
+        <div class="stat-value" id="dash-student-out-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-2)"></span>
+        <div class="stat-label">Personeel ingeteken</div>
+        <div class="stat-value" id="dash-personeel-in-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Personeel uitgeteken</div>
+        <div class="stat-value" id="dash-personeel-out-count">--</div>
+      </div>
+    </div>
+
+    <!-- Twee panele langs mekaar: statistieke links, soekbare lyste regs -->
     <section class="panels">
-      <!-- Linkerkant: paneelbord met tellings en naamlyste (word deur kampus.js ingevul) -->
-      <article class="glass-card panel" aria-label="Dashboard">
-        <h2>Dashboard</h2>
+      <article class="glass-card panel" aria-label="Statistieke">
+        <h2>Statistieke</h2>
         <div class="dashboard-grid">
-          <!-- Statistieke: in/uit-verdelings en regstreekse tendens (stats.js) -->
           <div class="card wide viz-block" id="dash-stats-card">
-            <strong>Statistieke</strong>
             <div id="stat-studente-split"></div>
             <div id="stat-personeel-split"></div>
             <div>
@@ -45,61 +61,55 @@
               <div id="stat-trend" class="viz-chart"></div>
             </div>
           </div>
-          <!-- Lys van studente wat tans op die kampus is -->
-          <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente tans op kampus</strong>
-            <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
-          <!-- Lys van studente wat nie op die kampus is nie -->
-          <div class="card wide" id="dash-student-out-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente nie op kampus</strong>
-            <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
-          <!-- Lys van personeel wat tans op die kampus is -->
-          <div class="card wide" id="dash-personeel-in-card" style="flex-direction:column;align-items:stretch">
-            <strong>Personeel tans op kampus</strong>
-            <div id="dash-personeel-in-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
-          <!-- Lys van personeel wat nie op die kampus is nie -->
-          <div class="card wide" id="dash-personeel-out-card" style="flex-direction:column;align-items:stretch">
-            <strong>Personeel nie op kampus</strong>
-            <div id="dash-personeel-out-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
         </div>
       </article>
 
-      <!-- Regterkant: lyste van studente en personeel met soekblokkies -->
-      <article class="glass-card panel" aria-label="Lys">
-        <h2>Lys</h2>
+      <article class="glass-card panel" aria-label="Lyste">
+        <h2>Almal op die stelsel</h2>
         <!-- Soekblokkie vir die studente-lys -->
         <div class="list-search">
           <input class="glass-input" type="search" id="list-search"
-                 aria-label="Soek in Lys" placeholder="Soek student...">
+                 aria-label="Soek student" placeholder="Soek student...">
         </div>
-        <!-- Hier word al die studente se kaartjies gewys -->
         <div id="data-list" class="admin-list" aria-label="Student lys"></div>
 
         <!-- Soekblokkie vir die personeel-lys -->
         <div class="list-search list-search--spaced">
           <input class="glass-input" type="search" id="bottom-search"
-                 aria-label="Soek dosent" placeholder="Soek dosent...">
+                 aria-label="Soek personeel" placeholder="Soek personeel...">
         </div>
-        <!-- Hier word al die personeel se kaartjies gewys -->
         <div id="personeel-list" class="admin-list" aria-label="Personeel lys"></div>
       </article>
     </section>
+
+    <!-- Wie is nou in en uit: vier naamlyste -->
+    <section class="glass-card panel" aria-label="Op die kampus nou">
+      <h2>Op die kampus nou</h2>
+      <div class="dashboard-grid">
+        <div class="card" id="dash-student-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Studente tans op kampus</strong>
+          <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+        <div class="card" id="dash-student-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Studente nie op kampus</strong>
+          <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+        <div class="card" id="dash-personeel-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Personeel tans op kampus</strong>
+          <div id="dash-personeel-in-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+        <div class="card" id="dash-personeel-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Personeel nie op kampus</strong>
+          <div id="dash-personeel-out-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <!-- Onderste balk met 'n knoppie om terug te gaan na die tuisblad -->
-  <div class="action-bar">
-    <button class="btn-outline" type="button"
-            onclick="window.location.href='home.html'">← Terug</button>
-  </div>
-
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
-  <script src="website_api_calls.js"></script>
-  <script src="main.js"></script>
-  <script src="stats.js"></script>
-  <script src="kampus.js"></script>
+  <script src="website_api_calls.js?v=20260819"></script>
+  <script src="main.js?v=20260819"></script>
+  <script src="stats.js?v=20260819"></script>
+  <script src="kampus.js?v=20260819"></script>
 </body>
 </html>

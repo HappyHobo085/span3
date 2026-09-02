@@ -1,68 +1,48 @@
 <!DOCTYPE html>
 <!--
-  events.html — Events-blad: wys die besonderhede van gebeure (events)
-  en 'n lys waarin 'n mens vir 'n student kan soek.
+  events.html — Events-blad: wys die gebeure (events) van die bediener af —
+  komende, myne of voriges — met 'n soekveld. Die logika sit in event.js.
 -->
-<html lang="en">
-<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — Events</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Shared header placeholder -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoofinhoud van die events-blad -->
-  <main class="page" id="home-page">
-    <section class="panels">
-      <!-- Paneel met die besonderhede van die gebeure -->
-      <article class="glass-card panel" aria-label="Events Details">
-        <h2>Events Details</h2>
-      </article>
+  <main class="page" id="events-page">
+    <!-- Boonste beheer: kies watter events om te sien, en soek -->
+    <section class="top-controls space-between" aria-label="Opsies">
+      <div class="control-group">
+        <label class="field-label" for="events-view">Wys</label>
+        <select class="glass-select" id="events-view" style="width:200px">
+          <option value="komende">Komende events</option>
+          <option value="vorige">Vorige events</option>
+        </select>
+      </div>
+      <div class="control-group" style="min-width:240px">
+        <label class="field-label" for="list-search">Soek</label>
+        <input class="glass-input" type="search" id="list-search"
+               aria-label="Soek event" placeholder="Soek event of plek...">
+      </div>
+    </section>
 
-      <!-- Paneel met die lys en 'n soek-veld om 'n student te vind -->
-      <article class="glass-card panel" aria-label="Lys">
-        <h2>Lys</h2>
-        <div class="list-search">
-          <input class="glass-input" type="search" id="list-search"
-                 aria-label="Soek in Lys" placeholder="Soek student...">
-        </div>
-        <ul id="data-list" class="empty-list" aria-label="Leë data lys"></ul>
-      </article>
+    <!-- Die lys van events -->
+    <section class="glass-card panel" aria-label="Events">
+      <h2 id="events-titel">Events</h2>
+      <div id="events-lys" aria-label="Events lys"></div>
     </section>
   </main>
 
-  <!-- Terug-knoppie onderaan die blad: stuur die gebruiker terug na die tuisblad -->
-  <div class="action-bar">
-    <button class="btn-outline" type="button"
-            onclick="window.location.href='home.html'">← Terug</button>
-  </div>
-
-  <!-- Skrip: laat die soek-veld werk sodat die lys gefiltreer kan word -->
-  <script>
-    // Hierdie funksie begin dadelik en maak die soek-veld reg
-    (function () {
-      const listSearch = document.getElementById('list-search');
-      const dataList   = document.getElementById('data-list');
-      // Hierdie funksie steek lys-items weg wat nie by die soekwoord pas nie
-      function applyListFilter() {
-        if (!listSearch || !dataList) return;
-        const query = listSearch.value.trim().toLowerCase();
-        dataList.querySelectorAll('li').forEach((li) => {
-          li.hidden = query !== '' && !(li.textContent || '').trim().toLowerCase().includes(query);
-        });
-      }
-      // Elke keer as die gebruiker in die soek-veld tik, word die lys weer gefiltreer
-      if (listSearch) listSearch.addEventListener('input', applyListFilter);
-    })();
-  </script>
-  <!-- Skrip: kyk of die gebruiker ingeteken is -->
-  <script src="main.js"></script>
+  <!-- Skripte: main.js (aanmelding en API) en event.js (hierdie blad se logika) -->
+  <script src="main.js?v=20260819"></script>
+  <script src="event.js?v=20260819"></script>
 </body>
 </html>

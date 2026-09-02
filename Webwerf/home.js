@@ -1,11 +1,12 @@
 // =============================================================================
-// home.js — Die Tuisblad se logika: laai al die syfers van die bediener af.
+// home.js — Die Oorsig-blad se logika: laai al die syfers van die bediener af.
 //
 // Wat dit doen, in eenvoudige woorde:
 //   - Kry die regstreekse tellings (wie is nou op kampus, toegange vandag)
 //     van GET /dashboard/live en hou dit elke 10 sekondes vars.
+//   - Bou uit daardie peiling 'n geskiedenis en teken die held-grafiek.
 //   - Tel die kampusse en koshuise (GET /kampusse/status en GET /koshuise).
-//   - Wys per kampus hoeveel mense tans ingeskandeer is.
+//   - Wys per kampus hoeveel mense tans ingeskandeer is (balk-grafiek).
 //   - Wys die komende events (GET /events?view=komende).
 //   - Wys my eie status (GET /dashboard) en die nuutste skanderings
 //     (GET /toegangslogs), en wanneer alles laas opgedateer is.
@@ -16,6 +17,12 @@
   'use strict';
 
   // ----- DOM verwysings -----
+  var heroValue = document.getElementById('hero-value');
+  var heroStu = document.getElementById('hero-stu');
+  var heroPer = document.getElementById('hero-per');
+  var heroChart = document.getElementById('hero-chart');
+  var heroKeyStu = document.getElementById('hero-key-stu');
+  var heroKeyPer = document.getElementById('hero-key-per');
   var statStudente = document.getElementById('stat-studente');
   var statPersoneel = document.getElementById('stat-personeel');
   var statToegange = document.getElementById('stat-toegange');
@@ -27,7 +34,6 @@
   var eventsTitel = document.getElementById('events-titel');
   var myStatus = document.getElementById('my-status');
   var aktiwiteitLys = document.getElementById('aktiwiteit-lys');
-  var laasOpgedateer = document.getElementById('laas-opgedateer');
 
   // Hoeveel skanderings die aktiwiteitslys hoogstens wys.
   var AKTIWITEIT_MAKS = 15;
@@ -35,6 +41,15 @@
   // Oor hoeveel sekondes die regstreekse syfers weer gaan haal word.
   var VERFRIS_SEKONDES = 10;
   var pollTimer = null;
+
+  // Geskiedenis van die peiling vir die held-grafiek: {t, stu, per}.
+  // 90 monsters teen 10 sekondes elk is sowat 15 minute.
+  var heroHistory = [];
+  var HERO_MAKS_MONSTERS = 90;
+
+  // Die jongste kampus-tellings, sodat die balke oorgeteken kan word
+  // as die venster van grootte verander of die tema wissel.
+  var laasteKampusData = null;
 
   var MAANDE_KORT = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun',
                      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -69,14 +84,16 @@
     if (foutKaart) foutKaart.hidden = !wys;
   }
 
-  // Hierdie funksie wys wanneer die syfers laas suksesvol gelaai is.
+  // Hierdie funksie wys in die boonste balk wanneer die syfers laas
+  // suksesvol gelaai is.
   function stempelOpdatering() {
-    if (!laasOpgedateer) return;
+    var el = document.getElementById('topbar-updated');
+    if (!el) return;
     var nou = new Date();
     function pad(n) { return (n < 10 ? '0' : '') + n; }
-    laasOpgedateer.textContent = 'Laas opgedateer ' +
+    el.textContent = 'Opgedateer ' +
       pad(nou.getHours()) + ':' + pad(nou.getMinutes()) + ':' + pad(nou.getSeconds());
-    laasOpgedateer.hidden = false;
+    el.hidden = false;
   }
 
   // Hierdie funksie wys 'n boodskap in 'n lys-houer (bv. "geen data nie").
@@ -88,9 +105,41 @@
     houer.appendChild(div);
   }
 
+  // ----- Held-grafiek -----
+  // Hierdie funksie kleur die legende-sleutels en teken die area-grafiek
+  // uit die geskiedenis van die peiling.
+  function tekenHeroGrafiek() {
+    if (!window.MoonStats || !heroChart) return;
+
+    if (heroKeyStu) heroKeyStu.style.background = MoonStats.colors.series1;
+    if (heroKeyPer) heroKeyPer.style.background = MoonStats.colors.series2;
+
+    MoonStats.renderTrend(heroChart, {
+      times: heroHistory.map(function (p) { return p.t; }),
+      series: [
+        {
+          label: 'Studente',
+          color: MoonStats.colors.series1,
+          values: heroHistory.map(function (p) { return p.stu; })
+        },
+        {
+          label: 'Personeel',
+          color: MoonStats.colors.series2,
+          values: heroHistory.map(function (p) { return p.per; })
+        }
+      ],
+      height: 130,
+      fill: true
+    });
+
+    // Die held het reeds sy eie legende in die kop — haal die outomatiese een uit.
+    var outoLegende = heroChart.querySelector('.viz-legend');
+    if (outoLegende) outoLegende.remove();
+  }
+
   // ----- Regstreekse tellings (GET /dashboard/live) -----
   // Hierdie funksie kry wie nou op kampus is en hoeveel toegange daar
-  // vandag was, en sit die syfers in die boonste kaartjies.
+  // vandag was, en werk die held-strook en die KPI-teëls by.
   async function laaiLiveTellings() {
     if (!window.MoonApi) return;
 
@@ -101,9 +150,21 @@
     }
     wysFout(false);
 
-    if (statStudente) statStudente.textContent = json.data.studente_op_kampus;
-    if (statPersoneel) statPersoneel.textContent = json.data.personeel_op_kampus;
+    var stu = Number(json.data.studente_op_kampus) || 0;
+    var per = Number(json.data.personeel_op_kampus) || 0;
+
+    if (heroValue) heroValue.textContent = stu + per;
+    if (heroStu) heroStu.textContent = stu;
+    if (heroPer) heroPer.textContent = per;
+    if (statStudente) statStudente.textContent = stu;
+    if (statPersoneel) statPersoneel.textContent = per;
     if (statToegange) statToegange.textContent = json.data.toegange_vandag;
+
+    // Bêre 'n monster vir die held-grafiek en teken dit oor.
+    heroHistory.push({ t: new Date(), stu: stu, per: per });
+    if (heroHistory.length > HERO_MAKS_MONSTERS) heroHistory.shift();
+    tekenHeroGrafiek();
+
     stempelOpdatering();
   }
 
@@ -188,8 +249,8 @@
   }
 
   // ----- Onlangse aktiwiteit (GET /toegangslogs) -----
-  // Hierdie funksie wys die nuutste in- en uitskanderings oor die stelsel.
-  // Ouer bedieners stuur nie name nie — dan wys ons die ID's.
+  // Hierdie funksie wys die nuutste in- en uitskanderings oor die stelsel,
+  // elkeen met 'n IN- of UIT-plakkertjie.
   async function laaiAktiwiteit() {
     if (!window.MoonApi || !aktiwiteitLys) return;
 
@@ -213,15 +274,15 @@
     json.data.slice(0, AKTIWITEIT_MAKS).forEach(function (log) {
       var li = document.createElement('li');
 
-      var kol = document.createElement('span');
-      kol.className = 'updates-dot';
-      kol.style.background = log.Rigting === 'IN' ? 'var(--success)' : 'var(--warning)';
-      li.appendChild(kol);
+      var chip = document.createElement('span');
+      chip.className = 'feed-chip ' + (log.Rigting === 'IN' ? 'feed-chip--in' : 'feed-chip--uit');
+      chip.textContent = log.Rigting === 'IN' ? 'IN' : 'UIT';
+      li.appendChild(chip);
 
       var wie = log.Naam || ('Gebruiker #' + log.Gebruiker_ID);
       var waar = log.Lokasie || ('Lokasie #' + log.Lokasie_ID);
       var teks = document.createElement('span');
-      teks.textContent = wie + ' · ' + log.Rigting + ' by ' + waar;
+      teks.textContent = wie + ' · ' + waar;
       li.appendChild(teks);
 
       var tyd = document.createElement('span');
@@ -238,8 +299,8 @@
   }
 
   // ----- Kampusse (GET /kampusse/status) -----
-  // Hierdie funksie tel die kampusse en teken die "Nou op kampus" lys:
-  // een kaartjie per kampus met hoeveel mense tans ingeskandeer is.
+  // Hierdie funksie tel die kampusse en teken die "Nou per kampus" balke:
+  // een balk per kampus met hoeveel mense tans ingeskandeer is.
   async function laaiKampusse() {
     if (!window.MoonApi) return;
 
@@ -252,39 +313,29 @@
     }
 
     if (statKampusse) statKampusse.textContent = json.data.length;
-    if (!kampusLys) return;
+    laasteKampusData = json.data;
+    tekenKampusBalke();
+  }
 
-    kampusLys.innerHTML = '';
-    if (json.data.length === 0) {
+  // Hierdie funksie teken die per-kampus balke uit die jongste data.
+  function tekenKampusBalke() {
+    if (!kampusLys || !laasteKampusData) return;
+
+    if (laasteKampusData.length === 0) {
       wysBoodskap(kampusLys, 'Geen kampusse geregistreer nie.');
       return;
     }
 
-    json.data.forEach(function (k) {
-      var kaart = document.createElement('div');
-      kaart.className = 'user-card';
-
-      var info = document.createElement('div');
-      info.className = 'admin-user-info';
-      var naam = document.createElement('div');
-      naam.className = 'admin-user-name';
-      naam.textContent = k.KAM_Naam;
-      info.appendChild(naam);
-      if (k.KAM_Adres) {
-        var adres = document.createElement('div');
-        adres.className = 'admin-user-email';
-        adres.textContent = k.KAM_Adres;
-        info.appendChild(adres);
-      }
-      kaart.appendChild(info);
-
-      var telling = document.createElement('div');
-      telling.className = 'admin-user-name';
-      telling.style.whiteSpace = 'nowrap';
-      telling.textContent = k.scanned_in_count + ' op kampus';
-      kaart.appendChild(telling);
-
-      kampusLys.appendChild(kaart);
+    if (!window.MoonStats) return;
+    MoonStats.renderBarsH(kampusLys, {
+      color: MoonStats.colors.series1,
+      items: laasteKampusData.map(function (k) {
+        return {
+          label: k.KAM_Naam,
+          value: k.scanned_in_count,
+          detail: (k.KAM_Adres ? k.KAM_Adres + ' · ' : '') + 'tans ingeskandeer'
+        };
+      })
     });
   }
 
@@ -312,7 +363,12 @@
     }
 
     if (eventsTitel) {
-      eventsTitel.textContent = 'Komende Events (' + json.data.length + ')';
+      eventsTitel.innerHTML = '';
+      eventsTitel.appendChild(document.createTextNode('Komende Events '));
+      var telling = document.createElement('span');
+      telling.className = 'panel-count';
+      telling.textContent = String(json.data.length);
+      eventsTitel.appendChild(telling);
     }
 
     eventsLys.innerHTML = '';
@@ -375,6 +431,16 @@
       laaiAktiwiteit();
     }, VERFRIS_SEKONDES * 1000);
   }
+
+  // As die venster van grootte verander, teken die grafieke oor sodat hulle pas.
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      tekenHeroGrafiek();
+      tekenKampusBalke();
+    }, 150);
+  });
 
   document.addEventListener('DOMContentLoaded', begin);
 })();

@@ -174,7 +174,7 @@
       ['dash-student-in-count', 'dash-student-out-count',
        'dash-personeel-in-count', 'dash-personeel-out-count'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.textContent = el.textContent.replace(/: .*$/, ': --');
+        if (el) el.textContent = '--';
       });
     }
 
@@ -206,10 +206,11 @@
     var perInCount = document.getElementById('dash-personeel-in-count');
     var perOutCount = document.getElementById('dash-personeel-out-count');
 
-    if (stuInCount) stuInCount.textContent = 'Studente ingeteken: ' + studentIn.length;
-    if (stuOutCount) stuOutCount.textContent = 'Studente uitgeteken: ' + studentOut.length;
-    if (perInCount) perInCount.textContent = 'Personeel ingeteken: ' + personeelIn.length;
-    if (perOutCount) perOutCount.textContent = 'Personeel uitgeteken: ' + personeelOut.length;
+    // Die KPI-teëls wys net die syfer — die etiket staan reeds op die teël.
+    if (stuInCount) stuInCount.textContent = studentIn.length;
+    if (stuOutCount) stuOutCount.textContent = studentOut.length;
+    if (perInCount) perInCount.textContent = personeelIn.length;
+    if (perOutCount) perOutCount.textContent = personeelOut.length;
 
     // Werk die vier naamlyste op die paneelbord by
     renderUserList(document.getElementById('dash-student-in-list'), studentIn);

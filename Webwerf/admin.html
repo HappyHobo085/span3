@@ -5,98 +5,36 @@
   bestuur: nuwes skep, bestaandes wysig, en oues verwyder.
   Die logika (wat gebeur as jy klik) sit in admin.js.
 -->
-<html lang="en">
-<!-- Kop-gedeelte: die bladsy se titel, lettertipes en stylblad -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Admin toegang: slegs admins -->
-  <!-- Shared header placeholder -->
+  <!-- Admin toegang: slegs admins (hek in main.js) -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoof-inhoud van die Admin-bladsy -->
   <main class="page" id="admin-page">
-    <!-- Action bar top -->
     <!-- Aksie-knoppies bo-aan: skep 'n nuwe gebruiker, kampus, lokaal of koshuis -->
-
     <section class="top-controls space-between" aria-label="Admin aksies">
-      <div class="control-group" style="flex-direction:row;gap:10px">
+      <div class="control-group" style="flex-direction:row;gap:10px;flex-wrap:wrap">
         <button class="btn-primary" id="open-create-user-modal" type="button">+ Skep Gebruiker</button>
-        <button class="btn-outline" id="upload-csv-btn" type="button">Oplaai/Aflaai CSV</button>
+        <button class="btn-outline" id="upload-csv-btn" type="button">CSV In/Uitvoer</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none">
       </div>
-
-      <div id="csvModal" class="class-modal-overlay" aria-hidden="true">
-        <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="csv-modal-title">
-          <h3 id="csv-modal-title">CSV Import / Export</h3>
-
-          <div class="field">
-            <label for="csv-action-select">Aksie</label>
-            <select class="glass-select" id="csv-action-select">
-              <option value="import">Invoer (Import)</option>
-              <option value="export">Uitvoer (Export)</option>
-              <option value="import-all">Invoer Alles (Import All)</option>
-              <option value="export-all">Uitvoer Alles (Export All)</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="csv-mode-select">Import Modus</label>
-            <select class="glass-select" id="csv-mode-select">
-              <option value="merge">Merge</option>
-              <option value="replace">Replace</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="csv-table-select">Tabel</label>
-            <select class="glass-select" id="csv-table-select">
-              <option value="">Kies tabel...</option>
-            </select>
-          </div>
-
-          <div class="field" id="csv-source-group">
-            <label for="csv-source-select">CSV Bron</label>
-            <select class="glass-select" id="csv-source-select">
-              <option value="file">Lêer oplaai</option>
-              <option value="text">Teks plak</option>
-            </select>
-          </div>
-
-          <div class="field" id="csv-file-group">
-            <label for="csv-file-picker">CSV-lêer</label>
-            <input class="glass-input" id="csv-file-picker" type="file" accept=".csv,text/csv">
-          </div>
-
-          <div class="field" id="csv-text-group" style="display:none">
-            <label for="csv-text-area">CSV-teks</label>
-            <textarea class="glass-input" id="csv-text-area" rows="8" placeholder="Plak CSV-teks hier..."></textarea>
-          </div>
-
-          <div id="csv-status-message" class="modal-status" aria-live="polite" hidden></div>
-
-          <div class="class-modal-actions">
-            <button class="btn-outline" id="close-csv-modal" type="button">Kanselleer</button>
-            <button class="btn-primary" id="confirm-csv-action" type="button">Doen</button>
-          </div>
-        </div>
-      </div>
-      <div class="control-group" style="flex-direction:row;gap:10px">
-        <button class="btn-primary" id="open-create-kampus-modal" type="button">+ Skep Kampus</button>
-        <button class="btn-primary" id="open-create-venue-modal" type="button">+ Skep Lokaal</button>
-        <button class="btn-primary" id="open-create-koshuis-modal" type="button">+ Skep Koshuis</button>
+      <div class="control-group" style="flex-direction:row;gap:10px;flex-wrap:wrap">
+        <button class="btn-outline" id="open-create-kampus-modal" type="button">+ Kampus</button>
+        <button class="btn-outline" id="open-create-venue-modal" type="button">+ Lokaal</button>
+        <button class="btn-outline" id="open-create-koshuis-modal" type="button">+ Koshuis</button>
       </div>
     </section>
 
-    <!-- Two-column grid: Gebruikers|Lokale on row 1, Kampusse|Koshuise on row 2
-         so that Kampusse en Koshuise op dieselfde horisontale vlak lê -->
     <!-- Panele met die lyste: elke paneel het 'n soekveld en 'n lys -->
     <section class="panels">
       <!-- Paneel 1: Lys van alle gebruikers, met soek en rol-filter -->
@@ -217,17 +155,66 @@
     </section>
   </main>
 
-  <!-- Balk onderaan met 'n "Terug" knoppie na die tuisblad -->
-  <div class="action-bar">
-    <button class="btn-outline" type="button"
-            onclick="window.location.href='home.html'">← Terug</button>
-    <span></span>
-  </div>
-
   <!-- Modale vensters: hulle is weggesteek totdat 'n knoppie hulle oopmaak -->
 
+  <!-- Modal: CSV In/Uitvoer -->
+  <div id="csvModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="csv-modal-title">
+      <h3 id="csv-modal-title">CSV Import / Export</h3>
+
+      <div class="field">
+        <label for="csv-action-select">Aksie</label>
+        <select class="glass-select" id="csv-action-select">
+          <option value="import">Invoer (Import)</option>
+          <option value="export">Uitvoer (Export)</option>
+          <option value="import-all">Invoer Alles (Import All)</option>
+          <option value="export-all">Uitvoer Alles (Export All)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="csv-mode-select">Import Modus</label>
+        <select class="glass-select" id="csv-mode-select">
+          <option value="merge">Merge</option>
+          <option value="replace">Replace</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="csv-table-select">Tabel</label>
+        <select class="glass-select" id="csv-table-select">
+          <option value="">Kies tabel...</option>
+        </select>
+      </div>
+
+      <div class="field" id="csv-source-group">
+        <label for="csv-source-select">CSV Bron</label>
+        <select class="glass-select" id="csv-source-select">
+          <option value="file">Lêer oplaai</option>
+          <option value="text">Teks plak</option>
+        </select>
+      </div>
+
+      <div class="field" id="csv-file-group">
+        <label for="csv-file-picker">CSV-lêer</label>
+        <input class="glass-input" id="csv-file-picker" type="file" accept=".csv,text/csv">
+      </div>
+
+      <div class="field" id="csv-text-group" style="display:none">
+        <label for="csv-text-area">CSV-teks</label>
+        <textarea class="glass-input" id="csv-text-area" rows="8" placeholder="Plak CSV-teks hier..."></textarea>
+      </div>
+
+      <div id="csv-status-message" class="modal-status" aria-live="polite" hidden></div>
+
+      <div class="class-modal-actions">
+        <button class="btn-outline" id="close-csv-modal" type="button">Kanselleer</button>
+        <button class="btn-primary" id="confirm-csv-action" type="button">Doen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal 1: Skep Gebruiker -->
-  <!-- Venster met die vorm om 'n gebruiker te skep of te wysig -->
   <div id="createUserModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
       <h3 id="create-user-title">Skep Gebruiker</h3>
@@ -286,7 +273,6 @@
   </div>
 
   <!-- Modal 2: Bestuur Rolle -->
-  <!-- Venster om 'n gebruiker se rolle by te voeg of te verwyder -->
   <div id="roleModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
       <h3 id="role-modal-title">Bestuur Rolle — <span id="role-modal-user-name">Gebruiker</span></h3>
@@ -312,7 +298,6 @@
   </div>
 
   <!-- Modal 3: Verander Wagwoord -->
-  <!-- Venster om 'n gebruiker se wagwoord te verander -->
   <div id="passwordModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
       <h3 id="password-modal-title">Verander Wagwoord — <span id="password-modal-user-name">Gebruiker</span></h3>
@@ -332,7 +317,6 @@
   </div>
 
   <!-- Modal 4: Skep Kampus -->
-  <!-- Venster met die vorm om 'n kampus te skep of te wysig -->
   <div id="createKampusModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-kampus-title">
       <h3 id="create-kampus-title">Skep Kampus</h3>
@@ -350,7 +334,6 @@
   </div>
 
   <!-- Modal 5: Skep Koshuis -->
-  <!-- Venster met die vorm om 'n koshuis te skep of te wysig -->
   <div id="createKoshuisModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="create-koshuis-title">
       <h3 id="create-koshuis-title">Skep Koshuis</h3>
@@ -436,8 +419,7 @@
     </div>
   </div>
 
-    <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
-  <!-- Venster met die vorm om 'n lokaal (klaskamer) te skep of te wysig -->
+  <!-- Modal 6: Skep/Wysig Lokaal — toggled by admin.js via .open class -->
   <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
       <h3 id="class-modal-title">Skep nuwe klas</h3>
@@ -460,11 +442,10 @@
     </div>
   </div>
 
-  <!-- Skripte: die kode wat die bladsy laat werk -->
-  <!-- website_api_calls.js praat met die bediener, main.js is gedeelde kode,
-       en admin.js beheer hierdie spesifieke bladsy -->
+  <!-- Skripte: website_api_calls.js praat met die bediener, main.js is
+       gedeelde kode, en admin.js beheer hierdie spesifieke bladsy -->
   <script src="website_api_calls.js?v=20260902"></script>
-  <script src="main.js"></script>
+  <script src="main.js?v=20260902"></script>
   <script src="admin.js?v=20260902"></script>
 </body>
 </html>

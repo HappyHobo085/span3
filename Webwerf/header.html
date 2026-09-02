@@ -1,10 +1,39 @@
-<nav class="navbar">
-    <a href="home.html" class="navbar-logo" aria-label="MOON">MOON</a>
-    <a href="home.html">Tuis</a>
-    <a href="kampus.html">Kampus</a>
-    <a href="koshuis.html">Koshuis</a>
-    <a href="events.html">Events</a>
-    <div class="navbar-right">
+<aside class="sidebar" id="app-sidebar">
+    <a href="home.html" class="sidebar-brand" aria-label="MOON tuisblad" style="display:flex;flex-direction:column;align-items:center">
+        <img class="brand-logo" src="assets/MOON-logo.png" alt="MOON" style="display:block;width:172px;max-width:100%;height:auto;aspect-ratio:1210/500;object-fit:contain">
+        <span class="brand-sub">Kampus Bestuur</span>
+    </a>
+    <nav class="navbar" aria-label="Hoofnavigasie">
+        <a href="home.html">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 6.5 8 2l6 4.5V14H9.5v-4h-3v4H2V6.5Z"/></svg>
+            Tuis
+        </a>
+        <a href="kampus.html">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 14V5.5L8 2l6 3.5V14M5.5 14v-3h5v3M2 14h12"/></svg>
+            Kampus
+        </a>
+        <a href="koshuis.html">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 14V3.5h11V14M2.5 14h11M5 6h1.5M5 8.5h1.5M9.5 6H11M9.5 8.5H11M6.5 14v-2.5h3V14"/></svg>
+            Koshuis
+        </a>
+        <a href="events.html">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M2 6.5h12M5.5 2v2.5M10.5 2v2.5"/></svg>
+            Events
+        </a>
+    </nav>
+    <div class="sidebar-foot navbar-right">
+        <div class="sidebar-user">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span class="sidebar-user-role" id="sidebar-role">Aangemeld</span>
+        </div>
         <button class="btn-outline" type="button" onclick="logOut()">Teken Uit</button>
     </div>
-</nav>
+</aside>
+<div class="sidebar-scrim" id="sidebar-scrim" aria-hidden="true"></div>
+<header class="topbar">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="Maak navigasie oop" aria-expanded="false">☰</button>
+    <h1 class="topbar-title" id="topbar-title">MOON</h1>
+    <div class="topbar-right">
+        <span class="topbar-updated" id="topbar-updated" hidden></span>
+    </div>
+</header>

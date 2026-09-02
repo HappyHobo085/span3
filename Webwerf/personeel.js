@@ -358,8 +358,8 @@
   // Hierdie funksie wys strepies en 'n boodskap in die bywoningspaneel
   // (geen klas gekies, geen klasdag, of 'n fout).
   function renderDashboardLeeg(boodskap) {
-    if (dashInCount) dashInCount.textContent = 'Ingeskandeer: --';
-    if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: --';
+    if (dashInCount) dashInCount.textContent = '--';
+    if (dashOutCount) dashOutCount.textContent = '--';
     renderPercentCard(null);
     renderLeegBoodskap(dashInList, boodskap);
     renderLeegBoodskap(dashOutList, boodskap);
@@ -375,7 +375,7 @@
 
     // Geen klas gekies (nog besig om te laai, of niks toegewys nie).
     if (!currentKlas) {
-      if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: --';
+      if (dashTotalCount) dashTotalCount.textContent = '--';
       renderDashboardLeeg('Geen klas gekies nie.');
       return;
     }
@@ -383,7 +383,8 @@
     var studente = studenteVir(currentKlas);
     var bywoning = kryBywoning(currentKlas, selectedDate);
 
-    if (dashTotalCount) dashTotalCount.textContent = 'Totaal studente: ' + studente.length;
+    // Die KPI-teëls wys net die syfers — die etikette staan reeds op die teëls.
+    if (dashTotalCount) dashTotalCount.textContent = String(studente.length);
 
     // Geen klasdata (nie 'n klasdag nie, of toekoms): strepies en boodskap.
     if (!bywoning) {
@@ -398,8 +399,8 @@
     var totaal = studente.length;
     var persent = totaal > 0 ? Math.round((bywoning.ingeskandeer.length / totaal) * 100) : 0;
 
-    if (dashInCount) dashInCount.textContent = 'Ingeskandeer: ' + bywoning.ingeskandeer.length;
-    if (dashOutCount) dashOutCount.textContent = 'Nie ingeskandeer: ' + bywoning.nieIngeskandeer.length;
+    if (dashInCount) dashInCount.textContent = String(bywoning.ingeskandeer.length);
+    if (dashOutCount) dashOutCount.textContent = String(bywoning.nieIngeskandeer.length);
     renderPercentCard(persent);
 
     // Vul die lys van studente wat wel ingeskandeer het.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="af">
 <!-- personeel.html — Die "My Klasse" bladsy vir personeel: wys klasbywoning,
      'n kalender en die klasregister. Die klasse en die klasregister kom van die
      bediener (/rooster-roetes); die logika sit in personeel.js. -->
@@ -9,19 +9,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — My Klasse</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- ?v= keer dat die blaaier 'n ou gekasde weergawe gebruik -->
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Personeel toegang: slegs Personeel-rol (gate in main.js) -->
-  <!-- Shared header placeholder -->
+  <!-- Personeel toegang: slegs Personeel-rol (hek in main.js) -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoof-inhoud van die bladsy -->
   <main class="page" id="personeel-page">
-    <!-- Top controls: klas select links, gekose datum regs -->
     <!-- Boonste beheer: kies 'n klas en sien watter datum tans gekies is -->
     <section class="top-controls space-between" aria-label="Opsies">
       <div class="control-group">
@@ -30,23 +27,37 @@
       </div>
       <div class="control-group">
         <span class="field-label">Gekose Datum</span>
-        <span id="dash-datum" style="font-size:14px;font-weight:600">--</span>
+        <span id="dash-datum" style="font-family:var(--font-mono);font-size:14px;font-weight:600">--</span>
       </div>
     </section>
 
-    <!-- Two-panel layout soos kampus.html -->
+    <!-- KPI-teëls: die gekose dag se bywoning -->
+    <div class="stat-grid" aria-label="Bywoning tellings">
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
+        <div class="stat-label">Ingeskandeer</div>
+        <div class="stat-value" id="dash-in-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--error)"></span>
+        <div class="stat-label">Nie ingeskandeer</div>
+        <div class="stat-value" id="dash-out-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
+        <div class="stat-label">Totaal studente</div>
+        <div class="stat-value" id="dash-total-count">--</div>
+      </div>
+      <!-- Bywoning as 'n persentasie-sirkel (stats.js: renderPercentRing) -->
+      <div class="glass-card stat-card viz-ring-card" id="dash-percent-count">Bywoning: --</div>
+    </div>
+
     <!-- Twee panele langs mekaar: links die bywoning, regs die kalender en klaslys -->
     <section class="panels">
       <!-- Links: bywoning dashboard -->
       <article class="glass-card panel" aria-label="Bywoning Dashboard">
         <h2>Klas Bywoning</h2>
-        <!-- Tellings en lyste: wie het ingeskandeer en wie nie -->
         <div class="dashboard-grid">
-          <div class="card" id="dash-in-count">Ingeskandeer: --</div>
-          <div class="card" id="dash-out-count">Nie ingeskandeer: --</div>
-          <div class="card" id="dash-total-count">Totaal studente: --</div>
-          <!-- Bywoning as 'n persentasie-sirkel (stats.js: renderPercentRing) -->
-          <div class="card viz-ring-card" id="dash-percent-count">Bywoning: --</div>
           <!-- Statistieke: bywoning oor die laaste 10 klasdae (stats.js);
                klik op 'n kolom om daardie dag se bywoning te sien -->
           <div class="card wide viz-block" id="dash-stats-card">
@@ -60,6 +71,15 @@
             <strong id="student-stats-titel">Studentbywoning</strong>
             <div id="stat-student-split" class="viz-chart"></div>
             <div id="stat-student-caption" class="viz-caption"></div>
+          </div>
+          <!-- Die gekose dag se lyste: wie het ingeskandeer en wie nie -->
+          <div class="card" id="dash-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+            <strong>Ingeskandeer</strong>
+            <div id="dash-in-list" class="admin-list" style="margin-top:8px"></div>
+          </div>
+          <div class="card" id="dash-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+            <strong>Nie ingeskandeer</strong>
+            <div id="dash-out-list" class="admin-list" style="margin-top:8px"></div>
           </div>
         </div>
       </article>
@@ -78,7 +98,7 @@
         </div>
 
         <!-- Klasregister: volle klaslys met 'n soekblokkie -->
-        <h2 style="margin-top:14px">Klasregister</h2>
+        <h2 style="margin-top:16px">Klasregister</h2>
         <div class="list-search">
           <input class="glass-input" type="search" id="roster-search"
                  aria-label="Soek student" placeholder="Soek student...">
@@ -88,18 +108,12 @@
     </section>
   </main>
 
-  <!-- Knoppie onderaan om terug te gaan na die tuisblad -->
-  <div class="action-bar">
-    <button class="btn-outline" type="button"
-            onclick="window.location.href='home.html'">← Terug</button>
-  </div>
-
   <!-- Skripte: website_api_calls.js (praat met die bediener; eksplisiet gelaai
        sodat MoonApi klaar bestaan wanneer personeel.js die klasse laai),
        main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
   <script src="website_api_calls.js?v=20260902"></script>
-  <script src="main.js"></script>
-  <script src="stats.js?v=20260818"></script>
+  <script src="main.js?v=20260902"></script>
+  <script src="stats.js?v=20260902"></script>
   <script src="personeel.js?v=20260902"></script>
 </body>
 </html>

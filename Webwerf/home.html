@@ -1,77 +1,96 @@
 <!DOCTYPE html>
 <!--
-  home.html — Tuisblad: 'n regstreekse oorsig van die stelsel.
+  home.html — Oorsig: die regstreekse beheerkamer van die stelsel.
   Al die syfers kom van die bediener (home.js praat met MoonApi):
     - wie nou op kampus is (studente / personeel) en vandag se toegange
-    - hoeveel kampusse en koshuise geregistreer is
-    - per-kampus tellings en die komende events
+    - 'n regstreekse tendens-grafiek uit die 10-sekonde peiling
+    - per-kampus tellings as balke, die komende events en die nuutste skanderings
 -->
-<html lang="en">
-<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MOON — Tuis</title>
+  <title>MOON — Oorsig</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Shared header placeholder -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoofinhoud van die tuisblad -->
   <main class="page" id="home-page">
-    <!-- Opsomming-blokkies: regstreekse tellings van die bediener -->
+    <!-- Held-strook: die een syfer wat saak maak, op sy eie regstreekse grafiek -->
+    <section class="glass-card hero" aria-label="Op kampus nou">
+      <div class="hero-top">
+        <div>
+          <div class="hero-label">
+            <span class="live-dot" aria-hidden="true"></span>
+            Op kampus nou
+          </div>
+          <div class="hero-value" id="hero-value">--</div>
+          <div class="hero-sub">
+            <b id="hero-stu">--</b> studente · <b id="hero-per">--</b> personeel
+          </div>
+        </div>
+        <div class="hero-legend viz-legend" aria-hidden="true">
+          <span class="viz-key viz-key--line"><i id="hero-key-stu"></i><span>Studente</span></span>
+          <span class="viz-key viz-key--line"><i id="hero-key-per"></i><span>Personeel</span></span>
+        </div>
+      </div>
+      <div class="hero-chart" id="hero-chart"></div>
+    </section>
+
+    <!-- KPI-teëls: regstreekse tellings van die bediener -->
     <div class="stat-grid" aria-label="Opsomming">
       <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
         <div class="stat-label">Studente op kampus</div>
         <div class="stat-value" id="stat-studente">--</div>
-        <div class="stat-sub">● Regstreeks</div>
+        <div class="stat-sub"><span class="live-dot" aria-hidden="true"></span>Regstreeks</div>
       </div>
       <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
         <div class="stat-label">Personeel op kampus</div>
         <div class="stat-value" id="stat-personeel">--</div>
-        <div class="stat-sub">● Regstreeks</div>
+        <div class="stat-sub"><span class="live-dot" aria-hidden="true"></span>Regstreeks</div>
       </div>
       <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
         <div class="stat-label">Toegange vandag</div>
         <div class="stat-value" id="stat-toegange">--</div>
-        <div class="stat-sub" style="color:var(--warning)">● In en uit</div>
+        <div class="stat-sub" style="color:var(--warning)">In en uit</div>
       </div>
       <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
         <div class="stat-label">Kampusse</div>
         <div class="stat-value" id="stat-kampusse">--</div>
-        <div class="stat-sub" style="color:var(--accent-2)">● Geregistreer</div>
+        <div class="stat-sub" style="color:var(--text-muted)">Geregistreer</div>
       </div>
       <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
         <div class="stat-label">Koshuise</div>
         <div class="stat-value" id="stat-koshuise">--</div>
-        <div class="stat-sub" style="color:var(--accent-2)">● Geregistreer</div>
+        <div class="stat-sub" style="color:var(--text-muted)">Geregistreer</div>
       </div>
     </div>
-
-    <!-- Wanneer die regstreekse syfers laas suksesvol gelaai is -->
-    <div class="viz-caption" id="laas-opgedateer" style="text-align:right" hidden></div>
 
     <!-- Foutboodskap as die bediener nie bereik kan word nie -->
     <div class="glass-card" id="home-fout" style="padding:12px 16px" hidden>
       <span class="viz-empty" style="padding:0">Kon nie die regstreekse syfers van die bediener laai nie — dit word elke paar sekondes weer probeer.</span>
     </div>
 
-    <!-- Vier panele in twee kolomme:
-         links my eie status en die per-kampus tellings,
-         regs die komende events en die nuutste skanderings -->
+    <!-- Vier panele in twee kolomme -->
     <section class="panels">
       <div class="panel-column">
+        <article class="glass-card panel" aria-label="Nou op kampus">
+          <h2>Nou per kampus</h2>
+          <div id="kampus-lys" aria-label="Kampus tellings"></div>
+        </article>
         <article class="glass-card panel" aria-label="My Status">
           <h2>My Status</h2>
           <div id="my-status" aria-label="My status besonderhede"></div>
-        </article>
-        <article class="glass-card panel" aria-label="Nou op kampus">
-          <h2>Nou op kampus</h2>
-          <div id="kampus-lys" aria-label="Kampus tellings"></div>
         </article>
       </div>
       <div class="panel-column">
@@ -87,8 +106,9 @@
     </section>
   </main>
 
-  <!-- Skripte: main.js (aanmelding en API) en home.js (hierdie blad se logika) -->
-  <script src="main.js"></script>
-  <script src="home.js?v=20260818b"></script>
+  <!-- Skripte: main.js (aanmelding en API), stats.js (grafieke) en home.js -->
+  <script src="main.js?v=20260819"></script>
+  <script src="stats.js?v=20260819"></script>
+  <script src="home.js?v=20260819"></script>
 </body>
 </html>

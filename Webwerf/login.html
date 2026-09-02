@@ -3,47 +3,45 @@
   login.html — Inteken-blad: hier tik die gebruiker sy/haar e-pos en wagwoord in
   om by die MOON kampus-stelsel in te teken.
 -->
-<html lang="en">
-<!-- Kop: die blad se titel, lettertipes en styl-lêer -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — Teken In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Inteken-afdeling: die logo en die inteken-vorm -->
-  <section id="login-page" aria-label="Login page">
+  <!-- Inteken-afdeling: die maan-merk en die inteken-vorm -->
+  <section id="login-page" aria-label="Teken in">
     <div class="login-container">
-      <!-- Logo en naam van die stelsel -->
+      <!-- Merk en naam van die stelsel -->
       <div class="login-logo">
-        <img src="assets/MOON.png" alt="MOON" class="login-logo-img">
+        <img class="login-logo-img" src="assets/MOON-logo.png" alt="MOON — Altyd waaksaam, altyd veilig" style="display:block;width:100%;max-width:300px;height:auto;margin:0 auto">
         <div class="login-logo-sub">Kampus Bestuur Stelsel</div>
       </div>
       <!-- Inteken-vorm: e-pos, wagwoord en die "Teken In" knoppie -->
       <div class="glass-card login-card">
         <form id="login-form">
-          <!-- Veld vir die e-pos adres -->
           <div class="field">
             <label class="field-label" for="email">E-pos</label>
             <input class="glass-input" type="email" id="email" name="email"
-                   placeholder="Voer u e-pos in" required>
+                   placeholder="Voer u e-pos in" autocomplete="username" required>
           </div>
-          <!-- Veld vir die wagwoord -->
           <div class="field">
             <label class="field-label" for="password">Wagwoord</label>
             <input class="glass-input" type="password" id="password" name="password"
-                   placeholder="Voer u wagwoord in" required>
+                   placeholder="Voer u wagwoord in" autocomplete="current-password" required>
           </div>
           <button class="btn-primary" type="submit">Teken In</button>
         </form>
       </div>
+      <div class="login-foot">Studente gebruik die Moon app</div>
     </div>
   </section>
   <!-- Skrip: die kode wat die inteken laat werk -->
-  <script src="login.js"></script>
+  <script src="login.js?v=20260819"></script>
 </body>
 </html>

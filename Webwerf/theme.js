@@ -45,8 +45,13 @@
       var navRight = document.querySelector('.navbar-right');
       var navbar = document.querySelector('.navbar');
       if (navRight) {
-        // Langs die Teken Uit-knoppie
-        navRight.insertBefore(btn, navRight.firstChild);
+        // Tussen die rol-plakkertjie en die Teken Uit-knoppie
+        var logoutBtn = navRight.querySelector('.btn-outline');
+        if (logoutBtn) {
+          navRight.insertBefore(btn, logoutBtn);
+        } else {
+          navRight.appendChild(btn);
+        }
       } else if (navbar) {
         navbar.appendChild(btn);
       }

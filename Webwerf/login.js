@@ -35,7 +35,7 @@
       const protocol = window.location.protocol || 'http:';
       return `${protocol}//${host}:8000`;
     }
-    return 'https://humorous-endurance-production-ee64.up.railway.app';
+    return 'https://cloned-toets-production.up.railway.app';
   }
 
   const API_BASE_URL = getApiBaseUrl();

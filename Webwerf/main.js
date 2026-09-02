@@ -1,62 +1,67 @@
 // =============================================================================
 // main.js — Hierdie lêer word op al die blaaie van die webwerf gebruik.
 // Dit maak seker die gebruiker is ingeteken, laai die API-lêer,
-// en wys ekstra skakels in die balk bo net vir admin- en personeel-gebruikers.
+// bou die sybalk-navigasie en wys ekstra skakels net vir die regte rolle.
 // =============================================================================
 
 /**
  * main.js — shared bootstrap for every page that includes it (except login-only flows).
  *
- * Part 1 — API script loader (Afrikaans comments preserved below):
- *   Ensures website_api_calls.js runs after this tag so `window.MoonApi` exists for kampus.js.
- * Part 2 — Simple "gate":
- *   If the user is not marked logged in, force redirect to login.html (except when already there).
- * Part 3 — Admin gate:
- *   If the current page is admin.html and the user is not an Administrateur, block access.
- * Part 4 — Admin nav link:
- *   Dynamically adds an "Admin" link in the navbar for admin users only.
- * Part 5 — Personeel gate + nav link:
- *   personeel.html is only for the Personeel role; a "My Klasse" navbar link
- *   is added dynamically for Personeel users only, and the Kampus/Koshuis/
- *   Events links are removed from the navbar for them.
+ * Part 1 — API script loader:
+ *   Ensures website_api_calls.js runs after this tag so `window.MoonApi` exists.
+ * Part 2 — Shared shell loader:
+ *   Injects header.html (sidebar + topbar) into #site-header and wires the
+ *   mobile menu button, the active nav link and the topbar title.
+ * Part 3 — Login gate:
+ *   If the user is not marked logged in, force redirect to login.html.
+ * Part 4 — Role gates + role-based nav:
+ *   admin.html only for Administrateur; personeel.html only for Personeel;
+ *   Personeel see only Tuis + My Klasse; Students are blocked entirely.
  */
 
 // -----------------------------------------------------------------------------
-// Sessie-roete en laai van die API-laag (website_api_calls.js).
-// MoonApi word gestel in website_api_calls.js — hierdie lêer skakel dit in
-// (reg na hierdie script-tag, met async=false) indien dit nog nie gelaai is.
+// Laai die API-laag (website_api_calls.js) as dit nog nie gelaai is nie.
 // -----------------------------------------------------------------------------
-// Hierdie funksie begin dadelik en laai die API-lêer (website_api_calls.js)
-// as dit nog nie gelaai is nie, sodat die blad met die bediener kan praat.
 (function loadWebsiteApiCalls() {
-  // As die API-lêer reeds gelaai is, hoef ons niks te doen nie
-  // Already loaded (e.g. manual script tag in HTML) — nothing to do
   if (typeof window.MoonApi !== 'undefined') return;
 
-  // Kry die huidige script-element sodat ons weet waar main.js vandaan kom
   var cur = document.currentScript;
   if (!cur || !cur.src) {
-    // Foutboodskap: ons kan nie uitwerk waar die API-lêer is nie
     console.error(
       '[main.js] Kan nie website_api_calls.js outomaties laai nie (geen currentScript.src). Skakel dit handmatig in HTML.'
     );
     return;
   }
 
-  // Bou die adres van die API-lêer: dieselfde plek as main.js, net 'n ander naam
-  // Same folder as main.js, swap filename to website_api_calls.js (keep query string if any)
   var apiSrc = cur.src.replace(/main\.js(\?[^#]*)?$/i, 'website_api_calls.js$1');
   var s = document.createElement('script');
   s.src = apiSrc;
-  s.async = false; // Run API file before any following scripts (e.g. kampus.js)
+  s.async = false; // Run API file before any following scripts
   var parent = cur.parentNode;
   if (!parent) return;
   parent.insertBefore(s, cur.nextSibling);
 })();
 
 // -----------------------------------------------------------------------------
-// Shared site header loader
+// Gedeelde raamwerk (sybalk + boonste balk)
 // -----------------------------------------------------------------------------
+var PAGE_TITLES = {
+  'home.html': 'Oorsig',
+  'kampus.html': 'Kampus',
+  'koshuis.html': 'Koshuis',
+  'events.html': 'Events',
+  'admin.html': 'Admin',
+  'personeel.html': 'My Klasse'
+};
+
+// Vriendelike name vir die rol-plakkertjie in die sybalk.
+var ROL_VERTOON = {
+  'Administrateur': 'Administrateur',
+  'Personeel': 'Personeel',
+  'Kampus_Opsigter': 'Kampus Opsigter',
+  'Sekuriteit_Wag': 'Sekuriteitswag'
+};
+
 function loadSiteHeader() {
   var placeholder = document.getElementById('site-header');
   if (!placeholder) return Promise.resolve();
@@ -69,6 +74,9 @@ function loadSiteHeader() {
     .then(function (html) {
       placeholder.innerHTML = html;
       setActiveNavLink();
+      setTopbarTitle();
+      setSidebarRole();
+      wireMobileMenu();
       window.dispatchEvent(new Event('siteHeaderReady'));
     })
     .catch(function (error) {
@@ -88,31 +96,58 @@ function onSiteHeaderReady(callback) {
   });
 }
 
-function setActiveNavLink() {
-  var currentPage = window.location.pathname.split('/').pop();
-  var activeMap = {
-    'home.html': 'Tuis',
-    'kampus.html': 'Kampus',
-    'koshuis.html': 'Koshuis',
-    'events.html': 'Events',
-    'admin.html': 'Admin',
-    'personeel.html': 'My Klasse'
-  };
-  var activeText = activeMap[currentPage];
-  if (!activeText) return;
+function currentPageName() {
+  return window.location.pathname.split('/').pop() || 'home.html';
+}
 
+function setActiveNavLink() {
   var navbar = document.querySelector('.navbar');
   if (!navbar) return;
 
+  var page = currentPageName();
   navbar.querySelectorAll('a').forEach(function (link) {
-    link.classList.remove('active');
+    link.classList.toggle('active', link.getAttribute('href') === page);
   });
-
-  var link = Array.from(navbar.querySelectorAll('a')).find(function (a) {
-    return a.textContent.trim() === activeText;
-  });
-  if (link) link.classList.add('active');
 }
+
+function setTopbarTitle() {
+  var titleEl = document.getElementById('topbar-title');
+  if (!titleEl) return;
+  titleEl.textContent = PAGE_TITLES[currentPageName()] || 'MOON';
+}
+
+function setSidebarRole() {
+  var roleEl = document.getElementById('sidebar-role');
+  if (!roleEl) return;
+  var rol = localStorage.getItem('user_role') || '';
+  roleEl.textContent = ROL_VERTOON[rol] || rol || 'Aangemeld';
+}
+
+function wireMobileMenu() {
+  var btn = document.getElementById('menu-btn');
+  var sidebar = document.getElementById('app-sidebar');
+  var scrim = document.getElementById('sidebar-scrim');
+  if (!btn || !sidebar) return;
+
+  function setOpen(open) {
+    sidebar.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  btn.addEventListener('click', function () {
+    setOpen(!sidebar.classList.contains('open'));
+  });
+  if (scrim) scrim.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') setOpen(false);
+  });
+}
+
+// Ikone vir skakels wat per rol bygevoeg word.
+var NAV_ICONS = {
+  'admin.html': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 1.5 13.5 4v4c0 3.2-2.3 5.6-5.5 6.5C4.8 13.6 2.5 11.2 2.5 8V4L8 1.5Z"/><path d="M5.8 8l1.5 1.5L10.4 6.4"/></svg>',
+  'personeel.html': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 3.5h4.2c.7 0 1.3.6 1.3 1.3V14c0-.7-.6-1.3-1.3-1.3H2.5V3.5ZM13.5 3.5H9.3c-.7 0-1.3.6-1.3 1.3V14c0-.7.6-1.3 1.3-1.3h4.2V3.5Z"/></svg>'
+};
 
 function insertNavLink(href, text) {
   var navbar = document.querySelector('.navbar');
@@ -121,19 +156,14 @@ function insertNavLink(href, text) {
 
   var link = document.createElement('a');
   link.href = href;
-  link.textContent = text;
-
-  var navRight = navbar.querySelector('.navbar-right');
-  if (navRight) {
-    navbar.insertBefore(link, navRight);
-  } else {
-    navbar.appendChild(link);
-  }
+  if (NAV_ICONS[href]) link.innerHTML = NAV_ICONS[href];
+  link.appendChild(document.createTextNode(text));
+  navbar.appendChild(link);
 
   setActiveNavLink();
 }
 
-// Hierdie funksie haal 'n skakel uit die balk bo (bv. blaaie wat 'n
+// Hierdie funksie haal 'n skakel uit die sybalk (bv. blaaie wat 'n
 // sekere rol nie mag sien nie).
 function removeNavLink(href) {
   var navbar = document.querySelector('.navbar');
@@ -157,17 +187,13 @@ function hasRole(roleName) {
 }
 
 // -----------------------------------------------------------------------------
-// Login gate + Admin gate + Admin nav link
+// Login gate + rol-hekke + rol-gebaseerde navigasie
 // -----------------------------------------------------------------------------
-// Hierdie funksie begin dadelik en werk soos 'n hek: dit kyk of die gebruiker
-// ingeteken is en of hy/sy die regte rol het om die huidige blad te sien.
 (function () {
-  // Kyk in die blaaier se stoorplek of die gebruiker ingeteken is
   var isLoggedIn = localStorage.getItem('isLoggedIn');
-  var currentPage = window.location.pathname.split('/').pop();
+  var currentPage = currentPageName();
 
   // As die gebruiker nie ingeteken is nie, stuur hom/haar na die inteken-blad
-  // If not logged in, redirect to login
   if (!isLoggedIn && currentPage !== 'login.html') {
     window.location.href = 'login.html';
     return;
@@ -234,10 +260,9 @@ if (isSuwerStudent && currentPage !== 'login.html') {
   }
 })();
 
-// Hierdie funksie teken die gebruiker uit: dit vee die gestoorde inteken-inligting
-// uit en stuur die gebruiker terug na die inteken-blad.
+// Hierdie funksie teken die gebruiker uit en stuur hom/haar terug
+// na die inteken-blad.
 function logOut() {
-  // Vee al die gestoorde inteken-inligting uit die blaaier se stoorplek
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');

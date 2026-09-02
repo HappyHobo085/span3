@@ -27,16 +27,18 @@
   // Die tema-afhanklike kleure is "getters": elke keer as 'n grafiek geteken
   // word, word die huidige tema se waarde gelees.
   var COLORS = {
-    series1: '#009fd4',              // Studente — donkerder stap van --accent-2
-    series2: '#7b61ff',              // Personeel — die --accent kleur
+    // Reekskleure kom uit styles.css sodat lig en donker elkeen sy eie
+    // gevalideerde stel kry (donker: #009fd4/#7b61ff, lig: #0077a8/#6d52f4).
+    get series1() { return cssVar('--series-1', '#009fd4'); },             // Studente
+    get series2() { return cssVar('--series-2', '#7b61ff'); },             // Personeel
     get dim() { return cssVar('--viz-dim', 'rgba(255,255,255,0.20)'); },   // de-emfase
     get grid() { return cssVar('--viz-grid', 'rgba(255,255,255,0.07)'); }, // rooster-lyne
     get axis() { return cssVar('--viz-axis', 'rgba(255,255,255,0.35)'); }, // as-etikette
     get ink() { return cssVar('--viz-ink', 'rgba(255,255,255,0.85)'); },   // waarde-etikette
-    get surface() { return cssVar('--bg', '#0A1423'); },                   // blad-agtergrond
-    accent: '#7b61ff',
-    warning: '#f59e0b',
-    error: '#ef4444'
+    get surface() { return cssVar('--surface-1', '#111A2E'); },            // kaart-agtergrond
+    get accent() { return cssVar('--accent', '#8B7CFF'); },
+    get warning() { return cssVar('--warning', '#E8A33D'); },
+    get error() { return cssVar('--error', '#E5636C'); }
   };
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
@@ -368,6 +370,13 @@
     var endLabels = [];
     series.forEach(function (s) {
       var pts = s.values.map(function (v, i) { return X(i) + ',' + Y(v); }).join(' ');
+      // Opsionele sagte vul onder die lyn (vir die held-grafiek op Tuis).
+      if (opts.fill) {
+        var areaPts = pts + ' ' + X(n - 1) + ',' + Y(0) + ' ' + X(0) + ',' + Y(0);
+        svg.appendChild(svgEl('polygon', {
+          points: areaPts, fill: s.color, opacity: 0.10, stroke: 'none'
+        }));
+      }
       svg.appendChild(svgEl('polyline', {
         points: pts, fill: 'none', stroke: s.color,
         'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'
@@ -641,6 +650,98 @@
     }
   }
 
+  /**
+   * Horisontale balke — vir kategorie-tellings (bv. mense per kampus).
+   * Elke balk kry dieselfde reeks-kleur (die kategorie is die etiket, nie die
+   * kleur nie) en die waarde staan altyd as teks langs die balk.
+   * opts = { items: [{ label, value, detail }], color }
+   */
+  function renderBarsH(container, opts) {
+    if (!container) return;
+
+    var items = opts.items || [];
+    container.innerHTML = '';
+    if (items.length === 0) {
+      renderEmpty(container, 'Geen data nie.');
+      return;
+    }
+
+    var w = container.clientWidth || 320;
+    var rowH = 30, barH = 12;
+    var padL = 8, padR = 40, padT = 4, padB = 4;
+    var labelW = Math.min(150, Math.max(70, Math.round(w * 0.3)));
+    var h = padT + items.length * rowH + padB;
+    var color = opts.color || COLORS.series1;
+
+    var maxV = 1;
+    items.forEach(function (it) {
+      var v = Number(it.value) || 0;
+      if (v > maxV) maxV = v;
+    });
+
+    var svg = svgEl('svg', {
+      width: w, height: h, viewBox: '0 0 ' + w + ' ' + h,
+      'class': 'viz-svg', role: 'img',
+      'aria-label': 'Balke: ' + items.map(function (it) {
+        return it.label + ' ' + (Number(it.value) || 0);
+      }).join(', ')
+    });
+
+    var plotW = Math.max(10, w - padL - labelW - padR);
+
+    items.forEach(function (it, i) {
+      var v = Number(it.value) || 0;
+      var y = padT + i * rowH;
+      var bw = Math.round(plotW * v / maxV);
+      var by = y + (rowH - barH) / 2;
+
+      // Kategorie-etiket links, in gewone teks-kleur.
+      var lab = svgEl('text', {
+        x: padL, y: y + rowH / 2 + 3.5,
+        'font-size': 10.5, fill: COLORS.ink
+      });
+      lab.textContent = it.label;
+      svg.appendChild(lab);
+
+      // Dowwe baan agter die balk sodat die skaal sigbaar bly.
+      svg.appendChild(svgEl('rect', {
+        x: padL + labelW, y: by, width: plotW, height: barH,
+        rx: 4, fill: COLORS.grid
+      }));
+
+      if (v > 0) {
+        svg.appendChild(svgEl('rect', {
+          x: padL + labelW, y: by, width: Math.max(4, bw), height: barH,
+          rx: 4, fill: color
+        }));
+      }
+
+      // Die waarde staan altyd as teks aan die einde van die balk.
+      var val = svgEl('text', {
+        x: padL + labelW + Math.max(4, bw) + 7, y: y + rowH / 2 + 3.5,
+        'font-size': 10.5, 'font-weight': 600, fill: COLORS.ink,
+        style: 'font-variant-numeric:tabular-nums'
+      });
+      val.textContent = String(v);
+      svg.appendChild(val);
+
+      // Trefteiken oor die hele ry vir die tooltip.
+      var hit = svgEl('rect', {
+        x: 0, y: y, width: w, height: rowH, fill: 'transparent'
+      });
+      hit.addEventListener('pointermove', function (ev) {
+        showTip({
+          title: it.label,
+          rows: [{ color: color, value: String(v), label: it.detail || '' }]
+        }, ev.clientX, ev.clientY);
+      });
+      hit.addEventListener('pointerleave', hideTip);
+      svg.appendChild(hit);
+    });
+
+    container.appendChild(svg);
+  }
+
   // Maak alles beskikbaar vir die res van die webwerf.
   window.MoonStats = {
     colors: COLORS,
@@ -648,6 +749,7 @@
     renderSplitBar: renderSplitBar,
     renderTrend: renderTrend,
     renderColumns: renderColumns,
-    renderPercentRing: renderPercentRing
+    renderPercentRing: renderPercentRing,
+    renderBarsH: renderBarsH
   };
 })();

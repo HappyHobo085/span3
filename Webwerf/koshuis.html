@@ -1,39 +1,54 @@
-<!-- koshuis.html — Die Koshuis-bladsy. Wys wie tans by die koshuis in- en uitgeteken is, hoeveel inwoners daar is, en 'n soekbare lys van die koshuis se studente. -->
+<!-- koshuis.html — Die Koshuis-bladsy. Wys wie tans by die koshuis in- en uitgeteken is, die kapasiteit, en 'n soekbare lys van die koshuis se studente. -->
 <!DOCTYPE html>
-<html lang="en">
-<!-- Kop van die bladsy: titel, lettertipes en stylblad -->
+<html lang="af">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOON — Koshuis</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260818d">
-  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <script src="theme.js?v=20260819"></script>
 </head>
 <body>
-  <!-- Shared header placeholder -->
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
 
-  <!-- Hoofdeel van die bladsy -->
-  <main class="page" id="home-page">
+  <main class="page" id="koshuis-page">
     <!-- Boonste beheer: keuselys om 'n koshuis te kies (word deur koshuis.js ingevul) -->
-    <section class="top-controls" aria-label="Opsies">
+    <section class="top-controls space-between" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="data-select">Kies Koshuis</label>
         <select class="glass-select" id="data-select" name="data-select" style="width:220px"></select>
       </div>
+      <span class="live-chip"><span class="live-dot" aria-hidden="true"></span>Regstreeks · elke 5s</span>
     </section>
 
-    <!-- Twee panele langs mekaar: paneelbord links, studente-lys regs -->
+    <!-- KPI-teëls: die koshuis se tellings -->
+    <div class="stat-grid" aria-label="Koshuis tellings">
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
+        <div class="stat-label">Studente ingeteken</div>
+        <div class="stat-value" id="dash-student-in-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Studente uitgeteken</div>
+        <div class="stat-value" id="dash-student-out-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
+        <div class="stat-label">Inwoners / Kapasiteit</div>
+        <div class="stat-value" id="dash-kapasiteit-card">--</div>
+      </div>
+    </div>
+
+    <!-- Twee panele langs mekaar: statistieke links, studente-lys regs -->
     <section class="panels">
-      <!-- Linkerkant: paneelbord met tellings en naamlyste (word deur koshuis.js ingevul) -->
-      <article class="glass-card panel" aria-label="Dashboard">
-        <h2>Dashboard</h2>
+      <article class="glass-card panel" aria-label="Statistieke">
+        <h2>Statistieke</h2>
         <div class="dashboard-grid">
-          <!-- Statistieke: kapasiteit-meter, in/uit-verdeling en regstreekse tendens (stats.js) -->
           <div class="card wide viz-block" id="dash-stats-card">
-            <strong>Statistieke</strong>
             <div id="stat-kapasiteit-meter"></div>
             <div id="stat-inuit-split"></div>
             <div>
@@ -41,43 +56,39 @@
               <div id="stat-trend" class="viz-chart"></div>
             </div>
           </div>
-          <!-- Lys van studente wat tans ingeteken is -->
-          <div class="card wide" id="dash-student-in-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente tans ingeteken</strong>
-            <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
-          <!-- Lys van studente wat uitgeteken is -->
-          <div class="card wide" id="dash-student-out-card" style="flex-direction:column;align-items:stretch">
-            <strong>Studente uitgeteken</strong>
-            <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
-          </div>
         </div>
       </article>
 
-      <!-- Regterkant: soekbare lys van die koshuis se studente -->
-      <article class="glass-card panel" aria-label="Lys">
-        <h2>Lys</h2>
-        <!-- Soekblokkie vir die studente-lys -->
+      <article class="glass-card panel" aria-label="Inwoners">
+        <h2>Inwoners van hierdie koshuis</h2>
         <div class="list-search">
           <input class="glass-input" type="search" id="list-search"
-                 aria-label="Soek in Lys" placeholder="Soek student...">
+                 aria-label="Soek student" placeholder="Soek student...">
         </div>
-        <!-- Hier word die studente se kaartjies gewys -->
         <div id="data-list" class="admin-list" aria-label="Student lys"></div>
       </article>
     </section>
+
+    <!-- Wie is nou in en uit: twee naamlyste -->
+    <section class="glass-card panel" aria-label="By die koshuis nou">
+      <h2>By die koshuis nou</h2>
+      <div class="dashboard-grid">
+        <div class="card" id="dash-student-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Studente tans ingeteken</strong>
+          <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+        <div class="card" id="dash-student-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+          <strong>Studente uitgeteken</strong>
+          <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <!-- Onderste balk met 'n knoppie om terug te gaan na die tuisblad -->
-  <div class="action-bar">
-    <button class="btn-outline" type="button"
-            onclick="window.location.href='home.html'">← Terug</button>
-  </div>
-
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
-  <script src="website_api_calls.js"></script>
-  <script src="main.js"></script>
-  <script src="stats.js"></script>
-  <script src="koshuis.js"></script>
+  <script src="website_api_calls.js?v=20260819"></script>
+  <script src="main.js?v=20260819"></script>
+  <script src="stats.js?v=20260819"></script>
+  <script src="koshuis.js?v=20260819"></script>
 </body>
 </html>
