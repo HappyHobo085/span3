@@ -9,6 +9,7 @@ from routers.klasse import (
     resolver_student_rooster,
     resolver_personeel_rooster,
     resolver_klas_studente,
+    parse_student_toewysing_csv,
 )
 
 
@@ -163,6 +164,29 @@ class TestKlasStudenteResolusie:
 
     def test_onbekende_klas_gee_leeg(self, db):
         assert resolver_klas_studente(db, 9999) == []
+
+
+class TestStudentToewysingCSV:
+    def test_pars_groepe_en_modules(self):
+        inhoud = (
+            "Studentenommer,Groep,Module\n"
+            "STU001,ER 2; LLB 2,EBREK370\n"
+            "STU002,,EBREK370;EFREK370\n"
+            ",,\n"
+        )
+        rye = parse_student_toewysing_csv(inhoud)
+        assert len(rye) == 2
+        assert rye[0] == {"ry": 2, "student": "STU001", "epos": "", "groepe": ["ER 2", "LLB 2"], "modules": ["EBREK370"]}
+        assert rye[1]["groepe"] == []
+        assert rye[1]["modules"] == ["EBREK370", "EFREK370"]
+
+    def test_epos_kolom_en_buigsame_kopname(self):
+        inhoud = "E-pos,GRO_Naam\ntoets1@voorbeeld.co.za,ER 2\n"
+        rye = parse_student_toewysing_csv(inhoud)
+        assert rye == [{"ry": 2, "student": "", "epos": "toets1@voorbeeld.co.za", "groepe": ["ER 2"], "modules": []}]
+
+    def test_geen_student_kolom_gee_leeg(self):
+        assert parse_student_toewysing_csv("Naam,Groep\nJan,ER 2\n") == []
 
 class TestCSVInvoerIdempotensie:
     def test_herinvoer_skep_nie_duplikate_nie(self, db):
@@ -434,3 +458,96 @@ class TestRoosterHTTPAuth:
         client = self._bou_client(http_db)
         resp = client.get("/rooster/personeel-modules", headers=self._headers(dosent))
         assert resp.status_code == 403
+
+    def test_student_toewysings_lys_en_verwyder(self, http_db):
+        admin = self._maak_gebruiker(http_db, "Administrateur", 1)
+        student = self._maak_gebruiker(http_db, "Student", 2)
+        module = skep_module(http_db, "EBREK370")
+        groep = skep_groep(http_db, "ER 2")
+        http_db.add(models.Student_Groep(Gebruiker_ID=student.Gebruiker_ID, Groep_ID=groep.Groep_ID))
+        http_db.add(models.Student_Module(Gebruiker_ID=student.Gebruiker_ID, Module_ID=module.Module_ID))
+        http_db.flush()
+        client = self._bou_client(http_db)
+
+        resp = client.get("/rooster/studente-toewysings", headers=self._headers(admin))
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["groepe"] == [{"Gebruiker_ID": student.Gebruiker_ID, "Groep_ID": groep.Groep_ID, "GRO_Naam": "ER 2"}]
+        assert [m["MOD_Kode"] for m in data["modules"]] == ["EBREK370"]
+
+        resp = client.delete(
+            f"/rooster/studente/{student.Gebruiker_ID}/groepe/{groep.Groep_ID}",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+        resp = client.delete(
+            f"/rooster/studente/{student.Gebruiker_ID}/modules/{module.Module_ID}",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+        resp = client.get("/rooster/studente-toewysings", headers=self._headers(admin))
+        assert resp.json()["data"] == {"groepe": [], "modules": []}
+
+        resp = client.delete(
+            f"/rooster/studente/{student.Gebruiker_ID}/groepe/{groep.Groep_ID}",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 404
+
+    def test_student_toewysings_403_vir_nie_admin(self, http_db):
+        student = self._maak_gebruiker(http_db, "Student", 1)
+        client = self._bou_client(http_db)
+        resp = client.get("/rooster/studente-toewysings", headers=self._headers(student))
+        assert resp.status_code == 403
+
+    def test_student_csv_invoer(self, http_db):
+        admin = self._maak_gebruiker(http_db, "Administrateur", 1)
+        student_a = self._maak_gebruiker(http_db, "Student", 2)
+        student_b = self._maak_gebruiker(http_db, "Student", 3)
+        http_db.add(models.Student(Gebruiker_ID=student_a.Gebruiker_ID, STU_Nommer="STU001"))
+        http_db.add(models.Student(Gebruiker_ID=student_b.Gebruiker_ID, STU_Nommer="STU002"))
+        module = skep_module(http_db, "EBREK370")
+        groep = skep_groep(http_db, "ER 2")
+        http_db.flush()
+        client = self._bou_client(http_db)
+
+        inhoud = (
+            "studentenommer,epos,groep,module\n"
+            "STU001,,ER 2; NUUT 1,EBREK370\n"
+            f",{student_b.GEB_Epos},ER 2,ONBEKEND1\n"
+            "STU999,,ER 2,\n"
+        )
+        resp = client.post(
+            "/rooster/studente/import",
+            files={"lêer": ("toewysings.csv", inhoud.encode("utf-8"), "text/csv")},
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["studente_verwerk"] == 2
+        assert data["groep_koppelings"] == 3      # STU001: ER 2 + NUUT 1; STU002: ER 2
+        assert data["module_koppelings"] == 1     # STU001: EBREK370
+        assert data["groepe_geskep"] == 1         # NUUT 1
+        assert len(data["foute"]) == 2            # ONBEKEND1 module, STU999 student
+        assert any("ONBEKEND1" in f for f in data["foute"])
+        assert any("STU999" in f for f in data["foute"])
+
+        assert http_db.query(models.Student_Groep).filter(
+            models.Student_Groep.Gebruiker_ID == student_a.Gebruiker_ID,
+            models.Student_Groep.Groep_ID == groep.Groep_ID,
+        ).count() == 1
+        assert http_db.query(models.Student_Module).filter(
+            models.Student_Module.Gebruiker_ID == student_a.Gebruiker_ID,
+            models.Student_Module.Module_ID == module.Module_ID,
+        ).count() == 1
+        assert http_db.query(models.Groep).filter(models.Groep.GRO_Naam == "NUUT 1").count() == 1
+
+        # Herinvoer skep geen duplikate nie.
+        resp = client.post(
+            "/rooster/studente/import",
+            files={"lêer": ("toewysings.csv", inhoud.encode("utf-8"), "text/csv")},
+            headers=self._headers(admin),
+        )
+        assert resp.json()["data"]["groep_koppelings"] == 0
+        assert resp.json()["data"]["module_koppelings"] == 0
+        assert http_db.query(models.Student_Groep).count() == 3

@@ -4,6 +4,7 @@ import csv
 import io
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -57,6 +58,62 @@ def parse_lantiv_csv(inhoud: str) -> list[dict]:
             "to": kolomme[7].strip(),
         })
     return reëls
+
+
+
+# Kolomname (genormaliseer: kleinletters, sonder spasies/onderstrepe) wat
+# die student-toewysing-CSV mag gebruik.
+_STUDENT_KOLOMME = {"studentenommer", "stunommer", "studentnommer", "student", "studentnumber", "nommer"}
+_EPOS_KOLOMME = {"epos", "e-pos", "email", "gebepos"}
+_GROEP_KOLOMME = {"groep", "groepe", "gronaam", "group", "groups"}
+_MODULE_KOLOMME = {"module", "modules", "modkode", "modulekode"}
+
+
+def _normaliseer_kop(naam: str) -> str:
+    return (naam or "").strip().lower().replace(" ", "").replace("_", "")
+
+
+def _splits_waardes(teks: str) -> list[str]:
+    """'ER 2; LLB 2' of 'ER 2, LLB 2' -> ['ER 2', 'LLB 2']."""
+    if not teks:
+        return []
+    return [w.strip() for w in teks.replace(";", ",").split(",") if w.strip()]
+
+
+def parse_student_toewysing_csv(inhoud: str) -> list[dict]:
+    """Pars die student-toewysing-CSV (kop-ry + 'n ry per student).
+
+    Verwagte kolomme (naam is buigsaam, sien _*_KOLOMME): studentenommer
+    (of epos), groep, module.  Groep en module mag meer as een waarde bevat,
+    geskei met ';' of ','.  Gee 'n lys van
+    {"ry", "student", "epos", "groepe", "modules"} terug; 'n leë lys as die
+    kop-ry geen student-/epos-kolom het nie.
+    """
+    leser = csv.DictReader(io.StringIO(inhoud))
+    if not leser.fieldnames:
+        return []
+    kop = {_normaliseer_kop(k): k for k in leser.fieldnames if k}
+    student_kol = next((kop[k] for k in kop if k in _STUDENT_KOLOMME), None)
+    epos_kol = next((kop[k] for k in kop if k in _EPOS_KOLOMME), None)
+    groep_kol = next((kop[k] for k in kop if k in _GROEP_KOLOMME), None)
+    module_kol = next((kop[k] for k in kop if k in _MODULE_KOLOMME), None)
+    if not student_kol and not epos_kol:
+        return []
+
+    rye = []
+    for ry_nr, ry in enumerate(leser, start=2):  # ry 1 is die kop-ry
+        student = (ry.get(student_kol) or "").strip() if student_kol else ""
+        epos = (ry.get(epos_kol) or "").strip() if epos_kol else ""
+        if not student and not epos:
+            continue
+        rye.append({
+            "ry": ry_nr,
+            "student": student,
+            "epos": epos,
+            "groepe": _splits_waardes(ry.get(groep_kol) or "") if groep_kol else [],
+            "modules": _splits_waardes(ry.get(module_kol) or "") if module_kol else [],
+        })
+    return rye
 
 
 # --- ROOSTER RESOLUTION HELPERS ---
@@ -442,6 +499,80 @@ def ken_student_klas_toe(
 
 # --- PERSONEEL-TOEWYSING (admin) ---
 
+@router.get("/studente-toewysings")
+def lys_student_toewysings(
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Alle student-groep- en student-module-toewysings (vir die admin-skerm)."""
+    groep_rye = (
+        db.query(models.Student_Groep, models.Groep)
+        .join(models.Groep, models.Groep.Groep_ID == models.Student_Groep.Groep_ID)
+        .order_by(models.Student_Groep.Gebruiker_ID, models.Groep.GRO_Naam)
+        .all()
+    )
+    module_rye = (
+        db.query(models.Student_Module, models.Module)
+        .join(models.Module, models.Module.Module_ID == models.Student_Module.Module_ID)
+        .order_by(models.Student_Module.Gebruiker_ID, models.Module.MOD_Kode)
+        .all()
+    )
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "groepe": [
+                {"Gebruiker_ID": sg.Gebruiker_ID, "Groep_ID": g.Groep_ID, "GRO_Naam": g.GRO_Naam}
+                for sg, g in groep_rye
+            ],
+            "modules": [
+                {
+                    "Gebruiker_ID": sm.Gebruiker_ID,
+                    "Module_ID": m.Module_ID,
+                    "MOD_Kode": m.MOD_Kode,
+                    "MOD_Naam": m.MOD_Naam,
+                }
+                for sm, m in module_rye
+            ],
+        },
+    )
+
+
+@router.delete("/studente/{gebruiker_id}/groepe/{groep_id}")
+def verwyder_student_groep(
+    gebruiker_id: int,
+    groep_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    koppeling = db.query(models.Student_Groep).filter(
+        models.Student_Groep.Gebruiker_ID == gebruiker_id,
+        models.Student_Groep.Groep_ID == groep_id,
+    ).first()
+    if not koppeling:
+        raise HTTPException(status_code=404, detail="Toewysing nie gevind nie")
+    db.delete(koppeling)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Groep_ID": groep_id})
+
+
+@router.delete("/studente/{gebruiker_id}/modules/{module_id}")
+def verwyder_student_module(
+    gebruiker_id: int,
+    module_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    koppeling = db.query(models.Student_Module).filter(
+        models.Student_Module.Gebruiker_ID == gebruiker_id,
+        models.Student_Module.Module_ID == module_id,
+    ).first()
+    if not koppeling:
+        raise HTTPException(status_code=404, detail="Toewysing nie gevind nie")
+    db.delete(koppeling)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Module_ID": module_id})
+
+
 @router.post("/personeel/{gebruiker_id}/modules")
 def ken_personeel_module_toe(
     gebruiker_id: int,
@@ -654,5 +785,93 @@ async def importeer_klasse(
         except Exception as e:  # noqa: BLE001
             db.rollback()
             resultaat.foute.append(f"Ry {ry_nr}: {e}")
+
+    return schemas.APIResponse(sukses=True, data=resultaat.model_dump())
+
+
+@router.post("/studente/import")
+async def importeer_student_toewysings(
+    lêer: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Grootmaat-toewysing van studente aan groepe en/of modules via CSV.
+
+    Kop-ry met kolomme studentenommer (of epos), groep, module.  Meer as een
+    groep/module per student word met ';' geskei.  Onbekende groepe word
+    geskep (soos by die Lantiv-invoer); onbekende modules en studente word
+    as foute gerapporteer.  Elke ry word onafhanklik gecommit.
+    """
+    inhoud = (await lêer.read()).decode("utf-8-sig", errors="replace")
+    rye = parse_student_toewysing_csv(inhoud)
+
+    resultaat = schemas.StudentToewysingImportResult()
+    if not rye:
+        resultaat.foute.append(
+            "Geen rye gevind nie. Die kop-ry moet 'n 'studentenommer' (of 'epos') kolom hê, "
+            "plus 'groep' en/of 'module'."
+        )
+        return schemas.APIResponse(sukses=True, data=resultaat.model_dump())
+
+    geskep_groep_name: set[str] = set()
+
+    for ry in rye:
+        try:
+            gebruiker = None
+            if ry["student"]:
+                student = (
+                    db.query(models.Student)
+                    .filter(func.lower(models.Student.STU_Nommer) == ry["student"].lower())
+                    .first()
+                )
+                if student:
+                    gebruiker = student.gebruiker
+            if gebruiker is None and ry["epos"]:
+                gebruiker = (
+                    db.query(models.Gebruikers)
+                    .filter(func.lower(models.Gebruikers.GEB_Epos) == ry["epos"].lower())
+                    .first()
+                )
+            if gebruiker is None:
+                resultaat.foute.append(
+                    f"Ry {ry['ry']}: student '{ry['student'] or ry['epos']}' nie gevind nie"
+                )
+                continue
+
+            for gro_naam in ry["groepe"]:
+                groep = db.query(models.Groep).filter(models.Groep.GRO_Naam == gro_naam).first()
+                if not groep:
+                    groep = models.Groep(GRO_Naam=gro_naam)
+                    db.add(groep)
+                    db.flush()
+                    if gro_naam not in geskep_groep_name:
+                        resultaat.groepe_geskep += 1
+                        geskep_groep_name.add(gro_naam)
+                bestaande = db.query(models.Student_Groep).filter(
+                    models.Student_Groep.Gebruiker_ID == gebruiker.Gebruiker_ID,
+                    models.Student_Groep.Groep_ID == groep.Groep_ID,
+                ).first()
+                if not bestaande:
+                    db.add(models.Student_Groep(Gebruiker_ID=gebruiker.Gebruiker_ID, Groep_ID=groep.Groep_ID))
+                    resultaat.groep_koppelings += 1
+
+            for mod_kode in ry["modules"]:
+                module = db.query(models.Module).filter(func.lower(models.Module.MOD_Kode) == mod_kode.lower()).first()
+                if not module:
+                    resultaat.foute.append(f"Ry {ry['ry']}: module '{mod_kode}' bestaan nie (laai eers die rooster op)")
+                    continue
+                bestaande = db.query(models.Student_Module).filter(
+                    models.Student_Module.Gebruiker_ID == gebruiker.Gebruiker_ID,
+                    models.Student_Module.Module_ID == module.Module_ID,
+                ).first()
+                if not bestaande:
+                    db.add(models.Student_Module(Gebruiker_ID=gebruiker.Gebruiker_ID, Module_ID=module.Module_ID))
+                    resultaat.module_koppelings += 1
+
+            db.commit()
+            resultaat.studente_verwerk += 1
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            resultaat.foute.append(f"Ry {ry['ry']}: {e}")
 
     return schemas.APIResponse(sukses=True, data=resultaat.model_dump())

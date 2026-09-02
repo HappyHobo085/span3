@@ -1959,7 +1959,7 @@ async function refreshDashboard() {
       const resultate = await Promise.all([
         window.MoonApi.fetchModules(),
         window.MoonApi.fetchRoosterKlasse(),
-        window.MoonApi.fetchGebruikers(),
+        window.MoonApi.fetchGebruikersAlle(),
         window.MoonApi.fetchPersoneelModuleToewysings()
       ]);
       const modJson = resultate[0];
@@ -2230,6 +2230,7 @@ async function refreshDashboard() {
         (d.groepe_geskep || 0) + ' nuwe groepe, ' + (d.klasse_geskep || 0) + ' klasse.';
       if (foute.length) boodskap += ' ' + foute.length + ' ry(e) oorgeslaan: ' + foute.slice(0, 3).join('; ') + (foute.length > 3 ? ' …' : '');
       await loadRoosterPaneel();
+      await loadStudentPaneel();
       setStatusBox(roosterStatus, boodskap, foute.length && !d.klasse_geskep ? 'error' : 'success');
     } catch (err) {
       setStatusBox(roosterStatus, 'Kon nie die rooster oplaai nie: ' + err.message, 'error');
@@ -2250,6 +2251,427 @@ async function refreshDashboard() {
     // Klik buite die venster maak dit toe (soos die ander modals).
     moduleModal.addEventListener('click', function (ev) {
       if (ev.target === moduleModal) closeModuleModal();
+    });
+  }
+
+  // =====================================================================
+  //  STUDENTE & GROEPE (wie op 'n klas se register verskyn)
+  // =====================================================================
+  // 'n Student kom op 'n klas se register (personeel.html) via sy/haar groep
+  // (Student_Groep -> Klas_Groep), via 'n module (Student_Module -> Klas) of
+  // via 'n direkte klas-toewysing. Hierdie paneel bestuur die eerste twee,
+  // een-vir-een in 'n modal of in grootmaat met 'n CSV
+  // (POST /rooster/studente/import).
+
+  const studentList = document.getElementById('student-list');
+  const studentSearch = document.getElementById('student-search');
+  const uploadStudenteBtn = document.getElementById('upload-studente-btn');
+  const studenteFileInput = document.getElementById('studente-file-input');
+  const studenteStatus = document.getElementById('studente-status');
+  const studenteOpsomming = document.getElementById('studente-opsomming');
+  const studentModal = document.getElementById('studentModal');
+  const studentModalUserName = document.getElementById('student-modal-user-name');
+  const currentStudentGroepe = document.getElementById('current-student-groepe');
+  const addStudentGroepSelect = document.getElementById('add-student-groep-select');
+  const addStudentGroepBtn = document.getElementById('add-student-groep-btn');
+  const currentStudentModules = document.getElementById('current-student-modules');
+  const addStudentModuleSelect = document.getElementById('add-student-module-select');
+  const addStudentModuleBtn = document.getElementById('add-student-module-btn');
+  const studentModalStatus = document.getElementById('student-modal-status');
+  const closeStudentModalBtn = document.getElementById('close-student-modal');
+
+  let alleGroepe = [];          // [{ Groep_ID, GRO_Naam }]
+  let studente = [];            // [{ id, naam, van, epos, nommer, isAktief }]
+  let studentGroepe = {};       // Gebruiker_ID -> [{ Groep_ID, GRO_Naam }]
+  let studentModules = {};      // Gebruiker_ID -> [{ Module_ID, MOD_Kode, MOD_Naam }]
+  let studentModalStudent = null;
+
+  // Hierdie funksie kyk of 'n gebruiker die Student-rol het (Rol_Namen van
+  // die bediener, of rolleMap as terugval).
+  function hetStudentRol(user) {
+    if (Array.isArray(user.Rol_Namen) && user.Rol_Namen.length) {
+      return user.Rol_Namen.indexOf('Student') !== -1;
+    }
+    return gebruikerRolIds(user).some(function (rolId) {
+      return (rolleMap[String(rolId)] || '').toLowerCase() === 'student';
+    });
+  }
+
+  /** Laai groepe, modules, studente en toewysings en teken die paneel. */
+  async function loadStudentPaneel() {
+    if (!studentList || !window.MoonApi) return;
+    setStatusBox(studenteStatus, '');
+
+    try {
+      const resultate = await Promise.all([
+        window.MoonApi.fetchGroepe(),
+        alleModules.length ? Promise.resolve({ sukses: true, data: alleModules }) : window.MoonApi.fetchModules(),
+        window.MoonApi.fetchGebruikersAlle(),
+        window.MoonApi.fetchStudentToewysings()
+      ]);
+      const groepJson = resultate[0];
+      const modJson = resultate[1];
+      const gebJson = resultate[2];
+      const toewJson = resultate[3];
+
+      if (!isOk(groepJson)) throw new Error(foutBoodskap(groepJson, 'Kon nie groepe laai nie.'));
+      if (!isOk(modJson)) throw new Error(foutBoodskap(modJson, 'Kon nie modules laai nie.'));
+      if (!isOk(gebJson)) throw new Error(foutBoodskap(gebJson, 'Kon nie gebruikers laai nie.'));
+      if (!isOk(toewJson)) throw new Error(foutBoodskap(toewJson, 'Kon nie toewysings laai nie.'));
+
+      alleGroepe = (groepJson.data || []).slice().sort(function (a, b) {
+        return String(a.GRO_Naam).localeCompare(String(b.GRO_Naam));
+      });
+      if (!alleModules.length) {
+        alleModules = (modJson.data || []).slice().sort(function (a, b) {
+          return String(a.MOD_Kode).localeCompare(String(b.MOD_Kode));
+        });
+      }
+
+      studentGroepe = {};
+      studentModules = {};
+      const toew = toewJson.data || {};
+      (toew.groepe || []).forEach(function (t) {
+        if (!studentGroepe[t.Gebruiker_ID]) studentGroepe[t.Gebruiker_ID] = [];
+        studentGroepe[t.Gebruiker_ID].push({ Groep_ID: t.Groep_ID, GRO_Naam: t.GRO_Naam });
+      });
+      (toew.modules || []).forEach(function (t) {
+        if (!studentModules[t.Gebruiker_ID]) studentModules[t.Gebruiker_ID] = [];
+        studentModules[t.Gebruiker_ID].push({ Module_ID: t.Module_ID, MOD_Kode: t.MOD_Kode, MOD_Naam: t.MOD_Naam });
+      });
+
+      studente = (gebJson.data || [])
+        .filter(hetStudentRol)
+        .map(function (u) {
+          return {
+            id: u.Gebruiker_ID, naam: u.GEB_Naam, van: u.GEB_Van, epos: u.GEB_Epos,
+            nommer: u.STU_Nommer || '', isAktief: u.Is_Aktief !== false
+          };
+        })
+        .sort(function (a, b) { return (a.van + a.naam).localeCompare(b.van + b.naam); });
+
+      renderStudente();
+      renderStudenteOpsomming();
+    } catch (err) {
+      setStatusBox(studenteStatus, 'Kon nie die studente-paneel laai nie: ' + err.message, 'error');
+    }
+  }
+
+  // Hierdie funksie wys onderaan hoeveel studente gekoppel is.
+  function renderStudenteOpsomming() {
+    if (!studenteOpsomming) return;
+    const gekoppel = studente.filter(function (s) {
+      return (studentGroepe[s.id] || []).length || (studentModules[s.id] || []).length;
+    }).length;
+    let teks = studente.length + ' student' + (studente.length === 1 ? '' : 'e') + ', ' +
+      gekoppel + ' gekoppel aan \'n groep of module · ' + alleGroepe.length + ' groep' + (alleGroepe.length === 1 ? '' : 'e');
+    if (alleGroepe.length === 0) teks += '. Laai die Lantiv-rooster op om groepe te skep.';
+    studenteOpsomming.textContent = teks;
+  }
+
+  // Hierdie funksie bou een student-ry: naam, nommer/e-pos, groep- en
+  // module-etikette en 'n "Toewysings"-knoppie.
+  function addStudentRow(student) {
+    const row = document.createElement('div');
+    row.className = 'admin-user-row';
+    row.dataset.userId = String(student.id);
+    const groepe = studentGroepe[student.id] || [];
+    const modules = studentModules[student.id] || [];
+    row.dataset.search = (
+      student.naam + ' ' + student.van + ' ' + student.epos + ' ' + student.nommer + ' ' +
+      groepe.map(function (g) { return g.GRO_Naam; }).join(' ') + ' ' +
+      modules.map(function (m) { return m.MOD_Kode; }).join(' ')
+    ).toLowerCase();
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'admin-user-info';
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'admin-user-name';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'admin-user-name-text';
+    nameSpan.textContent = student.naam + ' ' + student.van;
+    nameDiv.appendChild(nameSpan);
+    nameDiv.appendChild(buildStatusBadge(student.isAktief));
+    const subDiv = document.createElement('div');
+    subDiv.className = 'admin-user-email';
+    subDiv.textContent = student.nommer ? student.nommer + ' · ' + student.epos : student.epos;
+    infoDiv.appendChild(nameDiv);
+    infoDiv.appendChild(subDiv);
+
+    const badgesDiv = document.createElement('div');
+    badgesDiv.className = 'admin-user-roles';
+    if (groepe.length === 0 && modules.length === 0) {
+      const geen = document.createElement('span');
+      geen.className = 'admin-user-email';
+      geen.textContent = 'Geen groep of module';
+      badgesDiv.appendChild(geen);
+    }
+    groepe.forEach(function (g) {
+      const badge = document.createElement('span');
+      badge.className = 'role-badge groep-badge';
+      badge.textContent = g.GRO_Naam;
+      badge.title = 'Groep';
+      badgesDiv.appendChild(badge);
+    });
+    modules.forEach(function (m) {
+      const badge = document.createElement('span');
+      badge.className = 'role-badge module-badge';
+      badge.textContent = m.MOD_Kode;
+      badge.title = 'Module' + (m.MOD_Naam ? ': ' + m.MOD_Naam : '');
+      badgesDiv.appendChild(badge);
+    });
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'admin-user-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-outline btn-sm';
+    btn.textContent = 'Toewysings';
+    btn.addEventListener('click', function () { openStudentModal(student); });
+    actionsDiv.appendChild(btn);
+
+    row.appendChild(infoDiv);
+    row.appendChild(badgesDiv);
+    row.appendChild(actionsDiv);
+    studentList.appendChild(row);
+  }
+
+  /** Teken die studente-lys oor (en pas die soekfilter toe). */
+  function renderStudente() {
+    if (!studentList) return;
+    studentList.innerHTML = '';
+    if (studente.length === 0) {
+      const leeg = document.createElement('div');
+      leeg.className = 'admin-user-row';
+      const info = document.createElement('div');
+      info.className = 'admin-user-info';
+      const msg = document.createElement('div');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen gebruikers met die Student-rol nie.';
+      info.appendChild(msg);
+      leeg.appendChild(info);
+      studentList.appendChild(leeg);
+      return;
+    }
+    studente.forEach(addStudentRow);
+    applyStudentFilter();
+  }
+
+  /** Steek studente weg wat nie by die soekwoord pas nie (naam, nommer, groep, module). */
+  function applyStudentFilter() {
+    if (!studentList) return;
+    const query = studentSearch ? studentSearch.value.trim().toLowerCase() : '';
+    studentList.querySelectorAll('.admin-user-row').forEach(function (row) {
+      const searchable = row.dataset.search || '';
+      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
+    });
+    capListHeight(studentList, '.admin-user-row');
+  }
+
+  // ----- Student-modal -----
+
+  function openStudentModal(student) {
+    if (!studentModal) return;
+    studentModalStudent = student;
+    if (studentModalUserName) {
+      studentModalUserName.textContent = student.naam + ' ' + student.van + (student.nommer ? ' (' + student.nommer + ')' : '');
+    }
+    setStatusBox(studentModalStatus, '');
+    renderStudentModal();
+    studentModal.classList.add('open');
+    studentModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeStudentModal() {
+    if (!studentModal) return;
+    studentModal.classList.remove('open');
+    studentModal.setAttribute('aria-hidden', 'true');
+    studentModalStudent = null;
+  }
+
+  // Hierdie funksie vul een etiket-houer + keuselys (vir groepe óf modules).
+  function renderToewysingBlok(houer, select, knoppie, toegewys, alles, idVeld, naamFn, leegTeks, verwyderFn) {
+    const toegewysIds = toegewys.map(function (t) { return t[idVeld]; });
+    if (houer) {
+      houer.innerHTML = '';
+      if (toegewys.length === 0) {
+        const geen = document.createElement('span');
+        geen.className = 'admin-user-email';
+        geen.textContent = leegTeks;
+        houer.appendChild(geen);
+      }
+      toegewys.forEach(function (t) {
+        const badge = document.createElement('span');
+        badge.className = 'role-badge-removable ' + (idVeld === 'Groep_ID' ? 'groep-badge' : 'module-badge');
+        badge.title = naamFn(t);
+        badge.appendChild(document.createTextNode((idVeld === 'Groep_ID' ? t.GRO_Naam : t.MOD_Kode) + ' '));
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'role-badge-remove';
+        x.innerHTML = '&times;';
+        x.setAttribute('aria-label', 'Verwyder ' + naamFn(t));
+        x.addEventListener('click', function () { verwyderFn(t); });
+        badge.appendChild(x);
+        houer.appendChild(badge);
+      });
+    }
+    if (select) {
+      select.innerHTML = '';
+      const oorblywend = alles.filter(function (a) { return toegewysIds.indexOf(a[idVeld]) === -1; });
+      const eerste = document.createElement('option');
+      eerste.value = '';
+      eerste.textContent = alles.length === 0
+        ? 'Geen beskikbaar — laai eers die rooster op'
+        : (oorblywend.length === 0 ? 'Alles is reeds toegewys' : 'Kies...');
+      select.appendChild(eerste);
+      oorblywend.forEach(function (a) {
+        const opt = document.createElement('option');
+        opt.value = String(a[idVeld]);
+        opt.textContent = naamFn(a);
+        select.appendChild(opt);
+      });
+      select.disabled = oorblywend.length === 0;
+      if (knoppie) knoppie.disabled = oorblywend.length === 0;
+    }
+  }
+
+  /** Teken albei blokke (groepe en modules) vir die student in die modal. */
+  function renderStudentModal() {
+    if (!studentModalStudent) return;
+    const id = studentModalStudent.id;
+    renderToewysingBlok(
+      currentStudentGroepe, addStudentGroepSelect, addStudentGroepBtn,
+      studentGroepe[id] || [], alleGroepe, 'Groep_ID',
+      function (g) { return g.GRO_Naam; },
+      'Nog geen groep nie.', verwyderGroepVanStudent
+    );
+    renderToewysingBlok(
+      currentStudentModules, addStudentModuleSelect, addStudentModuleBtn,
+      studentModules[id] || [], alleModules, 'Module_ID',
+      moduleLabel,
+      'Geen direkte module nie (groep dek gewoonlik die klasse).', verwyderModuleVanStudent
+    );
+  }
+
+  async function voegGroepByStudent() {
+    if (!studentModalStudent || !addStudentGroepSelect || !window.MoonApi) return;
+    const groepId = parseInt(addStudentGroepSelect.value, 10);
+    if (!groepId) { setStatusBox(studentModalStatus, 'Kies eers \'n groep.', 'error'); return; }
+    const groep = alleGroepe.filter(function (g) { return g.Groep_ID === groepId; })[0];
+    const student = studentModalStudent;
+    if (addStudentGroepBtn) addStudentGroepBtn.disabled = true;
+    try {
+      const json = await window.MoonApi.assignStudentGroep(student.id, groepId);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie groep toewys nie.'));
+      if (!studentGroepe[student.id]) studentGroepe[student.id] = [];
+      studentGroepe[student.id].push(groep);
+      studentGroepe[student.id].sort(function (a, b) { return String(a.GRO_Naam).localeCompare(String(b.GRO_Naam)); });
+      setStatusBox(studentModalStatus, student.naam + ' ' + student.van + ' is by groep ' + groep.GRO_Naam + ' gevoeg.', 'success');
+      if (studentModalStudent === student) renderStudentModal();
+      renderStudente();
+      renderStudenteOpsomming();
+    } catch (err) {
+      setStatusBox(studentModalStatus, err.message, 'error');
+      if (addStudentGroepBtn) addStudentGroepBtn.disabled = false;
+    }
+  }
+
+  async function verwyderGroepVanStudent(groep) {
+    if (!studentModalStudent || !window.MoonApi) return;
+    const student = studentModalStudent;
+    try {
+      const json = await window.MoonApi.unassignStudentGroep(student.id, groep.Groep_ID);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie groep verwyder nie.'));
+      studentGroepe[student.id] = (studentGroepe[student.id] || []).filter(function (g) { return g.Groep_ID !== groep.Groep_ID; });
+      setStatusBox(studentModalStatus, 'Groep ' + groep.GRO_Naam + ' verwyder.', 'success');
+      if (studentModalStudent === student) renderStudentModal();
+      renderStudente();
+      renderStudenteOpsomming();
+    } catch (err) {
+      setStatusBox(studentModalStatus, err.message, 'error');
+    }
+  }
+
+  async function voegModuleByStudent() {
+    if (!studentModalStudent || !addStudentModuleSelect || !window.MoonApi) return;
+    const moduleId = parseInt(addStudentModuleSelect.value, 10);
+    if (!moduleId) { setStatusBox(studentModalStatus, 'Kies eers \'n module.', 'error'); return; }
+    const module = alleModules.filter(function (m) { return m.Module_ID === moduleId; })[0];
+    const student = studentModalStudent;
+    if (addStudentModuleBtn) addStudentModuleBtn.disabled = true;
+    try {
+      const json = await window.MoonApi.assignStudentModule(student.id, moduleId);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie module toewys nie.'));
+      if (!studentModules[student.id]) studentModules[student.id] = [];
+      studentModules[student.id].push(module);
+      studentModules[student.id].sort(function (a, b) { return String(a.MOD_Kode).localeCompare(String(b.MOD_Kode)); });
+      setStatusBox(studentModalStatus, module.MOD_Kode + ' toegewys aan ' + student.naam + ' ' + student.van + '.', 'success');
+      if (studentModalStudent === student) renderStudentModal();
+      renderStudente();
+      renderStudenteOpsomming();
+    } catch (err) {
+      setStatusBox(studentModalStatus, err.message, 'error');
+      if (addStudentModuleBtn) addStudentModuleBtn.disabled = false;
+    }
+  }
+
+  async function verwyderModuleVanStudent(module) {
+    if (!studentModalStudent || !window.MoonApi) return;
+    const student = studentModalStudent;
+    try {
+      const json = await window.MoonApi.unassignStudentModule(student.id, module.Module_ID);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie module verwyder nie.'));
+      studentModules[student.id] = (studentModules[student.id] || []).filter(function (m) { return m.Module_ID !== module.Module_ID; });
+      setStatusBox(studentModalStatus, module.MOD_Kode + ' verwyder.', 'success');
+      if (studentModalStudent === student) renderStudentModal();
+      renderStudente();
+      renderStudenteOpsomming();
+    } catch (err) {
+      setStatusBox(studentModalStatus, err.message, 'error');
+    }
+  }
+
+  // ----- Grootmaat CSV-oplaai -----
+
+  /** Stuur die CSV na POST /rooster/studente/import en herlaai die paneel. */
+  async function handleStudenteUpload() {
+    if (!studenteFileInput || !studenteFileInput.files || !studenteFileInput.files.length) return;
+    const file = studenteFileInput.files[0];
+    studenteFileInput.value = '';
+    if (!window.MoonApi) return;
+
+    setStatusBox(studenteStatus, 'Laai "' + file.name + '" op...', 'success');
+    if (uploadStudenteBtn) uploadStudenteBtn.disabled = true;
+    try {
+      const json = await window.MoonApi.importStudentToewysingsCsv(file);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Oplaai het misluk.'));
+      const d = json.data || {};
+      const foute = Array.isArray(d.foute) ? d.foute : [];
+      let boodskap = 'Toewysings ingevoer: ' + (d.studente_verwerk || 0) + ' studente verwerk, ' +
+        (d.groep_koppelings || 0) + ' groep-koppelings, ' + (d.module_koppelings || 0) + ' module-koppelings' +
+        ((d.groepe_geskep || 0) ? ', ' + d.groepe_geskep + ' nuwe groepe' : '') + '.';
+      if (foute.length) boodskap += ' ' + foute.length + ' fout(e): ' + foute.slice(0, 3).join('; ') + (foute.length > 3 ? ' …' : '');
+      await loadStudentPaneel();
+      setStatusBox(studenteStatus, boodskap, foute.length && !d.studente_verwerk ? 'error' : 'success');
+    } catch (err) {
+      setStatusBox(studenteStatus, 'Kon nie die toewysings oplaai nie: ' + err.message, 'error');
+    } finally {
+      if (uploadStudenteBtn) uploadStudenteBtn.disabled = false;
+    }
+  }
+
+  // ----- Gebeurtenisse vir hierdie paneel -----
+  if (studentSearch) studentSearch.addEventListener('input', applyStudentFilter);
+  if (uploadStudenteBtn && studenteFileInput) {
+    uploadStudenteBtn.addEventListener('click', function () { studenteFileInput.click(); });
+    studenteFileInput.addEventListener('change', handleStudenteUpload);
+  }
+  if (addStudentGroepBtn) addStudentGroepBtn.addEventListener('click', voegGroepByStudent);
+  if (addStudentModuleBtn) addStudentModuleBtn.addEventListener('click', voegModuleByStudent);
+  if (closeStudentModalBtn) closeStudentModalBtn.addEventListener('click', closeStudentModal);
+  if (studentModal) {
+    studentModal.addEventListener('click', function (ev) {
+      if (ev.target === studentModal) closeStudentModal();
     });
   }
 
@@ -2275,6 +2697,7 @@ async function refreshDashboard() {
   applyUserFilter();
 
   await loadRoosterPaneel();
+  await loadStudentPaneel();
 
   await loadAutoUitcheckTydstip();
 

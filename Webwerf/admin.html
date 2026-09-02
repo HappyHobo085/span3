@@ -172,7 +172,30 @@
         </div>
         <p id="rooster-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
       </article>
-      <!-- Paneel 6: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
+      <!-- Paneel 6: Studente en hul groepe/modules. Bepaal wie op 'n klas se
+           register (personeel.html) verskyn: groep -> klasse, module -> klasse. -->
+      <article class="glass-card panel" aria-label="Studente en Groepe">
+        <h2>Studente &amp; Groepe</h2>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:10px">
+          Koppel studente aan groepe (soos in die Lantiv-rooster, bv. "ER 2") of
+          direk aan modules. Dit bepaal wie op 'n klas se register verskyn.
+          Grootmaat: laai 'n CSV op met kolomme <code>studentenommer</code>
+          (of <code>epos</code>), <code>groep</code> en <code>module</code>;
+          skei meer as een groep of module met ";".
+        </p>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="student-search" autocomplete="off"
+                 aria-label="Soek student" placeholder="Soek student..." style="flex:1">
+          <button class="btn-outline btn-sm" id="upload-studente-btn" type="button">Laai Toewysings (CSV)</button>
+          <input type="file" id="studente-file-input" accept=".csv,text/csv" style="display:none">
+        </div>
+        <div id="studente-status" class="modal-status" aria-live="polite"></div>
+        <div class="admin-list" id="student-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+        <p id="studente-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
+      </article>
+      <!-- Paneel 7: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
       <article class="glass-card panel" aria-label="Outo-Uitskandering">
         <h2>Outo-Uitskandering</h2>
         <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">
@@ -378,6 +401,37 @@
       <div id="module-modal-status" class="modal-status" aria-live="polite"></div>
       <div class="class-modal-actions">
         <button class="btn-primary" id="close-module-modal" type="button">Klaar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Bestuur Groepe en Modules van 'n student (toggled by admin.js via .open class) -->
+  <div id="studentModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="student-modal-title">
+      <h3 id="student-modal-title">Toewysings — <span id="student-modal-user-name">Student</span></h3>
+      <div class="field">
+        <label>Groepe</label>
+        <div class="role-badges-container" id="current-student-groepe"></div>
+        <div class="add-role-row">
+          <select class="glass-select" id="add-student-groep-select">
+            <option value="">Kies groep...</option>
+          </select>
+          <button class="btn-primary btn-sm" id="add-student-groep-btn" type="button">Voeg By</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Modules (direk)</label>
+        <div class="role-badges-container" id="current-student-modules"></div>
+        <div class="add-role-row">
+          <select class="glass-select" id="add-student-module-select">
+            <option value="">Kies module...</option>
+          </select>
+          <button class="btn-primary btn-sm" id="add-student-module-btn" type="button">Voeg By</button>
+        </div>
+      </div>
+      <div id="student-modal-status" class="modal-status" aria-live="polite"></div>
+      <div class="class-modal-actions">
+        <button class="btn-primary" id="close-student-modal" type="button">Klaar</button>
       </div>
     </div>
   </div>

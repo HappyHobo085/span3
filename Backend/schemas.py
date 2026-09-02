@@ -738,3 +738,12 @@ class KlasImportResult(BaseModel):
     groepe_geskep: int = 0
     klasse_geskep: int = 0
     foute: List[str] = []
+
+
+class StudentToewysingImportResult(BaseModel):
+    """Uitslag van die student-groep/module CSV-invoer."""
+    studente_verwerk: int = 0
+    groep_koppelings: int = 0
+    module_koppelings: int = 0
+    groepe_geskep: int = 0
+    foute: List[str] = []

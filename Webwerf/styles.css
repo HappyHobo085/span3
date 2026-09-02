@@ -515,6 +515,7 @@ body{
 .role-badge-remove:hover{opacity:1}
 /* Module-etikette (Dosente & Modules paneel) deel die rol-etiket se vorm */
 .module-badge{background:rgba(123,97,255,0.15);color:#7b61ff}
+.groep-badge{background:rgba(16,185,129,0.15);color:#10b981}
 .admin-user-row .admin-user-roles .module-badge{font-size:9px}
 
 /* ─── Role checkbox group (multi-select) ──────────────────────────────── */

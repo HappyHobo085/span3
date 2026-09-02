@@ -774,6 +774,62 @@
     },
 
     /**
+     * GET /gebruikers?limit=10000
+     * Alle gebruikers (die verstek-limiet van /gebruikers is 100).
+     */
+    fetchGebruikersAlle: async function () {
+      const r = await apiRequest('/gebruikers?limit=10000', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/studente-toewysings  (slegs Admin)
+     * { groepe: [{ Gebruiker_ID, Groep_ID, GRO_Naam }],
+     *   modules: [{ Gebruiker_ID, Module_ID, MOD_Kode, MOD_Naam }] }
+     */
+    fetchStudentToewysings: async function () {
+      const r = await apiRequest('/rooster/studente-toewysings', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * DELETE /rooster/studente/{userId}/groepe/{groepId}  (slegs Admin)
+     */
+    unassignStudentGroep: async function (userId, groepId) {
+      const r = await apiRequest(
+        '/rooster/studente/' + encodeURIComponent(userId) + '/groepe/' + encodeURIComponent(groepId),
+        { method: 'DELETE' }
+      );
+      return r.body;
+    },
+
+    /**
+     * DELETE /rooster/studente/{userId}/modules/{moduleId}  (slegs Admin)
+     */
+    unassignStudentModule: async function (userId, moduleId) {
+      const r = await apiRequest(
+        '/rooster/studente/' + encodeURIComponent(userId) + '/modules/' + encodeURIComponent(moduleId),
+        { method: 'DELETE' }
+      );
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/studente/import  (slegs Admin)
+     * CSV met kop-ry: studentenommer (of epos), groep, module.
+     * Meer as een groep/module per ry word met ';' geskei.
+     */
+    importStudentToewysingsCsv: async function (file) {
+      const formData = new FormData();
+      formData.append('l\u00eaer', file);
+      const r = await apiRequest('/rooster/studente/import', {
+        method: 'POST',
+        body: formData,
+      });
+      return r.body;
+    },
+
+    /**
      * GET /rooster/studente/{userId}/rooster
      * Student se eie rooster (of Admin vir enige student).
      */
