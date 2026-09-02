@@ -14,7 +14,7 @@
  *       GET /rooster/klasse/{id}/studente     (groep + module + direk, gededupeer).
  *
  * NOG DEMO: die bywoning (ingeskandeer / nie ingeskandeer) word steeds
- * deterministies gegenereer (seed = klas + datum) oor die REGTE klasregister,
+ * deterministies gegenereer (seed = module + datum) oor die REGTE klasregister,
  * omdat skanderings nog nie aan 'n klassessie gekoppel word nie. Dieselfde
  * dag wys dus altyd dieselfde resultaat, sonder enige stoor. Elke weeksdag
  * (Ma–Vr) tel as 'n klasdag, soos in die oorspronklike ontwerp, sodat die
@@ -26,6 +26,7 @@
  *   - styles.css (.kalender* klasse)
  *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
  *     dash-total-count, dash-percent-count, dash-in-list, dash-out-list,
+ *     module-student-list, module-student-titel, module-student-caption,
  *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list,
  *     dash-student-card, student-stats-titel, stat-student-split,
  *     stat-student-caption.
@@ -64,6 +65,9 @@
   var studentTitel = document.getElementById('student-stats-titel');
   var studentSplit = document.getElementById('stat-student-split');
   var studentCaption = document.getElementById('stat-student-caption');
+  var moduleList = document.getElementById('module-student-list');
+  var moduleTitel = document.getElementById('module-student-titel');
+  var moduleCaption = document.getElementById('module-student-caption');
 
   // ----- Module state -----
   // Onthou watter klas en dag tans gekies is, en watter maand
@@ -270,10 +274,23 @@
   // Hierdie funksie werk uit watter studente op 'n dag ingeskandeer het
   // en watter nie (voorbeeld-data oor die regte klasregister; nie regte
   // skanderings nie).
+  // Die bywoning per klas+dag word onthou sodat die studentelys (wat elke
+  // student oor 30 klasdae nagaan) nie dieselfde dag herhaaldelik bereken nie.
+  var bywoningKas = {};
+
   function kryBywoning(klas, datum) {
     if (!klas || !isKlasdag(datum)) return null;
+    var sleutel = klas.kode + '|' + isoDate(datum);
+    if (Object.prototype.hasOwnProperty.call(bywoningKas, sleutel)) return bywoningKas[sleutel];
+    var resultaat = berekenBywoning(klas, datum);
+    bywoningKas[sleutel] = resultaat;
+    return resultaat;
+  }
 
-    var rand = mulberry32(hashString(klas.id + '|' + isoDate(datum)));
+  // Die seed is die MODULE-kode + datum: al die klassessies van een module
+  // deel dus dieselfde bywoningsrekord, sodat die balk "bywoning per module" is.
+  function berekenBywoning(klas, datum) {
+    var rand = mulberry32(hashString(klas.kode + '|' + isoDate(datum)));
     var ingeskandeer = [];
     var nieIngeskandeer = [];
 
@@ -376,6 +393,7 @@
     if (!currentKlas) {
       if (dashTotalCount) dashTotalCount.textContent = '--';
       renderDashboardLeeg('Geen klas gekies nie.');
+      renderModuleStudente();
       return;
     }
 
@@ -384,6 +402,9 @@
 
     // Die KPI-teëls wys net die syfers — die etikette staan reeds op die teëls.
     if (dashTotalCount) dashTotalCount.textContent = String(studente.length);
+
+    // Die studentelys met vorderingsbalke volg die klas en die gekose dag.
+    renderModuleStudente();
 
     // Geen klasdata (naweek of toekoms): strepies en boodskap.
     if (!bywoning) {
@@ -503,6 +524,134 @@
     }
   }
 
+  // ----- Studente per module: lys met vorderingsbalke (linkerpaneel) -----
+
+  // Hierdie funksie maak die klein status-etiket vir die gekose dag:
+  // ingeskandeer (met tyd), nie ingeskandeer nie, of geen klasdag nie.
+  function maakDagStatus(dagByw, student) {
+    var el = document.createElement('span');
+    el.className = 'dag-status';
+    if (!dagByw) {
+      el.classList.add('dag-status--geen');
+      el.textContent = 'Geen klasdag';
+      return el;
+    }
+    var rekord = null;
+    for (var i = 0; i < dagByw.ingeskandeer.length; i++) {
+      if (dagByw.ingeskandeer[i].student.id === student.id) { rekord = dagByw.ingeskandeer[i]; break; }
+    }
+    if (rekord) {
+      el.classList.add('dag-status--in');
+      el.textContent = 'In · ' + rekord.tyd;
+    } else {
+      el.classList.add('dag-status--uit');
+      el.textContent = 'Nie in';
+    }
+    return el;
+  }
+
+  /**
+   * Hierdie funksie vul die linkerpaneel se studentelys: elke student in die
+   * gekose klas se register kry 'n kaartjie met naam, studentenommer, die
+   * gekose dag se status, en 'n vorderingsbalk wat wys hoeveel van die laaste
+   * klasdae hy/sy vir hierdie module bygewoon het. Klik op 'n kaartjie om die
+   * student te kies (dieselfde as in die klasregister regs).
+   */
+  function renderModuleStudente() {
+    if (!moduleList) return;
+    moduleList.innerHTML = '';
+
+    if (!currentKlas) {
+      if (moduleTitel) moduleTitel.textContent = 'Studente — bywoning per module';
+      if (moduleCaption) moduleCaption.textContent = '';
+      renderLeegBoodskap(moduleList, 'Geen klas gekies nie.');
+      return;
+    }
+
+    var studente = studenteVir(currentKlas);
+    var dae = kryLaasteKlasdae(STUDENT_STAT_DAE);
+    if (moduleTitel) {
+      moduleTitel.textContent = 'Studente — ' + currentKlas.kode +
+        (currentKlas.moduleNaam ? ' · ' + currentKlas.moduleNaam : '');
+    }
+    if (moduleCaption) {
+      moduleCaption.textContent = studente.length + ' student' + (studente.length === 1 ? '' : 'e') +
+        ' · bywoning oor die laaste ' + dae.length + ' klasdae';
+    }
+    if (studente.length === 0) {
+      renderLeegBoodskap(moduleList, 'Geen studente is aan hierdie module gekoppel nie.');
+      return;
+    }
+
+    var dagByw = kryBywoning(currentKlas, selectedDate);
+
+    studente.forEach(function (s) {
+      var stats = kryStudentBywoning(currentKlas, s, STUDENT_STAT_DAE);
+      var pct = stats.dae > 0 ? Math.round((stats.bygewoon / stats.dae) * 100) : 0;
+
+      var card = document.createElement('div');
+      card.className = 'user-card user-card--bywoning user-card--klikbaar';
+      card.dataset.id = String(s.id);
+      card.dataset.search = (s.naam + ' ' + s.van + ' ' + s.nommer).toLowerCase();
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label',
+        s.naam + ' ' + s.van + ': ' + pct + '% bywoning vir ' + currentKlas.kode);
+      if (selectedStudent && selectedStudent.id === s.id) card.classList.add('user-card--gekies');
+
+      // Boonste ry: naam + nommer links, die gekose dag se status regs.
+      var ry = document.createElement('div');
+      ry.className = 'user-card-ry';
+      var info = document.createElement('div');
+      info.className = 'admin-user-info';
+      var naam = document.createElement('div');
+      naam.className = 'admin-user-name';
+      naam.textContent = s.naam + ' ' + s.van;
+      var sub = document.createElement('div');
+      sub.className = 'admin-user-email';
+      sub.textContent = s.nommer;
+      info.appendChild(naam);
+      info.appendChild(sub);
+      ry.appendChild(info);
+      ry.appendChild(maakDagStatus(dagByw, s));
+      card.appendChild(ry);
+
+      // Onderste ry: vorderingsbalk + persentasie + "x van y".
+      var balkRy = document.createElement('div');
+      balkRy.className = 'bywoning-balk-ry';
+      var balk = document.createElement('div');
+      balk.className = 'bywoning-balk';
+      balk.setAttribute('role', 'progressbar');
+      balk.setAttribute('aria-valuemin', '0');
+      balk.setAttribute('aria-valuemax', '100');
+      balk.setAttribute('aria-valuenow', String(pct));
+      var vul = document.createElement('div');
+      vul.className = 'bywoning-balk-vul' +
+        (pct < 50 ? ' bywoning-balk-vul--laag' : (pct < 75 ? ' bywoning-balk-vul--middel' : ''));
+      vul.style.width = pct + '%';
+      balk.appendChild(vul);
+      var pctEl = document.createElement('span');
+      pctEl.className = 'bywoning-pct';
+      pctEl.textContent = pct + '%';
+      var detail = document.createElement('span');
+      detail.className = 'bywoning-detail';
+      detail.textContent = stats.bygewoon + ' van ' + stats.dae;
+      balkRy.appendChild(balk);
+      balkRy.appendChild(pctEl);
+      balkRy.appendChild(detail);
+      card.appendChild(balkRy);
+
+      card.addEventListener('click', function () { selectStudent(s); });
+      card.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          selectStudent(s);
+        }
+      });
+      moduleList.appendChild(card);
+    });
+  }
+
   // ----- Studentbywoning: statistieke vir die gekose student -----
 
   /**
@@ -573,12 +722,13 @@
     var selfde = selectedStudent && selectedStudent.id === student.id;
     selectedStudent = selfde ? null : student;
 
-    if (rosterList) {
-      rosterList.querySelectorAll('.user-card').forEach(function (row) {
+    [rosterList, moduleList].forEach(function (lys) {
+      if (!lys) return;
+      lys.querySelectorAll('.user-card').forEach(function (row) {
         row.classList.toggle('user-card--gekies',
           !!selectedStudent && row.dataset.id === String(selectedStudent.id));
       });
-    }
+    });
     renderStudentStats();
   }
 
@@ -737,6 +887,7 @@
   // klas kies, word die ou antwoord geïgnoreer.
   function kiesKlas(klas) {
     currentKlas = klas;
+    bywoningKas = {}; // ander register = ander bywoning
     // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
     selectedStudent = null;
     renderStudentStats();
@@ -745,6 +896,7 @@
 
     return laaiStudente(klas).then(function () {
       if (currentKlas !== klas) return;
+      bywoningKas = {}; // die register is nou gelaai: bereken oor
       renderDashboard();
       renderRoster();
     }).catch(function (err) {

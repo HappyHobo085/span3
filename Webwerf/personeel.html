@@ -10,7 +10,7 @@
   <title>MOON — My Klasse</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260827c">
+  <link rel="stylesheet" href="styles.css?v=20260903">
   <script src="theme.js?v=20260819"></script>
 </head>
 <body>
@@ -65,8 +65,21 @@
             <div id="stat-bywoning-chart" class="viz-chart"></div>
             <div id="stat-bywoning-avg" class="viz-caption"></div>
           </div>
-          <!-- Studentbywoning: verskyn wanneer 'n student in die klasregister
-               (regterpaneel) gekies word; wys bygewoon vs gemis vir hierdie module -->
+          <!-- Studente per module: elke student in die gekose klas se register
+               met 'n vorderingsbalk van sy/haar bywoning vir hierdie module
+               (laaste klasdae) en die gekose dag se status. Klik op 'n student
+               om sy/haar bywoningstatistieke hieronder te sien. -->
+          <div class="card wide viz-block" id="dash-module-card"
+               style="flex-direction:column;align-items:stretch;justify-content:flex-start">
+            <div class="module-list-kop">
+              <strong id="module-student-titel">Studente — bywoning per module</strong>
+              <span class="viz-caption" id="module-student-caption"></span>
+            </div>
+            <div id="module-student-list" class="admin-list module-student-list"
+                 aria-label="Studente per module met bywoning"></div>
+          </div>
+          <!-- Studentbywoning: verskyn wanneer 'n student gekies word (links of in
+               die klasregister regs); wys bygewoon vs gemis vir hierdie module -->
           <div class="card wide viz-block" id="dash-student-card" hidden>
             <strong id="student-stats-titel">Studentbywoning</strong>
             <div id="stat-student-split" class="viz-chart"></div>
@@ -114,6 +127,6 @@
   <script src="website_api_calls.js?v=20260902"></script>
   <script src="main.js?v=20260902"></script>
   <script src="stats.js?v=20260902"></script>
-  <script src="personeel.js?v=20260902b"></script>
+  <script src="personeel.js?v=20260903"></script>
 </body>
 </html>
