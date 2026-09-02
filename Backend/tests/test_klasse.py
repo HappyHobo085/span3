@@ -36,9 +36,11 @@ def skep_klas(db, module, lokaal="GH117 A (50)", dag="Maandag", begin="8:00", ei
 
 class TestParseLantivCsv:
     def test_pars_ongewone_aanhalingstekens(self):
+        # Werklike Lantiv-formaat: elke ry in een paar buitenste kwote,
+        # velde binne-in dubbel-aangehaal.
         inhoud = (
             '"End Time,""Start Time"",""Dag"",""Lokaal"",""Groep"",""Module"",""From"",""To"""\n'
-            '"","","Maandag","GH117 A (50)","ER 2, LLB 2","EBREK370","8:00","9:00"'
+            '"10:00,""9:00"",""Maandag"",""GH117 A (50)"",""ER 2, LLB 2"",""EBREK370"",""8:00"",""9:00"""'
         )
         reëls = parse_lantiv_csv(inhoud)
         assert len(reëls) == 1
@@ -52,8 +54,8 @@ class TestParseLantivCsv:
 
     def test_meervoudige_rye(self):
         inhoud = (
-            '"","","Maandag","A","G1","M1","8:00","9:00"\n'
-            '"","","Dinsdag","B","G2","M2","10:00","11:00"'
+            '"10:00,""9:00"",""Maandag"",""A"",""G1"",""M1"",""8:00"",""9:00"""\n'
+            '"11:00,""10:00"",""Dinsdag"",""B"",""G2"",""M2"",""10:00"",""11:00"""'
         )
         reëls = parse_lantiv_csv(inhoud)
         assert len(reëls) == 2
@@ -122,7 +124,7 @@ class TestCSVInvoerIdempotensie:
         # Simuleer twee invoere van dieselfde CSV deur dieselfde logika
         # twee keer te laat loop (via die router se hulpfunksies).
         inhoud = (
-            '"","","Maandag","GH117 A (50)","ER 2","EBREK370","8:00","9:00"'
+            '"10:00,""9:00"",""Maandag"",""GH117 A (50)"",""ER 2"",""EBREK370"",""8:00"",""9:00"""'
         )
         reëls = parse_lantiv_csv(inhoud)
 

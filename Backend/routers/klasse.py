@@ -17,30 +17,35 @@ router = APIRouter(prefix="/rooster", tags=["Klas / Module / Groep"])
 def parse_lantiv_csv(inhoud: str) -> list[dict]:
     """Pars die Lantiv-uitvoer-CSV met sy ongewone dubbelaanhalingstekens.
 
-    Elke ry is dubbel-aangehaal met ingebedde aanhalingstekens, bv.:
-    '"End Time,""Start Time"",""Dag"",""Lokaal"",""Groep"",""Module"",""From"",""To\"\"\"'
-    Die buitenste kwote vorm een groot vel vir die kopreeks (wat sodoende
-    uitgeskakel word), terwyl datarye korrek in 8 kolomme ontsyfer word deur
-    die standaard csv-leser.
+    Lantiv draai elke RY in een paar buitenste aanhalingstekens, met die
+    velde binne-in dubbel-aangehaal, bv.:
+    '"10:00,""9:00"",""Maandag"",""GH117 A (50)"",""FBR 3"",""EBREK370"",""9:00"",""10:00\"\"\"'
+    Die buitenste kwote maak die hele ry een veld vir die standaard csv-leser;
+    ons lees dus elke ry as een veld en parse dit dan weer om die 8 kolomme te
+    kry.  Gewone CSV-rye (sonder buitenste kwote) word direk gebruik.
     """
     reëls = []
     for lyn in inhoud.splitlines():
         lyn = lyn.strip()
         if not lyn:
             continue
-        # Gebruik csv.reader direk — die Lantiv-CSV is reeds geldig geënkodeer
-        # met buitenste aanhalingstekens per ry.  Die buitenste kwote vorm een
-        # groot vel vir die kopreeks (wat sodoende uitgeskakel word), terwyl
-        # datarye korrek in 8 kolomme ontsyfer word.
-        leser = csv.reader(io.StringIO(lyn))
         try:
-            rye = list(leser)
+            rye = list(csv.reader(io.StringIO(lyn)))
+            if not rye or not rye[0]:
+                continue
+            kolomme = rye[0]
+            # As die hele ry een veld is (Lantiv se buitenste kwote), parse
+            # daardie veld weer om die werklike kolomme te ontsyfer.
+            if len(kolomme) < 8:
+                rye2 = list(csv.reader(io.StringIO(kolomme[0])))
+                if rye2 and rye2[0] and len(rye2[0]) >= 8:
+                    kolomme = rye2[0]
+                else:
+                    continue
         except Exception:
             continue
-        if not rye:
-            continue
-        kolomme = rye[0]
-        if len(kolomme) < 8:
+        # Slaan die kopreeks oor (Dag-kolom is die kolomnaam "Dag").
+        if kolomme[2].strip().lower() == "dag":
             continue
         # Kolomme: End Time, Start Time, Dag, Lokaal, Groep, Module, From, To
         reëls.append({
