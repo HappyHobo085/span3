@@ -199,6 +199,13 @@ function hasRole(roleName) {
     return;
   }
 
+  // 'n Vervalle (of ontbrekende) aanmeldbewys: gaan terug na die inteken-blad
+  // met 'n boodskap, eerder as dat elke bediener-oproep met 401 misluk.
+  if (currentPage !== 'login.html' && tokenHetVerval()) {
+    logOut('verval');
+    return;
+  }
+
   // Rolle word via hasRole() hieronder getoets (sien user_roles array in localStorage)
 
   // Studente mag nie die website gebruik nie.
@@ -262,11 +269,27 @@ if (isSuwerStudent && currentPage !== 'login.html') {
 
 // Hierdie funksie teken die gebruiker uit en stuur hom/haar terug
 // na die inteken-blad.
-function logOut() {
+function logOut(rede) {
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('access_token');
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_roles');
-  // Stuur die gebruiker na die inteken-blad
-  window.location.href = 'login.html';
+  // Stuur die gebruiker na die inteken-blad (met 'n rede as daar een is)
+  window.location.href = rede ? 'login.html?rede=' + encodeURIComponent(rede) : 'login.html';
+}
+
+// Hierdie funksie kyk of die gestoorde aanmeldbewys (JWT) ontbreek of verval
+// het, deur die "exp"-tyd in die token te lees. Geen token = verval.
+function tokenHetVerval() {
+  var token = localStorage.getItem('access_token');
+  if (!token) return true;
+  try {
+    var base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    var padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    var payload = JSON.parse(atob(padded));
+    if (!payload.exp) return false;
+    return payload.exp * 1000 <= Date.now();
+  } catch (err) {
+    return true;
+  }
 }

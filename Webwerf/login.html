@@ -24,6 +24,8 @@
       </div>
       <!-- Inteken-vorm: e-pos, wagwoord en die "Teken In" knoppie -->
       <div class="glass-card login-card">
+        <!-- Boodskappe (bv. sessie verval, verkeerde wagwoord) -->
+        <p id="login-boodskap" class="modal-status" aria-live="polite" style="margin:0 0 14px"></p>
         <form id="login-form">
           <div class="field">
             <label class="field-label" for="email">E-pos</label>
@@ -42,6 +44,7 @@
     </div>
   </section>
   <!-- Skrip: die kode wat die inteken laat werk -->
-  <script src="login.js?v=20260819"></script>
+  <script src="website_api_calls.js?v=20260902b"></script>
+  <script src="login.js?v=20260902b"></script>
 </body>
 </html>

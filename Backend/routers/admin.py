@@ -426,6 +426,34 @@ def _reset_sequences(db: Session, table_names: Iterable[str]) -> None:
             savepoint.rollback()
 
 
+# Ouer uitvoere (voor die status-woordeskat vasgepen is) gebruik waardes wat
+# die huidige CHECK-beperkings verwerp. Hulle word by invoer na die naaste
+# huidige waarde vertaal sodat 'n ou rugsteun steeds ingelees kan word.
+_VEROUDERDE_WAARDES: Dict[Tuple[str, str], Dict[str, str]] = {
+    ("funksie", "FUN_Status"): {"BEPLAN": "AKTIEF", "VOLTOOI": "AKTIEF"},
+    ("funksie_rsvp", "RSVP_Status"): {"MISKIEN": "GAAN"},
+    ("saamry_groep", "SAA_Status"): {"VOL": "GESLUIT", "BEËINDIG": "GESLUIT", "BEEINDIG": "GESLUIT"},
+    ("saamry_groep_lid", "SAA_Status"): {"IN_AFWAGTING": "HANGEND", "VERWERP": "GEWEIER"},
+    ("saamry_vriendskap", "SAA_Status"): {"IN_AFWAGTING": "HANGEND", "VERWERP": "GEWEIER"},
+    ("besoeker_uitnodiging", "BES_Status"): {
+        "IN_AFWAGTING": "HANGEND", "VERWERP": "GEWEIER", "VERWYS": "HANGEND",
+    },
+}
+
+
+def _vertaal_verouderde_waardes(table_name: str, row: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
+    """Vervang verouderde status-waardes in 'n ry met die huidige ekwivalent."""
+    row = dict(row)
+    for (tabel, kolom), kaart in _VEROUDERDE_WAARDES.items():
+        if tabel != table_name or kolom not in row or row[kolom] is None:
+            continue
+        nuut = kaart.get(str(row[kolom]).strip().upper())
+        if nuut is not None and nuut != row[kolom]:
+            row[kolom] = nuut
+            report["aangepas"] = report.get("aangepas", 0) + 1
+    return row
+
+
 def _insert_csv_rows(
     db: Session,
     table_name: str,
@@ -444,7 +472,7 @@ def _insert_csv_rows(
 
     if report is None:
         report = {}
-    report.update({"rye": 0, "nuut": 0, "bestaan_reeds": 0, "misluk": 0, "ontbrekende_velde": 0, "foute": []})
+    report.update({"rye": 0, "nuut": 0, "bestaan_reeds": 0, "misluk": 0, "ontbrekende_velde": 0, "aangepas": 0, "foute": []})
 
     table = _resolve_table(table_name)
     mode_name = _normalize_import_mode(mode)
@@ -462,6 +490,7 @@ def _insert_csv_rows(
 
     for ry_nr, row in enumerate(rows, start=2):  # ry 1 is die kop-ry
         report["rye"] += 1
+        row = _vertaal_verouderde_waardes(table.name, row, report)
         sanitized = _normalize_insert_row(table, row)
 
         insertable = {

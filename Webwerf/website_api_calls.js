@@ -38,6 +38,23 @@
   // Die bediener se adres word een keer hier uitgewerk en gestoor.
   const API_BASE_URL = getApiBaseUrl();
 
+  // Hierdie funksie kyk of die bediener die aanmeldbewys verwerp het (401).
+  // As dit so is, word die sessie skoongemaak en die gebruiker na die
+  // inteken-blad gestuur met 'n boodskap — in plaas daarvan dat elke bladsy
+  // 'n verwarrende "Kon nie geloofsbriewe verifieer nie" wys.
+  function hanteerOngemagtig(response, pathname) {
+    if (!response || response.status !== 401) return false;
+    if (pathname === '/token') return false; // verkeerde wagwoord, nie 'n vervalle sessie nie
+    const bladsy = window.location.pathname.split('/').pop();
+    if (bladsy === 'login.html') return false;
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_roles');
+    window.location.href = 'login.html?rede=verval';
+    return true;
+  }
+
   /**
    * Generic API request helper
    */
@@ -67,6 +84,8 @@
       API_BASE_URL + path,
       Object.assign({}, options, { headers })
     );
+
+    hanteerOngemagtig(response, path);
 
     // Probeer die antwoord se inhoud lees; as dit nie kan nie, bly dit leeg.
     let body = {};
@@ -446,6 +465,7 @@
         headers,
         body: formData,
       });
+      hanteerOngemagtig(response, '/admin/csv/import');
 
       let body = {};
       try {
@@ -473,6 +493,7 @@
         method: 'GET',
         headers: token ? { Authorization: 'Bearer ' + token } : {},
       });
+      hanteerOngemagtig(response, '/admin/csv/export');
 
       const text = await response.text();
       return {
@@ -492,6 +513,7 @@
         method: 'GET',
         headers: token ? { Authorization: 'Bearer ' + token } : {},
       });
+      hanteerOngemagtig(response, '/admin/csv/export-all');
 
       const blob = await response.blob();
       return {
@@ -521,6 +543,7 @@
         headers,
         body: formData,
       });
+      hanteerOngemagtig(response, '/admin/csv/import-all');
 
       let body = {};
       try {

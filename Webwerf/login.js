@@ -35,10 +35,27 @@
       const protocol = window.location.protocol || 'http:';
       return `${protocol}//${host}:8000`;
     }
-    return 'https://cloned-toets-production.up.railway.app';
+    return 'https://humorous-endurance-production-ee64.up.railway.app';
   }
 
-  const API_BASE_URL = getApiBaseUrl();
+  // Dieselfde bediener as website_api_calls.js (as dit gelaai is), anders die
+  // adres hierbo — die aanmelding MOET na dieselfde bediener gaan as die res
+  // van die webwerf, anders word die token oral verwerp.
+  const API_BASE_URL = (window.MoonApi && window.MoonApi.baseUrl) || getApiBaseUrl();
+
+  // Wys 'n boodskap op die inteken-blad (bv. "sessie het verval").
+  function wysBoodskap(teks, tipe) {
+    const el = document.getElementById('login-boodskap');
+    if (!el) { if (teks) alert(teks); return; }
+    el.textContent = teks || '';
+    el.className = 'modal-status' + (teks ? ' ' + (tipe || 'error') : '');
+  }
+
+  // As ons hierheen gestuur is omdat die sessie verval het, sê so.
+  const rede = new URLSearchParams(window.location.search).get('rede');
+  if (rede === 'verval') {
+    wysBoodskap('Jou sessie het verval of is ongeldig. Teken asseblief weer in.', 'error');
+  }
 
   // Kry die inteken-vorm op die blad
   const loginForm = document.getElementById('login-form');
@@ -113,11 +130,11 @@
           window.location.href = 'home.html';
         } else {
           // Die inteken het misluk: wys die foutboodskap
-          alert(result.fout || 'Verkeerde e-pos of wagwoord.');
+          wysBoodskap(result.fout || 'Verkeerde e-pos of wagwoord.', 'error');
         }
       } catch (err) {
         // Die bediener kon nie bereik word nie: wys 'n boodskap
-        alert('Kon nie aan die bediener koppel nie. Probeer later weer.');
+        wysBoodskap('Kon nie aan die bediener koppel nie. Probeer later weer.', 'error');
         console.error('[login] Network error:', err);
       } finally {
         // Sit die knoppie terug soos dit was
