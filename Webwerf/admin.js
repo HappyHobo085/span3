@@ -1881,6 +1881,379 @@ async function refreshDashboard() {
   }
 
   // =====================================================================
+  //  DOSENTE & MODULES (rooster-toewysing)
+  // =====================================================================
+  // Hierdie paneel wys elke gebruiker met die Personeel-rol saam met die
+  // modules wat aan hom/haar toegewys is, en laat die admin modules byvoeg
+  // of verwyder. Dit is wat "My Klasse" (personeel.html) vir 'n dosent vul:
+  // GET /rooster/personeel/{id}/rooster gee net klasse van toegewysde modules.
+  // Die Lantiv-rooster-oplaai (POST /rooster/klasse/import) skep die modules,
+  // groepe en klasse waaruit hier gekies word.
+
+  const dosentList = document.getElementById('dosent-list');
+  const dosentSearch = document.getElementById('dosent-search');
+  const uploadRoosterBtn = document.getElementById('upload-rooster-btn');
+  const roosterFileInput = document.getElementById('rooster-file-input');
+  const roosterStatus = document.getElementById('rooster-status');
+  const roosterOpsomming = document.getElementById('rooster-opsomming');
+  const moduleModal = document.getElementById('moduleModal');
+  const moduleModalUserName = document.getElementById('module-modal-user-name');
+  const currentModules = document.getElementById('current-modules');
+  const addModuleSelect = document.getElementById('add-module-select');
+  const addModuleBtn = document.getElementById('add-module-btn');
+  const moduleModalStatus = document.getElementById('module-modal-status');
+  const closeModuleModalBtn = document.getElementById('close-module-modal');
+
+  let alleModules = [];      // [{ Module_ID, MOD_Kode, MOD_Naam }]
+  let aantalKlasse = null;   // hoeveel klassessies die rooster het (null = onbekend)
+  let dosente = [];          // [{ id, naam, van, epos }]
+  let dosentModules = {};    // Gebruiker_ID -> [{ Module_ID, MOD_Kode, MOD_Naam }]
+  let moduleModalDosent = null; // dosent wie se modules tans in die modal wys
+
+  // Hierdie funksie wys 'n groen (success) of rooi (error) boodskap in 'n
+  // .modal-status-blokkie; 'n leë boodskap steek dit weg.
+  function setStatusBox(el, message, type) {
+    if (!el) return;
+    el.textContent = message || '';
+    el.className = 'modal-status' + (message ? ' ' + (type || 'success') : '');
+  }
+
+  // Hierdie funksie kyk of 'n bediener-antwoord suksesvol was.
+  function isOk(json) {
+    return !!(json && json.sukses);
+  }
+
+  // Hierdie funksie gee die foutboodskap uit 'n bediener-antwoord.
+  function foutBoodskap(json, verstek) {
+    if (json && typeof json.detail === 'string') return json.detail;
+    if (json && typeof json.boodskap === 'string') return json.boodskap;
+    return verstek;
+  }
+
+  // Hierdie funksie skryf 'n module leesbaar uit, bv. "EBREK370 — Rekeningkunde".
+  function moduleLabel(m) {
+    return m.MOD_Naam ? m.MOD_Kode + ' — ' + m.MOD_Naam : m.MOD_Kode;
+  }
+
+  // Hierdie funksie kyk of 'n gebruiker se rolle die Personeel-rol insluit
+  // (via rolleMap se vertoonname, dus "Personeel" of "Dosente").
+  function hetPersoneelRol(rolIds) {
+    return rolIds.some(function (rolId) {
+      const naam = (rolleMap[String(rolId)] || '').toLowerCase().replace(/[\s_]+/g, '');
+      return naam === 'personeel' || naam === 'dosente' || naam === 'dosent';
+    });
+  }
+
+  // Hierdie funksie gee 'n gebruiker se rol-ID's (nuwe multi-rol lys, of die
+  // ou enkel Rol_ID as terugval) — dieselfde reël as loadGebruikers().
+  function gebruikerRolIds(user) {
+    return Array.isArray(user.Rol_IDs) && user.Rol_IDs.length ? user.Rol_IDs : [user.Rol_ID];
+  }
+
+  /** Laai modules, klasse, dosente en toewysings en teken die paneel. */
+  async function loadRoosterPaneel() {
+    if (!dosentList || !window.MoonApi) return;
+    setStatusBox(roosterStatus, '');
+
+    try {
+      const resultate = await Promise.all([
+        window.MoonApi.fetchModules(),
+        window.MoonApi.fetchRoosterKlasse(),
+        window.MoonApi.fetchGebruikers(),
+        window.MoonApi.fetchPersoneelModuleToewysings()
+      ]);
+      const modJson = resultate[0];
+      const klasJson = resultate[1];
+      const gebJson = resultate[2];
+      const toewJson = resultate[3];
+
+      if (!isOk(modJson)) throw new Error(foutBoodskap(modJson, 'Kon nie modules laai nie.'));
+      if (!isOk(gebJson)) throw new Error(foutBoodskap(gebJson, 'Kon nie gebruikers laai nie.'));
+      if (!isOk(toewJson)) throw new Error(foutBoodskap(toewJson, 'Kon nie toewysings laai nie.'));
+
+      alleModules = (modJson.data || []).slice().sort(function (a, b) {
+        return String(a.MOD_Kode).localeCompare(String(b.MOD_Kode));
+      });
+      aantalKlasse = isOk(klasJson) && Array.isArray(klasJson.data) ? klasJson.data.length : null;
+
+      dosentModules = {};
+      (toewJson.data || []).forEach(function (t) {
+        if (!dosentModules[t.Gebruiker_ID]) dosentModules[t.Gebruiker_ID] = [];
+        dosentModules[t.Gebruiker_ID].push({
+          Module_ID: t.Module_ID, MOD_Kode: t.MOD_Kode, MOD_Naam: t.MOD_Naam
+        });
+      });
+
+      dosente = (gebJson.data || [])
+        .filter(function (u) { return hetPersoneelRol(gebruikerRolIds(u)); })
+        .map(function (u) {
+          return { id: u.Gebruiker_ID, naam: u.GEB_Naam, van: u.GEB_Van, epos: u.GEB_Epos, isAktief: u.Is_Aktief !== false };
+        })
+        .sort(function (a, b) { return (a.van + a.naam).localeCompare(b.van + b.naam); });
+
+      renderDosente();
+      renderRoosterOpsomming();
+    } catch (err) {
+      setStatusBox(roosterStatus, 'Kon nie die dosente-paneel laai nie: ' + err.message, 'error');
+    }
+  }
+
+  // Hierdie funksie wys onderaan die paneel hoeveel modules en klasse daar is.
+  function renderRoosterOpsomming() {
+    if (!roosterOpsomming) return;
+    let teks = alleModules.length + ' module' + (alleModules.length === 1 ? '' : 's');
+    if (aantalKlasse !== null) teks += ' · ' + aantalKlasse + ' klas' + (aantalKlasse === 1 ? '' : 'se') + ' in die rooster';
+    if (alleModules.length === 0) teks += '. Laai die Lantiv-rooster op om modules te skep.';
+    roosterOpsomming.textContent = teks;
+  }
+
+  // Hierdie funksie bou een dosent-ry: naam, e-pos, module-etikette en 'n
+  // "Modules"-knoppie wat die toewysings-modal oopmaak.
+  function addDosentRow(dosent) {
+    const row = document.createElement('div');
+    row.className = 'admin-user-row';
+    row.dataset.userId = String(dosent.id);
+    row.dataset.search = (dosent.naam + ' ' + dosent.van + ' ' + dosent.epos).toLowerCase();
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'admin-user-info';
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'admin-user-name';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'admin-user-name-text';
+    nameSpan.textContent = dosent.naam + ' ' + dosent.van;
+    nameDiv.appendChild(nameSpan);
+    nameDiv.appendChild(buildStatusBadge(dosent.isAktief));
+    const emailDiv = document.createElement('div');
+    emailDiv.className = 'admin-user-email';
+    emailDiv.textContent = dosent.epos;
+    infoDiv.appendChild(nameDiv);
+    infoDiv.appendChild(emailDiv);
+
+    const modulesDiv = document.createElement('div');
+    modulesDiv.className = 'admin-user-roles';
+    const modules = dosentModules[dosent.id] || [];
+    if (modules.length === 0) {
+      const geen = document.createElement('span');
+      geen.className = 'admin-user-email';
+      geen.textContent = 'Geen modules';
+      modulesDiv.appendChild(geen);
+    } else {
+      modules.forEach(function (m) {
+        const badge = document.createElement('span');
+        badge.className = 'role-badge module-badge';
+        badge.textContent = m.MOD_Kode;
+        if (m.MOD_Naam) badge.title = m.MOD_Naam;
+        modulesDiv.appendChild(badge);
+      });
+    }
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'admin-user-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-outline btn-sm';
+    btn.textContent = 'Modules';
+    btn.addEventListener('click', function () { openModuleModal(dosent); });
+    actionsDiv.appendChild(btn);
+
+    row.appendChild(infoDiv);
+    row.appendChild(modulesDiv);
+    row.appendChild(actionsDiv);
+    dosentList.appendChild(row);
+  }
+
+  /** Teken die dosente-lys oor (en pas die soekfilter toe). */
+  function renderDosente() {
+    if (!dosentList) return;
+    dosentList.innerHTML = '';
+    if (dosente.length === 0) {
+      const leeg = document.createElement('div');
+      leeg.className = 'admin-user-row';
+      const info = document.createElement('div');
+      info.className = 'admin-user-info';
+      const msg = document.createElement('div');
+      msg.className = 'admin-user-email';
+      msg.textContent = 'Geen gebruikers met die Personeel-rol nie. Gee \'n gebruiker die Personeel-rol onder "Gebruikers".';
+      info.appendChild(msg);
+      leeg.appendChild(info);
+      dosentList.appendChild(leeg);
+      return;
+    }
+    dosente.forEach(addDosentRow);
+    applyDosentFilter();
+  }
+
+  /** Steek dosente weg wat nie by die soekwoord pas nie. */
+  function applyDosentFilter() {
+    if (!dosentList) return;
+    const query = dosentSearch ? dosentSearch.value.trim().toLowerCase() : '';
+    dosentList.querySelectorAll('.admin-user-row').forEach(function (row) {
+      const searchable = row.dataset.search || '';
+      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
+    });
+    capListHeight(dosentList, '.admin-user-row');
+  }
+
+  // ----- Module-modal -----
+
+  /** Maak die modal oop vir 'n dosent. */
+  function openModuleModal(dosent) {
+    if (!moduleModal) return;
+    moduleModalDosent = dosent;
+    if (moduleModalUserName) moduleModalUserName.textContent = dosent.naam + ' ' + dosent.van;
+    setStatusBox(moduleModalStatus, '');
+    renderModuleModal();
+    moduleModal.classList.add('open');
+    moduleModal.setAttribute('aria-hidden', 'false');
+  }
+
+  /** Maak die modal toe. */
+  function closeModuleModal() {
+    if (!moduleModal) return;
+    moduleModal.classList.remove('open');
+    moduleModal.setAttribute('aria-hidden', 'true');
+    moduleModalDosent = null;
+  }
+
+  /** Teken die toegewysde modules (met ×) en die keuselys van oorblywende modules. */
+  function renderModuleModal() {
+    if (!moduleModalDosent) return;
+    const toegewys = dosentModules[moduleModalDosent.id] || [];
+    const toegewysIds = toegewys.map(function (m) { return m.Module_ID; });
+
+    if (currentModules) {
+      currentModules.innerHTML = '';
+      if (toegewys.length === 0) {
+        const geen = document.createElement('span');
+        geen.className = 'admin-user-email';
+        geen.textContent = 'Nog geen modules toegewys nie.';
+        currentModules.appendChild(geen);
+      }
+      toegewys.forEach(function (m) {
+        const badge = document.createElement('span');
+        badge.className = 'role-badge-removable module-badge';
+        badge.title = moduleLabel(m);
+        badge.appendChild(document.createTextNode(m.MOD_Kode + ' '));
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'role-badge-remove';
+        x.innerHTML = '&times;';
+        x.setAttribute('aria-label', 'Verwyder ' + m.MOD_Kode);
+        x.addEventListener('click', function () { verwyderModuleVanDosent(m); });
+        badge.appendChild(x);
+        currentModules.appendChild(badge);
+      });
+    }
+
+    if (addModuleSelect) {
+      addModuleSelect.innerHTML = '';
+      const eerste = document.createElement('option');
+      eerste.value = '';
+      const oorblywend = alleModules.filter(function (m) { return toegewysIds.indexOf(m.Module_ID) === -1; });
+      eerste.textContent = alleModules.length === 0
+        ? 'Geen modules — laai eers die rooster op'
+        : (oorblywend.length === 0 ? 'Alle modules is reeds toegewys' : 'Kies module...');
+      addModuleSelect.appendChild(eerste);
+      oorblywend.forEach(function (m) {
+        const opt = document.createElement('option');
+        opt.value = String(m.Module_ID);
+        opt.textContent = moduleLabel(m);
+        addModuleSelect.appendChild(opt);
+      });
+      addModuleSelect.disabled = oorblywend.length === 0;
+      if (addModuleBtn) addModuleBtn.disabled = oorblywend.length === 0;
+    }
+  }
+
+  /** Wys die gekose module in die keuselys aan die dosent toe. */
+  async function voegModuleByDosent() {
+    if (!moduleModalDosent || !addModuleSelect || !window.MoonApi) return;
+    const moduleId = parseInt(addModuleSelect.value, 10);
+    if (!moduleId) {
+      setStatusBox(moduleModalStatus, 'Kies eers \'n module.', 'error');
+      return;
+    }
+    const module = alleModules.filter(function (m) { return m.Module_ID === moduleId; })[0];
+    const dosent = moduleModalDosent;
+    if (addModuleBtn) addModuleBtn.disabled = true;
+    try {
+      const json = await window.MoonApi.assignPersoneelModule(dosent.id, moduleId);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie module toewys nie.'));
+      if (!dosentModules[dosent.id]) dosentModules[dosent.id] = [];
+      dosentModules[dosent.id].push(module);
+      dosentModules[dosent.id].sort(function (a, b) { return String(a.MOD_Kode).localeCompare(String(b.MOD_Kode)); });
+      setStatusBox(moduleModalStatus, module.MOD_Kode + ' toegewys aan ' + dosent.naam + ' ' + dosent.van + '.', 'success');
+      if (moduleModalDosent === dosent) renderModuleModal();
+      renderDosente();
+    } catch (err) {
+      setStatusBox(moduleModalStatus, err.message, 'error');
+      if (addModuleBtn) addModuleBtn.disabled = false;
+    }
+  }
+
+  /** Haal 'n module van die dosent in die modal af. */
+  async function verwyderModuleVanDosent(module) {
+    if (!moduleModalDosent || !window.MoonApi) return;
+    const dosent = moduleModalDosent;
+    try {
+      const json = await window.MoonApi.unassignPersoneelModule(dosent.id, module.Module_ID);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie module verwyder nie.'));
+      dosentModules[dosent.id] = (dosentModules[dosent.id] || []).filter(function (m) {
+        return m.Module_ID !== module.Module_ID;
+      });
+      setStatusBox(moduleModalStatus, module.MOD_Kode + ' verwyder van ' + dosent.naam + ' ' + dosent.van + '.', 'success');
+      if (moduleModalDosent === dosent) renderModuleModal();
+      renderDosente();
+    } catch (err) {
+      setStatusBox(moduleModalStatus, err.message, 'error');
+    }
+  }
+
+  // ----- Lantiv-rooster oplaai -----
+
+  /** Stuur die gekose CSV na POST /rooster/klasse/import en herlaai die paneel. */
+  async function handleRoosterUpload() {
+    if (!roosterFileInput || !roosterFileInput.files || !roosterFileInput.files.length) return;
+    const file = roosterFileInput.files[0];
+    roosterFileInput.value = '';
+    if (!window.MoonApi) return;
+
+    setStatusBox(roosterStatus, 'Laai "' + file.name + '" op...', 'success');
+    if (uploadRoosterBtn) uploadRoosterBtn.disabled = true;
+    try {
+      const json = await window.MoonApi.importKlasseCsv(file);
+      if (!isOk(json)) throw new Error(foutBoodskap(json, 'Oplaai het misluk.'));
+      const d = json.data || {};
+      const foute = Array.isArray(d.foute) ? d.foute : [];
+      let boodskap = 'Rooster ingevoer: ' + (d.modules_geskep || 0) + ' nuwe modules, ' +
+        (d.groepe_geskep || 0) + ' nuwe groepe, ' + (d.klasse_geskep || 0) + ' klasse.';
+      if (foute.length) boodskap += ' ' + foute.length + ' ry(e) oorgeslaan: ' + foute.slice(0, 3).join('; ') + (foute.length > 3 ? ' …' : '');
+      await loadRoosterPaneel();
+      setStatusBox(roosterStatus, boodskap, foute.length && !d.klasse_geskep ? 'error' : 'success');
+    } catch (err) {
+      setStatusBox(roosterStatus, 'Kon nie die rooster oplaai nie: ' + err.message, 'error');
+    } finally {
+      if (uploadRoosterBtn) uploadRoosterBtn.disabled = false;
+    }
+  }
+
+  // ----- Gebeurtenisse vir hierdie paneel -----
+  if (dosentSearch) dosentSearch.addEventListener('input', applyDosentFilter);
+  if (uploadRoosterBtn && roosterFileInput) {
+    uploadRoosterBtn.addEventListener('click', function () { roosterFileInput.click(); });
+    roosterFileInput.addEventListener('change', handleRoosterUpload);
+  }
+  if (addModuleBtn) addModuleBtn.addEventListener('click', voegModuleByDosent);
+  if (closeModuleModalBtn) closeModuleModalBtn.addEventListener('click', closeModuleModal);
+  if (moduleModal) {
+    // Klik buite die venster maak dit toe (soos die ander modals).
+    moduleModal.addEventListener('click', function (ev) {
+      if (ev.target === moduleModal) closeModuleModal();
+    });
+  }
+
+  // =====================================================================
   //  INIT
   // =====================================================================
 
@@ -1900,6 +2273,8 @@ async function refreshDashboard() {
 
   await loadGebruikers();
   applyUserFilter();
+
+  await loadRoosterPaneel();
 
   await loadAutoUitcheckTydstip();
 

@@ -753,6 +753,27 @@
     },
 
     /**
+     * GET /rooster/personeel-modules  (slegs Admin)
+     * Alle dosent-module-toewysings: [{ Gebruiker_ID, Module_ID, MOD_Kode, MOD_Naam }]
+     */
+    fetchPersoneelModuleToewysings: async function () {
+      const r = await apiRequest('/rooster/personeel-modules', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * DELETE /rooster/personeel/{userId}/modules/{moduleId}  (slegs Admin)
+     * Haal 'n module van 'n personeellid af.
+     */
+    unassignPersoneelModule: async function (userId, moduleId) {
+      const r = await apiRequest(
+        '/rooster/personeel/' + encodeURIComponent(userId) + '/modules/' + encodeURIComponent(moduleId),
+        { method: 'DELETE' }
+      );
+      return r.body;
+    },
+
+    /**
      * GET /rooster/studente/{userId}/rooster
      * Student se eie rooster (of Admin vir enige student).
      */

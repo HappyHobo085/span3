@@ -387,3 +387,50 @@ class TestRoosterHTTPAuth:
         client = self._bou_client(http_db)
         resp = client.get("/rooster/klasse/9999/studente", headers=self._headers(admin))
         assert resp.status_code == 404
+
+    def test_personeel_modules_lys_en_verwyder(self, http_db):
+        admin = self._maak_gebruiker(http_db, "Administrateur", 1)
+        dosent = self._maak_gebruiker(http_db, "Personeel", 2)
+        module = skep_module(http_db, "EBREK370", "Rekeningkunde")
+        http_db.flush()
+        client = self._bou_client(http_db)
+
+        resp = client.post(
+            f"/rooster/personeel/{dosent.Gebruiker_ID}/modules",
+            json={"Module_ID": module.Module_ID},
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+
+        resp = client.get("/rooster/personeel-modules", headers=self._headers(admin))
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data == [{
+            "Gebruiker_ID": dosent.Gebruiker_ID,
+            "Module_ID": module.Module_ID,
+            "MOD_Kode": "EBREK370",
+            "MOD_Naam": "Rekeningkunde",
+        }]
+
+        resp = client.delete(
+            f"/rooster/personeel/{dosent.Gebruiker_ID}/modules/{module.Module_ID}",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["Module_ID"] == module.Module_ID
+
+        resp = client.get("/rooster/personeel-modules", headers=self._headers(admin))
+        assert resp.json()["data"] == []
+
+        # Tweede keer verwyder: die toewysing bestaan nie meer nie.
+        resp = client.delete(
+            f"/rooster/personeel/{dosent.Gebruiker_ID}/modules/{module.Module_ID}",
+            headers=self._headers(admin),
+        )
+        assert resp.status_code == 404
+
+    def test_personeel_modules_lys_403_vir_nie_admin(self, http_db):
+        dosent = self._maak_gebruiker(http_db, "Personeel", 1)
+        client = self._bou_client(http_db)
+        resp = client.get("/rooster/personeel-modules", headers=self._headers(dosent))
+        assert resp.status_code == 403

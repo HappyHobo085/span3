@@ -151,7 +151,28 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
-      <!-- Paneel 5: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
+      <!-- Paneel 5: Dosente en hul modules (rooster-toewysing). Dosente sien op
+           "My Klasse" net die klasse van modules wat hier aan hulle toegewys is. -->
+      <article class="glass-card panel" aria-label="Dosente en Modules">
+        <h2>Dosente &amp; Modules</h2>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:10px">
+          Wys modules aan dosente toe. 'n Dosent sien op "My Klasse" net die
+          klasse van modules wat hier aan hom/haar toegewys is. Laai eers die
+          Lantiv-rooster op sodat die modules en klasse bestaan.
+        </p>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="dosent-search" autocomplete="off"
+                 aria-label="Soek dosent" placeholder="Soek dosent..." style="flex:1">
+          <button class="btn-outline btn-sm" id="upload-rooster-btn" type="button">Laai Rooster (CSV)</button>
+          <input type="file" id="rooster-file-input" accept=".csv,text/csv" style="display:none">
+        </div>
+        <div id="rooster-status" class="modal-status" aria-live="polite"></div>
+        <div class="admin-list" id="dosent-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+        <p id="rooster-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
+      </article>
+      <!-- Paneel 6: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
       <article class="glass-card panel" aria-label="Outo-Uitskandering">
         <h2>Outo-Uitskandering</h2>
         <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">
@@ -337,6 +358,30 @@
     </div>
   </div>
 
+  <!-- Modal: Bestuur Modules van 'n dosent (toggled by admin.js via .open class) -->
+  <div id="moduleModal" class="class-modal-overlay" aria-hidden="true">
+    <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="module-modal-title">
+      <h3 id="module-modal-title">Modules — <span id="module-modal-user-name">Dosent</span></h3>
+      <div class="field">
+        <label>Toegewysde Modules</label>
+        <div class="role-badges-container" id="current-modules"></div>
+      </div>
+      <div class="field">
+        <label for="add-module-select">Wys Module Toe</label>
+        <div class="add-role-row">
+          <select class="glass-select" id="add-module-select">
+            <option value="">Kies module...</option>
+          </select>
+          <button class="btn-primary btn-sm" id="add-module-btn" type="button">Voeg By</button>
+        </div>
+      </div>
+      <div id="module-modal-status" class="modal-status" aria-live="polite"></div>
+      <div class="class-modal-actions">
+        <button class="btn-primary" id="close-module-modal" type="button">Klaar</button>
+      </div>
+    </div>
+  </div>
+
     <!-- "Skep nuwe klas" modal — toggled by kampus.js via .open class -->
   <!-- Venster met die vorm om 'n lokaal (klaskamer) te skep of te wysig -->
   <div id="class-modal-overlay" class="class-modal-overlay" aria-hidden="true">
@@ -364,8 +409,8 @@
   <!-- Skripte: die kode wat die bladsy laat werk -->
   <!-- website_api_calls.js praat met die bediener, main.js is gedeelde kode,
        en admin.js beheer hierdie spesifieke bladsy -->
-  <script src="website_api_calls.js"></script>
+  <script src="website_api_calls.js?v=20260902"></script>
   <script src="main.js"></script>
-  <script src="admin.js"></script>
+  <script src="admin.js?v=20260902"></script>
 </body>
 </html>

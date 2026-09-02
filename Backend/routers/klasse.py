@@ -465,6 +465,51 @@ def ken_personeel_module_toe(
     return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Module_ID": data.Module_ID})
 
 
+@router.get("/personeel-modules")
+def lys_personeel_modules(
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Alle dosent-module-toewysings in een lys (vir die admin-skerm)."""
+    rye = (
+        db.query(models.Personeel_Module, models.Module)
+        .join(models.Module, models.Module.Module_ID == models.Personeel_Module.Module_ID)
+        .order_by(models.Personeel_Module.Gebruiker_ID, models.Module.MOD_Kode)
+        .all()
+    )
+    return schemas.APIResponse(
+        sukses=True,
+        data=[
+            {
+                "Gebruiker_ID": pm.Gebruiker_ID,
+                "Module_ID": m.Module_ID,
+                "MOD_Kode": m.MOD_Kode,
+                "MOD_Naam": m.MOD_Naam,
+            }
+            for pm, m in rye
+        ],
+    )
+
+
+@router.delete("/personeel/{gebruiker_id}/modules/{module_id}")
+def verwyder_personeel_module(
+    gebruiker_id: int,
+    module_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Haal 'n module van 'n personeellid af (verwyder die toewysing)."""
+    koppeling = db.query(models.Personeel_Module).filter(
+        models.Personeel_Module.Gebruiker_ID == gebruiker_id,
+        models.Personeel_Module.Module_ID == module_id,
+    ).first()
+    if not koppeling:
+        raise HTTPException(status_code=404, detail="Toewysing nie gevind nie")
+    db.delete(koppeling)
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Module_ID": module_id})
+
+
 @router.post("/personeel/{gebruiker_id}/klasse")
 def ken_personeel_klas_toe(
     gebruiker_id: int,
