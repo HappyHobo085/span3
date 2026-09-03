@@ -826,18 +826,48 @@ img,svg,video{max-width:100%}
 }
 
 @media (max-width:640px){
-  :root{--page-px:12px}
+  :root{--page-px:12px;--panel-gap:12px}
   .hero-value{font-size:42px}
+  .hero-chart{margin-left:calc(-1 * var(--page-px));margin-right:calc(-1 * var(--page-px))}
+  /* KPI-teëls: twee langs mekaar in plaas van een lang kolom */
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat-card{padding:12px 14px}
+  .stat-value{font-size:24px}
+  /* 'n Onewe laaste teël vul die hele ry in plaas van alleen te staan */
+  .stat-grid>.stat-card:last-child:nth-child(odd){grid-column:1/-1}
   .dashboard-grid{grid-template-columns:1fr}
-  .top-controls{flex-wrap:wrap;align-items:stretch}
+  .top-controls{flex-wrap:wrap;align-items:stretch;gap:10px}
   .top-controls .control-group{flex:1 1 100%}
   .top-controls .glass-select,.top-controls .glass-input{width:100% !important}
+  .top-controls .control-group>.btn-outline,
+  .top-controls .control-group>.btn-primary{flex:1 1 auto}
   .control-group{flex-wrap:wrap}
   .panel{padding:14px}
-  .class-modal{padding:20px;max-height:92vh;overflow-y:auto}
+  /* Soek-ry met 'n filter langsaan (admin): die filter val onder die soekblokkie */
+  .list-search{flex-wrap:wrap}
+  .list-search .glass-select{width:100% !important}
+  /* Insetvelde minstens 16px sodat iOS nie inzoem wanneer 'n mens tik nie */
+  .glass-input,.glass-select,
+  .class-modal input,.class-modal select,.class-modal textarea{font-size:16px}
+  /* Knoppies en kalenderdae groot genoeg vir 'n vinger */
+  .btn-primary,.btn-outline{min-height:40px}
+  .btn-sm{min-height:34px}
+  .menu-btn{width:40px;height:40px}
+  .kalender-dag{height:38px;font-size:13px}
+  /* Modale vul die skerm en rol binne-in as die vorm te lank is */
+  .class-modal-overlay{padding:12px}
+  .class-modal{padding:20px;max-height:92vh;max-height:92dvh;overflow-y:auto}
   .class-modal-actions{flex-wrap:wrap}
+  .class-modal-actions .btn-primary,
+  .class-modal-actions .btn-outline{flex:1 1 auto}
   .admin-user-row,.admin-venue-row{flex-wrap:wrap}
-  .admin-user-roles{margin:0}
+  .admin-user-roles{margin:0;flex-basis:100%}
+  .admin-user-actions{flex-wrap:wrap}
+  /* Onderste balk: ruimte vir die selfoon se tuis-strepie */
+  .action-bar{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .action-bar-right{flex-wrap:wrap}
+  /* Die grafiek-tooltip mag nie breër as die skerm wees nie */
+  .viz-tooltip{max-width:calc(100vw - 24px)}
 }
 
 /* ─── Personeel (My Klasse): geen bladsy-blaai; net die lyste blaai ─────── */
@@ -881,9 +911,22 @@ body.personeel-blad .topbar{flex-shrink:0}
   /* Panele onder mekaar: elk kry die helfte van die hoogte, lyste blaai steeds */
   #personeel-page .panels{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
 }
-@media (max-width:640px){
-  /* Klein skerms: die bladsy blaai steeds nie; as 'n paneel se vaste dele
-     (grafiek, kalender) nie inpas nie, blaai daardie paneel self. */
-  #personeel-page .panel{overflow-y:auto}
-  #personeel-page .kalender-dag{height:26px}
+
+/* Selfoon en tablet (die sybalk is weggesteek): die "geen bladsy-blaai"
+   reël geld NET op 'n rekenaar. Hier blaai die bladsy soos gewoonlik sodat
+   niks afgesny word nie; net die twee lang studentelyste bly beperk en
+   blaai binne hul kaart sodat die bladsy nie eindeloos lank word nie. */
+@media (max-width:900px){
+  body.personeel-blad{height:auto;min-height:100vh;overflow:visible}
+  #personeel-page{height:auto;overflow:visible}
+  #personeel-page .panels{grid-template-rows:none}
+  #personeel-page .panel{overflow:visible;min-height:0}
+  #personeel-page .dashboard-grid{flex:none}
+  #personeel-page #dash-module-card{flex:none;overflow:visible}
+  #personeel-page .module-student-list{
+    flex:none;max-height:50vh;max-height:50dvh;overflow-y:auto;
+  }
+  #personeel-page #roster-list{
+    flex:none;max-height:50vh;max-height:50dvh;overflow-y:auto;
+  }
 }
