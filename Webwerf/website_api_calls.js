@@ -416,6 +416,26 @@
     },
 
     /**
+     * GET /events/{eventId}/rsvps
+     * Gee die event se besonderhede saam met almal wat RSVP het: app-gebruikers
+     * (studente/personeel) én eksterne gaste ("plus 1's" via die deel-skakel).
+     * Slegs 'n Administrateur of Kampus_Opsigter mag dit sien (anders 403).
+     */
+    // Hierdie funksie roep GET /events/{id}/rsvps — dit kry die gastelys
+    // van een event: wie genooi is (RSVP) en die eksterne gaste.
+    fetchEventRsvps: async function (eventId) {
+      const r = await apiRequest('/events/' + eventId + '/rsvps', {
+        method: 'GET',
+      });
+      const body = r.body || {};
+      if (!r.ok && body.sukses === undefined) {
+        return { sukses: false, data: null, fout: body.detail || ('Fout ' + r.status), status: r.status };
+      }
+      if (body.status === undefined) body.status = r.status;
+      return body;
+    },
+
+    /**
      * GET /kampusse/status
      * Returns summary scan counts for all campuses. No auth required.
      * Used by the Tuis dashboard (home.js) for the per-campus overview.
