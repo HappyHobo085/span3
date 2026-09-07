@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional, Generic, TypeVar, List
 from datetime import datetime
 
@@ -75,15 +75,13 @@ class UserUpdate(BaseModel):
     NFC_Is_Aktief: Optional[bool] = None
 
 
-# --- Gebruiker status update ---
-# Word deur routers/gebruikers.py gebruik vir PATCH /gebruikers/{user_id}/status.
+# --- GEBRUIKER STATUS UPDATE ---
+# Word deur routers/gebruikers.py gebruik.
+# Pydantic v2: populate_by_name laat beide "is_aktief" en "Is_Aktief" toe.
 class GebruikerStatusUpdate(BaseModel):
-    # Ondersteun beide {"is_aktief": true} en {"Is_Aktief": true}.
-    is_aktief: bool = Field(alias="Is_Aktief")
+    model_config = ConfigDict(populate_by_name=True)
 
-    class Config:
-        allow_population_by_field_name = True
-        populate_by_name = True
+    is_aktief: bool = Field(alias="Is_Aktief")
 
 class User(UserBase):
     Gebruiker_ID: int
@@ -675,3 +673,23 @@ class PublicEventRsvpRequest(BaseModel):
     van: str
     selfoon: str
     epos: Optional[str] = None
+
+
+# --- WAGTE: EKSTERNE EVENT-GASTE ---
+
+class WagteEventGuestScanRequest(BaseModel):
+    scan_kode: str
+    kampus_id: int
+
+
+class WagteEventGuestConfirmRequest(BaseModel):
+    publiek_rsvp_id: int
+    kampus_id: int
+    rigting: str
+    metode: str = "QR"
+
+
+class WagteEventGuestDeclineRequest(BaseModel):
+    publiek_rsvp_id: int
+    kampus_id: int
+    metode: str = "QR"
