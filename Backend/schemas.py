@@ -40,10 +40,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     GEB_Wagwoord: str
-    # Opsioneel: word outomaties gegenereer indien nie verskaf nie.
-    GEB_ID_Nommer: Optional[str] = None
-    Rol_ID: Optional[int] = None
-    Rol_IDs: Optional[List[int]] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: bool = False
     Koshuis_ID: Optional[int] = None
@@ -56,10 +52,6 @@ class UserCreate(UserBase):
     NFC_Tipe: str = "Gebruiker"
     NFC_Is_Aktief: bool = True
 
-class GebruikerStatusUpdate(BaseModel):
-    """Liggaam vir PATCH /gebruikers/{id}/status."""
-    Is_Aktief: bool
-
 class UserUpdate(BaseModel):
     GEB_Naam: Optional[str] = None
     GEB_Van: Optional[str] = None
@@ -69,7 +61,6 @@ class UserUpdate(BaseModel):
     GEB_Selfoon_Nr: Optional[str] = None
     GEB_Profiel_Foto: Optional[str] = None
     Rol_ID: Optional[int] = None
-    Rol_IDs: Optional[List[int]] = None
     Is_Aktief: Optional[bool] = None
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: Optional[bool] = None
@@ -675,75 +666,21 @@ class PublicEventRsvpRequest(BaseModel):
     epos: Optional[str] = None
 
 
-# --- INSTELLINGS SCHEMAS ---
+# --- WAGTE: EKSTERNE EVENT-GASTE ---
 
-class InstellingRead(BaseModel):
-    Sleutel:    str
-    Waarde:     str
-    Beskrywing: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-class InstellingUpdate(BaseModel):
-    Waarde:     str
-    Beskrywing: Optional[str] = None
+class WagteEventGuestScanRequest(BaseModel):
+    scan_kode: str
+    kampus_id: int
 
 
-# --- KLAS / MODULE / GROEP SCHEMAS ---
-
-class ModuleCreate(BaseModel):
-    MOD_Kode: str
-    MOD_Naam: Optional[str] = None
-
-
-class GroepCreate(BaseModel):
-    GRO_Naam: str
+class WagteEventGuestConfirmRequest(BaseModel):
+    publiek_rsvp_id: int
+    kampus_id: int
+    rigting: str
+    metode: str = "QR"
 
 
-class KlasCreate(BaseModel):
-    Module_ID: int
-    KLA_Lokaal: Optional[str] = None
-    KLA_Dag: Optional[str] = None
-    KLA_Begin_Tyd: Optional[str] = None
-    KLA_Eind_Tyd: Optional[str] = None
-
-
-class KlasGroepAssign(BaseModel):
-    Groep_ID: int
-
-
-class StudentGroepAssign(BaseModel):
-    Groep_ID: int
-
-
-class StudentModuleAssign(BaseModel):
-    Module_ID: int
-
-
-class StudentKlasAssign(BaseModel):
-    Klas_ID: int
-
-
-class PersoneelModuleAssign(BaseModel):
-    Module_ID: int
-
-
-class PersoneelKlasAssign(BaseModel):
-    Klas_ID: int
-
-
-class KlasImportResult(BaseModel):
-    modules_geskep: int = 0
-    groepe_geskep: int = 0
-    klasse_geskep: int = 0
-    foute: List[str] = []
-
-
-class StudentToewysingImportResult(BaseModel):
-    """Uitslag van die student-groep/module CSV-invoer."""
-    studente_verwerk: int = 0
-    groep_koppelings: int = 0
-    module_koppelings: int = 0
-    groepe_geskep: int = 0
-    foute: List[str] = []
+class WagteEventGuestDeclineRequest(BaseModel):
+    publiek_rsvp_id: int
+    kampus_id: int
+    metode: str = "QR"

@@ -219,6 +219,10 @@ class Funksie(Base):
         back_populates="funksie",
         cascade="all, delete-orphan",
     )
+    publieke_toegange = relationship(
+        "FunksiePubliekToegang",
+        back_populates="funksie",
+    )
 
     __table_args__ = (
         CheckConstraint('"FUN_Kapasiteit" > 0', name='ck_funksie_kapasiteit'),
@@ -264,11 +268,46 @@ class FunksiePubliekRSVP(Base):
     Gewysig_Op        = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     funksie = relationship("Funksie", back_populates="publieke_rsvps")
+    toegange = relationship(
+        "FunksiePubliekToegang",
+        back_populates="publieke_rsvp",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint(
             '"RSVP_Status" IN (\'GAAN\', \'GEKANSELLEER\')',
             name='ck_funksie_publiek_rsvp_status',
+        ),
+    )
+
+
+class FunksiePubliekToegang(Base):
+    """IN/UIT/GEWEIER heklog vir eksterne Event-gaste."""
+    __tablename__ = 'funksie_publiek_toegang'
+
+    Toegang_ID       = Column(Integer, primary_key=True, index=True)
+    Publiek_RSVP_ID  = Column(Integer, ForeignKey('funksie_publiek_rsvp.Publiek_RSVP_ID'), nullable=False, index=True)
+    Funksie_ID       = Column(Integer, ForeignKey('funksie.Funksie_ID'), nullable=False, index=True)
+    Kampus_ID        = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False, index=True)
+    Wag_ID            = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
+    Rigting           = Column(String(16), nullable=False)
+    Metode            = Column(String(32), nullable=False, default='QR')
+    Tydstempel        = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    publieke_rsvp = relationship("FunksiePubliekRSVP", back_populates="toegange")
+    funksie = relationship("Funksie", back_populates="publieke_toegange")
+    kampus = relationship("Kampus")
+    wag = relationship("Gebruikers", foreign_keys=[Wag_ID])
+
+    __table_args__ = (
+        CheckConstraint(
+            '"Rigting" IN (\'IN\', \'UIT\', \'GEWEIER\')',
+            name='ck_funksie_publiek_toegang_rigting',
+        ),
+        CheckConstraint(
+            '"Metode" IN (\'QR\', \'HANDMATIG\')',
+            name='ck_funksie_publiek_toegang_metode',
         ),
     )
 
@@ -399,83 +438,3 @@ class BesoekerUitnodiging(Base):
             name='ck_besoeker_uitnodiging_status',
         ),
     )
-
-# --- INSTELLING (APPLICATION SETTINGS) ---
-
-class Instelling(Base):
-    __tablename__ = 'instellings'
-
-    Sleutel      = Column(String(100), primary_key=True)
-    Waarde       = Column(String(255), nullable=False)
-    Beskrywing   = Column(String(255), nullable=True)
-
-# --- KLAS / MODULE / GROEP MODELS ---
-
-class Module(Base):
-    __tablename__ = 'module'
-
-    Module_ID = Column(Integer, primary_key=True, index=True)
-    MOD_Kode  = Column(String(20), nullable=False, unique=True)
-    MOD_Naam  = Column(String(200), nullable=True)
-
-
-class Groep(Base):
-    __tablename__ = 'groep'
-
-    Groep_ID = Column(Integer, primary_key=True, index=True)
-    GRO_Naam = Column(String(50), nullable=False, unique=True)
-
-
-class Klas(Base):
-    __tablename__ = 'klas'
-
-    Klas_ID        = Column(Integer, primary_key=True, index=True)
-    Module_ID      = Column(Integer, ForeignKey('module.Module_ID'), nullable=False)
-    KLA_Lokaal     = Column(String(100), nullable=True)
-    KLA_Dag        = Column(String(20), nullable=True)
-    KLA_Begin_Tyd  = Column(String(10), nullable=True)
-    KLA_Eind_Tyd   = Column(String(10), nullable=True)
-
-    module = relationship("Module")
-
-
-class Klas_Groep(Base):
-    __tablename__ = 'klas_groep'
-
-    Klas_ID  = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)
-    Groep_ID = Column(Integer, ForeignKey('groep.Groep_ID'), primary_key=True)
-
-
-class Student_Groep(Base):
-    __tablename__ = 'student_groep'
-
-    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
-    Groep_ID     = Column(Integer, ForeignKey('groep.Groep_ID'), primary_key=True)
-
-
-class Student_Module(Base):
-    __tablename__ = 'student_module'
-
-    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
-    Module_ID    = Column(Integer, ForeignKey('module.Module_ID'), primary_key=True)
-
-
-class Personeel_Module(Base):
-    __tablename__ = 'personeel_module'
-
-    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
-    Module_ID    = Column(Integer, ForeignKey('module.Module_ID'), primary_key=True)
-
-
-class Student_Klas(Base):
-    __tablename__ = 'student_klas'
-
-    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
-    Klas_ID      = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)
-
-
-class Personeel_Klas(Base):
-    __tablename__ = 'personeel_klas'
-
-    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
-    Klas_ID      = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)

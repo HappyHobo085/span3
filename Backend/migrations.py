@@ -553,123 +553,98 @@ def run_migrations(engine):
             f"(Publieke Event RSVP) het misluk: {_migrasie_fout}"
         )
 
-    # Migrasie 013: Instellings (settings) tabel
+
+
+    # Migrasie 013: Event Live Attendance + eksterne Event hektoegang
     try:
         with engine.connect() as _conn:
+            # Maak bestaande aktiewe duplicate publieke RSVP's skoon voordat die
+            # databasis-unique index bygevoeg word. Hou die oudste aktiewe RSVP.
             _conn.execute(text('''
-                CREATE TABLE IF NOT EXISTS instellings (
-                    "Sleutel"    VARCHAR(100) PRIMARY KEY,
-                    "Waarde"     VARCHAR(255) NOT NULL,
-                    "Beskrywing" VARCHAR(255)
+                WITH ranked AS (
+                    SELECT
+                        "Publiek_RSVP_ID",
+                        ROW_NUMBER() OVER (
+                            PARTITION BY
+                                "Funksie_ID",
+                                lower(trim("Naam")),
+                                lower(trim("Van")),
+                                "Selfoon"
+                            ORDER BY "RSVP_Tyd" ASC, "Publiek_RSVP_ID" ASC
+                        ) AS rn
+                    FROM funksie_publiek_rsvp
+                    WHERE "RSVP_Status" = 'GAAN'
+                )
+                UPDATE funksie_publiek_rsvp p
+                SET "RSVP_Status" = 'GEKANSELLEER',
+                    "Gewysig_Op" = CURRENT_TIMESTAMP
+                FROM ranked r
+                WHERE p."Publiek_RSVP_ID" = r."Publiek_RSVP_ID"
+                  AND r.rn > 1
+            '''))
+
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_funksie_publiek_rsvp_aktiewe_identiteit
+                ON funksie_publiek_rsvp (
+                    "Funksie_ID",
+                    lower(trim("Naam")),
+                    lower(trim("Van")),
+                    "Selfoon"
+                )
+                WHERE "RSVP_Status" = 'GAAN'
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS funksie_publiek_toegang (
+                    "Toegang_ID" SERIAL PRIMARY KEY,
+                    "Publiek_RSVP_ID" INT NOT NULL,
+                    "Funksie_ID" INT NOT NULL,
+                    "Kampus_ID" INT NOT NULL,
+                    "Wag_ID" INT,
+                    "Rigting" VARCHAR(16) NOT NULL,
+                    "Metode" VARCHAR(32) NOT NULL DEFAULT 'QR',
+                    "Tydstempel" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_funksie_publiek_toegang_rsvp
+                        FOREIGN KEY ("Publiek_RSVP_ID")
+                        REFERENCES funksie_publiek_rsvp("Publiek_RSVP_ID")
+                        ON DELETE CASCADE,
+                    CONSTRAINT fk_funksie_publiek_toegang_funksie
+                        FOREIGN KEY ("Funksie_ID")
+                        REFERENCES funksie("Funksie_ID")
+                        ON DELETE CASCADE,
+                    CONSTRAINT fk_funksie_publiek_toegang_kampus
+                        FOREIGN KEY ("Kampus_ID")
+                        REFERENCES kampus("Kampus_ID"),
+                    CONSTRAINT fk_funksie_publiek_toegang_wag
+                        FOREIGN KEY ("Wag_ID")
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    CONSTRAINT ck_funksie_publiek_toegang_rigting
+                        CHECK ("Rigting" IN ('IN', 'UIT', 'GEWEIER')),
+                    CONSTRAINT ck_funksie_publiek_toegang_metode
+                        CHECK ("Metode" IN ('QR', 'HANDMATIG'))
                 )
             '''))
 
             _conn.execute(text('''
-                INSERT INTO instellings ("Sleutel", "Waarde", "Beskrywing")
-                VALUES ('auto_uitcheck_tydstip', '22:00', 'Tydstip vir outomatiese uitcheck (HH:MM formaat)')
-                ON CONFLICT ("Sleutel") DO NOTHING
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_toegang_event
+                ON funksie_publiek_toegang ("Funksie_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_toegang_rsvp
+                ON funksie_publiek_toegang ("Publiek_RSVP_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_toegang_kampus
+                ON funksie_publiek_toegang ("Kampus_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_publiek_toegang_tyd
+                ON funksie_publiek_toegang ("Tydstempel")
             '''))
 
             _conn.commit()
     except Exception as _migrasie_fout:
         print(
             "Waarskuwing: migrasie 013 "
-            f"(Instellings tabel) het misluk: {_migrasie_fout}"
+            f"(Event Live Attendance / publieke hektoegang) het misluk: {_migrasie_fout}"
         )
-
-    # Migrasie 014: Klas / Module / Groep / rooster-koppelingstabelle
-    try:
-        with engine.connect() as _conn:
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS module (
-                    "Module_ID" SERIAL PRIMARY KEY,
-                    "MOD_Kode" VARCHAR(20) NOT NULL UNIQUE,
-                    "MOD_Naam" VARCHAR(200)
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS groep (
-                    "Groep_ID" SERIAL PRIMARY KEY,
-                    "GRO_Naam" VARCHAR(50) NOT NULL UNIQUE
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS klas (
-                    "Klas_ID" SERIAL PRIMARY KEY,
-                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
-                    "KLA_Lokaal" VARCHAR(100),
-                    "KLA_Dag" VARCHAR(20),
-                    "KLA_Begin_Tyd" VARCHAR(10),
-                    "KLA_Eind_Tyd" VARCHAR(10)
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS klas_groep (
-                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
-                    "Groep_ID" INT NOT NULL REFERENCES groep("Groep_ID"),
-                    PRIMARY KEY ("Klas_ID", "Groep_ID")
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS student_groep (
-                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
-                    "Groep_ID" INT NOT NULL REFERENCES groep("Groep_ID"),
-                    PRIMARY KEY ("Gebruiker_ID", "Groep_ID")
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS student_module (
-                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
-                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
-                    PRIMARY KEY ("Gebruiker_ID", "Module_ID")
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS personeel_module (
-                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
-                    "Module_ID" INT NOT NULL REFERENCES module("Module_ID"),
-                    PRIMARY KEY ("Gebruiker_ID", "Module_ID")
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS student_klas (
-                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
-                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
-                    PRIMARY KEY ("Gebruiker_ID", "Klas_ID")
-                )
-            """))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS personeel_klas (
-                    "Gebruiker_ID" INT NOT NULL REFERENCES gebruikers("Gebruiker_ID"),
-                    "Klas_ID" INT NOT NULL REFERENCES klas("Klas_ID"),
-                    PRIMARY KEY ("Gebruiker_ID", "Klas_ID")
-                )
-            """))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_klas_module ON klas ("Module_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_klas_groep_groep ON klas_groep ("Groep_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_student_groep_groep ON student_groep ("Groep_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_student_module_module ON student_module ("Module_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_personeel_module_module ON personeel_module ("Module_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_student_klas_klas ON student_klas ("Klas_ID")'
-            ))
-            _conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS ix_personeel_klas_klas ON personeel_klas ("Klas_ID")'
-            ))
-            _conn.commit()
-    except Exception as _migrasie_fout:
-        print(
-            "Waarskuwing: migrasie 014 "
-            f"(Klas / Module / Groep) het misluk: {_migrasie_fout}"
-        )
-

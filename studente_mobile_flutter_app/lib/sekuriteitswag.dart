@@ -446,6 +446,43 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     });
 
     try {
+      // Publieke Event QR's gebruik dieselfde normale Kampus Skandeer-knoppie.
+      // Moenie dit deur die gewone Student/Personeel profielsoektog stuur nie.
+      if (metode == 'QR' &&
+          cleanNommer.toUpperCase().startsWith('MOON-EVENT:')) {
+        final preview = await MoonApi.wagteEventGuestPreview(
+          scanKode: cleanNommer,
+          kampusId: widget.kampusId,
+        );
+
+        if (!mounted) return;
+        _scannerController.clear();
+        setState(() {
+          _loading = false;
+          _status = 'Event-gas RSVP gevind';
+        });
+
+        final verified = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WagteEventGuestVerifyPage(
+              preview: preview,
+              kampusId: widget.kampusId,
+              kampusNaam: widget.kampusNaam,
+            ),
+          ),
+        );
+
+        if (!mounted) return;
+        setState(() {
+          _status = verified == true
+              ? 'Event-gas suksesvol verwerk'
+              : 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
+        });
+        await _resumeAutomaticListening();
+        return;
+      }
+
       final profile = await MoonApi.wagteProfileScan(cleanNommer);
 
       if (!mounted) return;
@@ -922,6 +959,359 @@ class _AutoScanBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class WagteEventGuestVerifyPage extends StatefulWidget {
+  final EventGuestGatePreviewDto preview;
+  final int kampusId;
+  final String kampusNaam;
+
+  const WagteEventGuestVerifyPage({
+    super.key,
+    required this.preview,
+    required this.kampusId,
+    required this.kampusNaam,
+  });
+
+  @override
+  State<WagteEventGuestVerifyPage> createState() =>
+      _WagteEventGuestVerifyPageState();
+}
+
+class _WagteEventGuestVerifyPageState
+    extends State<WagteEventGuestVerifyPage> {
+  bool _loading = false;
+  bool _verified = false;
+  bool _declined = false;
+
+  String _dateTime(DateTime value) {
+    final d = value.day.toString().padLeft(2, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final h = value.hour.toString().padLeft(2, '0');
+    final min = value.minute.toString().padLeft(2, '0');
+    return '$d/$m/${value.year} · $h:$min';
+  }
+
+  Future<void> _confirm() async {
+    if (_loading || _verified || _declined) return;
+    setState(() => _loading = true);
+    try {
+      await MoonApi.wagteEventGuestConfirm(
+        publiekRsvpId: widget.preview.publiekRsvpId,
+        kampusId: widget.kampusId,
+        rigting: widget.preview.voorgesteldeRigting,
+        metode: 'QR',
+      );
+      if (!mounted) return;
+      setState(() {
+        _verified = true;
+        _loading = false;
+      });
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _decline() async {
+    if (_loading || _verified || _declined) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text(
+          'Weier Event-toegang',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Weier toegang vir ${widget.preview.volleNaam}?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Kanselleer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('WEIER', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+
+    setState(() => _loading = true);
+    try {
+      await MoonApi.wagteEventGuestDecline(
+        publiekRsvpId: widget.preview.publiekRsvpId,
+        kampusId: widget.kampusId,
+        metode: 'QR',
+      );
+      if (!mounted) return;
+      setState(() {
+        _declined = true;
+        _loading = false;
+      });
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.preview;
+    final isIn = p.voorgesteldeRigting == 'IN';
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Event Gas',
+              subtitle: widget.kampusNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.green.withOpacity(0.7),
+                          width: 1.3,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_rounded,
+                            color: Colors.green,
+                            size: 30,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'GELDIGE EVENT RSVP',
+                              style: GoogleFonts.inter(
+                                color: Colors.green,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.7,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.account_circle_rounded,
+                            color: kAccent,
+                            size: 76,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            p.volleNaam,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kAccent.withOpacity(0.13),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: kAccent.withOpacity(0.5),
+                              ),
+                            ),
+                            child: Text(
+                              'EKSTERNE GAS',
+                              style: GoogleFonts.inter(
+                                color: kAccent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                          if ((p.selfoon ?? '').trim().isNotEmpty) ...[
+                            const SizedBox(height: 9),
+                            Text(
+                              p.selfoon!,
+                              style: GoogleFonts.inter(
+                                color: kText2,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'EVENT',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            p.eventNaam,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            p.kampusNaam,
+                            style: GoogleFonts.inter(
+                              color: kText2,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_dateTime(p.beginTyd)} – ${_dateTime(p.eindTyd)}',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: isIn
+                            ? Colors.green.withOpacity(0.13)
+                            : kAccent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isIn
+                              ? Colors.green.withOpacity(0.65)
+                              : kAccent.withOpacity(0.6),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'VOORGESTELDE AKSIE',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.9,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            isIn ? '🟢 IN' : '🔵 UIT',
+                            style: GoogleFonts.inter(
+                              color: isIn ? Colors.green : kAccent,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (_verified)
+                      Text(
+                        '✔ EVENT-TOEGANG BEVESTIG',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          color: Colors.green,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    else if (_declined)
+                      Text(
+                        '✖ EVENT-TOEGANG GEWEIER',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          color: Colors.red,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    else ...[
+                      GradientActionButton(
+                        label: _loading
+                            ? 'BESIG...'
+                            : 'BEVESTIG ${p.voorgesteldeRigting}',
+                        onTap: _confirm,
+                        height: 56,
+                      ),
+                      const SizedBox(height: 10),
+                      OutlineActionButton(
+                        label: 'WEIER TOEGANG',
+                        onTap: _loading ? () {} : _decline,
+                        height: 52,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

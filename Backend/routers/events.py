@@ -1,11 +1,12 @@
 """MOON Events API — eventbestuur, app-RSVP en publieke eksterne RSVP."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html import escape
+import os
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,9 +15,15 @@ import auth
 import database
 import models
 import schemas
-from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(prefix="/events", tags=["Events"])
+
+# Publieke Event-RSVP skakels moet na die MOON webwerf wys, nie na die
+# Flutter API-hostname nie. Railway kan dit met PUBLIC_SITE_BASE_URL oorskryf.
+PUBLIC_SITE_BASE_URL = os.getenv(
+    "PUBLIC_SITE_BASE_URL",
+    "https://capstone-production-3673.up.railway.app",
+).rstrip("/")
 
 
 def _utc_naive(value: datetime) -> datetime:
@@ -36,14 +43,16 @@ def _require_active(current_user: models.Gebruikers) -> None:
         raise HTTPException(status_code=403, detail="Jou gebruiker is nie aktief nie")
 
 
-def _require_opsigter(db: Session, current_user: models.Gebruikers) -> None:
-    """Magtekening geskied op rolle, nie op subrekords nie — so 'n gebruiker
-    wie se Opsigter-rol verwyder is, verloor ook die reg, en 'n Administrateur
-    sonder 'n subrekord kry steeds toegang (konsekwent met RoleChecker)."""
+def _require_opsigter(db: Session, current_user: models.Gebruikers) -> models.Kampus_Opsigter:
     _require_active(current_user)
-    rol_namen = get_user_role_names(db, current_user)
-    if "Administrateur" not in rol_namen and "Kampus_Opsigter" not in rol_namen:
+    opsigter = (
+        db.query(models.Kampus_Opsigter)
+        .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    if opsigter is None:
         raise HTTPException(status_code=403, detail="Slegs 'n Opsigter mag events bestuur")
+    return opsigter
 
 
 def _require_rsvp_user(db: Session, current_user: models.Gebruikers) -> None:
@@ -166,6 +175,189 @@ def _event_dict(db: Session, event: models.Funksie, current_user_id: Optional[in
         },
     }
 
+
+
+def _event_attendance_window(event: models.Funksie) -> tuple[datetime, datetime]:
+    """Breë hekvenster vir app-RSVP gebruikers wat via normale kampushek scan."""
+    start = event.FUN_Begin_Tyd - timedelta(hours=4)
+    end = event.FUN_Eind_Tyd + timedelta(hours=6)
+    return start, end
+
+
+def _last_direction(logs) -> Optional[str]:
+    usable = [row for row in logs if row.TOE_Rigting in {"IN", "UIT"}]
+    return usable[-1].TOE_Rigting if usable else None
+
+
+def _attendance_payload(
+    db: Session,
+    event: models.Funksie,
+    current_user_id: Optional[int] = None,
+) -> dict:
+    """Een bron vir Opsigter se live/finale Event-bywoning."""
+    app_rows = (
+        db.query(models.FunksieRSVP, models.Gebruikers)
+        .join(
+            models.Gebruikers,
+            models.Gebruikers.Gebruiker_ID == models.FunksieRSVP.Gebruiker_ID,
+        )
+        .filter(
+            models.FunksieRSVP.Funksie_ID == event.Funksie_ID,
+            models.FunksieRSVP.RSVP_Status == "GAAN",
+        )
+        .order_by(models.FunksieRSVP.RSVP_Tyd.asc())
+        .all()
+    )
+    external_rows = (
+        db.query(models.FunksiePubliekRSVP)
+        .filter(
+            models.FunksiePubliekRSVP.Funksie_ID == event.Funksie_ID,
+            models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
+        )
+        .order_by(models.FunksiePubliekRSVP.RSVP_Tyd.asc())
+        .all()
+    )
+
+    start, end = _event_attendance_window(event)
+    now = datetime.utcnow()
+    query_end = min(end, now)
+
+    app_user_ids = [user.Gebruiker_ID for _, user in app_rows]
+    logs_by_user = {uid: [] for uid in app_user_ids}
+    if app_user_ids and query_end >= start:
+        app_logs = (
+            db.query(models.ToegangsLogs)
+            .join(
+                models.Lokasie,
+                models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
+            )
+            .filter(
+                models.ToegangsLogs.Gebruiker_ID.in_(app_user_ids),
+                models.Lokasie.Kampus_ID == event.Kampus_ID,
+                models.Lokasie.LOK_Tipe == "Kampus",
+                models.ToegangsLogs.TOE_Tydstempel >= start,
+                models.ToegangsLogs.TOE_Tydstempel <= query_end,
+                models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+            )
+            .order_by(models.ToegangsLogs.TOE_Tydstempel.asc())
+            .all()
+        )
+        for row in app_logs:
+            logs_by_user.setdefault(row.Gebruiker_ID, []).append(row)
+
+    ext_ids = [row.Publiek_RSVP_ID for row in external_rows]
+    ext_logs_by_id = {rid: [] for rid in ext_ids}
+    if ext_ids:
+        ext_logs = (
+            db.query(models.FunksiePubliekToegang)
+            .filter(
+                models.FunksiePubliekToegang.Funksie_ID == event.Funksie_ID,
+                models.FunksiePubliekToegang.Publiek_RSVP_ID.in_(ext_ids),
+                models.FunksiePubliekToegang.Rigting.in_(["IN", "UIT"]),
+            )
+            .order_by(models.FunksiePubliekToegang.Tydstempel.asc())
+            .all()
+        )
+        for row in ext_logs:
+            ext_logs_by_id.setdefault(row.Publiek_RSVP_ID, []).append(row)
+
+    attendees = []
+    in_scans = 0
+    out_scans = 0
+
+    for rsvp, user in app_rows:
+        logs = logs_by_user.get(user.Gebruiker_ID, [])
+        in_scans += sum(1 for row in logs if row.TOE_Rigting == "IN")
+        out_scans += sum(1 for row in logs if row.TOE_Rigting == "UIT")
+        first_in = next((row for row in logs if row.TOE_Rigting == "IN"), None)
+        last = logs[-1] if logs else None
+        last_dir = _last_direction(logs)
+        arrived = first_in is not None
+        status = last_dir if arrived and last_dir in {"IN", "UIT"} else "NOG_NIE"
+        if user.student is not None:
+            role, number = "STUDENT", user.student.STU_Nommer
+        elif user.personeel is not None:
+            role, number = "PERSONEEL", user.personeel.PER_Nommer
+        else:
+            role, number = "GEBRUIKER", ""
+        attendees.append({
+            "attendee_key": f"app:{user.Gebruiker_ID}",
+            "gebruiker_id": user.Gebruiker_ID,
+            "publiek_rsvp_id": None,
+            "volle_naam": f"{user.GEB_Naam} {user.GEB_Van}".strip(),
+            "rol": role,
+            "nommer": number,
+            "selfoon": user.GEB_Selfoon_Nr,
+            "epos": user.GEB_Epos,
+            "ekstern": False,
+            "status": status,
+            "aangekom": arrived,
+            "eerste_in": _iso_utc(first_in.TOE_Tydstempel) if first_in else None,
+            "laaste_aksie": _iso_utc(last.TOE_Tydstempel) if last else None,
+            "laaste_rigting": last_dir,
+            "rsvp_tyd": _iso_utc(rsvp.RSVP_Tyd),
+        })
+
+    for rsvp in external_rows:
+        logs = ext_logs_by_id.get(rsvp.Publiek_RSVP_ID, [])
+        in_scans += sum(1 for row in logs if row.Rigting == "IN")
+        out_scans += sum(1 for row in logs if row.Rigting == "UIT")
+        first_in = next((row for row in logs if row.Rigting == "IN"), None)
+        last = logs[-1] if logs else None
+        last_dir = last.Rigting if last and last.Rigting in {"IN", "UIT"} else None
+        arrived = first_in is not None
+        status = last_dir if arrived and last_dir in {"IN", "UIT"} else "NOG_NIE"
+        attendees.append({
+            "attendee_key": f"external:{rsvp.Publiek_RSVP_ID}",
+            "gebruiker_id": None,
+            "publiek_rsvp_id": rsvp.Publiek_RSVP_ID,
+            "volle_naam": f"{rsvp.Naam} {rsvp.Van}".strip(),
+            "rol": "EKSTERNE GAS",
+            "nommer": rsvp.Selfoon,
+            "selfoon": rsvp.Selfoon,
+            "epos": rsvp.Epos,
+            "ekstern": True,
+            "status": status,
+            "aangekom": arrived,
+            "eerste_in": _iso_utc(first_in.Tydstempel) if first_in else None,
+            "laaste_aksie": _iso_utc(last.Tydstempel) if last else None,
+            "laaste_rigting": last_dir,
+            "rsvp_tyd": _iso_utc(rsvp.RSVP_Tyd),
+        })
+
+    order = {"IN": 0, "UIT": 1, "NOG_NIE": 2}
+    attendees.sort(
+        key=lambda item: (
+            order.get(item["status"], 9),
+            -(datetime.fromisoformat(item["laaste_aksie"].replace("Z", "+00:00")).timestamp()
+              if item.get("laaste_aksie") else 0),
+            item["volle_naam"].lower(),
+        )
+    )
+
+    arrived_count = sum(1 for item in attendees if item["aangekom"])
+    inside_count = sum(1 for item in attendees if item["status"] == "IN")
+    out_count = sum(1 for item in attendees if item["status"] == "UIT")
+    not_arrived = len(attendees) - arrived_count
+    final_stats = now > event.FUN_Eind_Tyd
+
+    return {
+        "event": _event_dict(db, event, current_user_id),
+        "summary": {
+            "rsvp": len(attendees),
+            "aangekom": arrived_count,
+            "tans_binne": inside_count,
+            "uit": out_count,
+            "nog_nie_gekom": not_arrived,
+            "no_show": not_arrived if final_stats else 0,
+            "in_skanderings": in_scans,
+            "uit_skanderings": out_scans,
+            "app_rsvp": len(app_rows),
+            "eksterne_rsvp": len(external_rows),
+        },
+        "final": final_stats,
+        "attendees": attendees,
+    }
 
 def _new_unique_share_token(db: Session) -> str:
     for _ in range(10):
@@ -313,7 +505,6 @@ def cancel_event(
 @router.post("/{event_id}/share")
 def share_event(
     event_id: int,
-    request: Request,
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
@@ -324,7 +515,7 @@ def share_event(
         event.Gewysig_Op = datetime.utcnow()
         db.commit()
         db.refresh(event)
-    share_url = f"{str(request.base_url).rstrip('/')}/events/public/{event.FUN_Deel_Token}"
+    share_url = f"{PUBLIC_SITE_BASE_URL}/events/public/{event.FUN_Deel_Token}"
     return {
         "sukses": True,
         "data": {
@@ -463,6 +654,61 @@ def event_rsvps(
     }
 
 
+
+@router.get("/{event_id}/attendance")
+def event_attendance(
+    event_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_opsigter(db, current_user)
+    event = _event_or_404(db, event_id)
+    return {
+        "sukses": True,
+        "data": _attendance_payload(db, event, current_user.Gebruiker_ID),
+        "fout": None,
+    }
+
+
+@router.delete("/{event_id}/public-rsvps/{publiek_rsvp_id}")
+def cancel_public_rsvp_by_opsigter(
+    event_id: int,
+    publiek_rsvp_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_opsigter(db, current_user)
+    event = _event_or_404(db, event_id)
+    row = (
+        db.query(models.FunksiePubliekRSVP)
+        .filter(
+            models.FunksiePubliekRSVP.Publiek_RSVP_ID == publiek_rsvp_id,
+            models.FunksiePubliekRSVP.Funksie_ID == event_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Eksterne RSVP nie gevind nie")
+    if row.RSVP_Status != "GAAN":
+        return {
+            "sukses": True,
+            "data": {"gekanselleer": True, "reeds_gekanselleer": True},
+            "fout": None,
+        }
+    row.RSVP_Status = "GEKANSELLEER"
+    row.Gewysig_Op = datetime.utcnow()
+    db.commit()
+    return {
+        "sukses": True,
+        "data": {
+            "gekanselleer": True,
+            "reeds_gekanselleer": False,
+            "event": _event_dict(db, event, current_user.Gebruiker_ID),
+        },
+        "fout": None,
+    }
+
+
 @router.get("/public/{share_token}", response_class=HTMLResponse)
 def public_event_page(share_token: str, db: Session = Depends(database.get_db)):
     event = _public_event_or_404(db, share_token)
@@ -477,6 +723,7 @@ def public_event_page(share_token: str, db: Session = Depends(database.get_db)):
     disabled_attr = "disabled" if disabled else ""
     status_text = "Hierdie event is nie meer oop vir RSVP nie." if disabled else f"{data['plekke_oor']} plekke oor"
     location_text = f" · {lokasie}" if lokasie else ""
+    storage_key = escape(f"moon_event_rsvp_{share_token}")
 
     page = f'''<!doctype html>
 <html lang="af"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -489,20 +736,60 @@ label{{display:block;margin:14px 0 6px;color:#cbd5e1;font-size:12px;font-weight:
 button{{width:100%;margin-top:20px;border:0;border-radius:13px;padding:14px 16px;background:#22d3ee;color:#02141b;font-weight:900;font-size:15px;cursor:pointer}}button:disabled{{opacity:.45;cursor:not-allowed}}
 .status{{margin-top:14px;font-size:13px;color:#94a3b8}}.err{{color:#f87171;margin-top:12px;font-weight:700}}#confirm{{display:none;text-align:center}}#qr{{width:260px;height:260px;margin:22px auto 10px;background:#fff;border-radius:14px;padding:10px}}
 #qr img,#qr canvas{{width:100%!important;height:100%!important}}.ok{{color:#4ade80;font-weight:900;font-size:22px}}.token{{word-break:break-all;color:#64748b;font-size:10px;margin-top:12px}}
+.restore{{display:none;margin-bottom:14px;padding:11px 13px;border-radius:12px;background:#0f172a;border:1px solid #334155;color:#cbd5e1;font-size:13px}}
 </style></head><body><div class="wrap"><div class="brand">MOON</div>
+<div id="restoreStatus" class="restore">Jou bestaande RSVP word gelaai...</div>
 <div class="card" id="formCard"><h1>{naam}</h1><div class="muted">{beskrywing}</div><div class="meta">
 <div><strong>Kampus:</strong> {kampus}{location_text}</div><div><strong>Datum/Tyd:</strong> <span id="eventTime" data-start="{begin_iso}" data-end="{end_iso}"></span></div>
 <div><strong>RSVP:</strong> {data['rsvp_aantal']} / {data['kapasiteit']} · {escape(status_text)}</div></div>
-<form id="rsvpForm"><label>Naam</label><input name="naam" maxlength="100" required {disabled_attr}><label>Van</label><input name="van" maxlength="100" required {disabled_attr}>
-<label>Selfoon</label><input name="selfoon" maxlength="30" inputmode="tel" required {disabled_attr}><label>E-pos (opsioneel)</label><input name="epos" maxlength="255" type="email" {disabled_attr}>
+<form id="rsvpForm"><label>Naam</label><input name="naam" maxlength="100" autocomplete="given-name" required {disabled_attr}><label>Van</label><input name="van" maxlength="100" autocomplete="family-name" required {disabled_attr}>
+<label>Selfoon</label><input name="selfoon" maxlength="30" inputmode="tel" autocomplete="tel" required {disabled_attr}><label>E-pos (opsioneel)</label><input name="epos" maxlength="255" type="email" autocomplete="email" {disabled_attr}>
 <button type="submit" {disabled_attr}>RSVP – EK GAAN</button><div class="status">{escape(status_text)}</div><div class="err" id="error"></div></form></div>
 <div class="card" id="confirm"><div class="ok">✓ RSVP BEVESTIG</div><h1 id="guestName" style="margin-top:12px"></h1><div class="muted">Wys hierdie QR by die event se toegangspunt.</div>
 <div id="qr"></div><div class="muted">{naam}</div><div class="token" id="tokenFallback"></div></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script>
+const storageKey={storage_key!r};
 const timeEl=document.getElementById('eventTime');try{{const s=new Date(timeEl.dataset.start),e=new Date(timeEl.dataset.end);timeEl.textContent=s.toLocaleString([],{{dateStyle:'medium',timeStyle:'short'}})+' – '+e.toLocaleTimeString([],{{hour:'2-digit',minute:'2-digit'}})}}catch(_){{timeEl.textContent='Tyd nie beskikbaar nie'}}
-document.getElementById('rsvpForm').addEventListener('submit',async(ev)=>{{ev.preventDefault();const error=document.getElementById('error');error.textContent='';const form=new FormData(ev.target);const payload={{naam:String(form.get('naam')||'').trim(),van:String(form.get('van')||'').trim(),selfoon:String(form.get('selfoon')||'').trim(),epos:String(form.get('epos')||'').trim()||null}};const btn=ev.target.querySelector('button');btn.disabled=true;btn.textContent='BESIG...';try{{const res=await fetch(window.location.pathname+'/rsvp',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const body=await res.json();if(!res.ok||body.sukses!==true)throw new Error(body.detail||body.fout||'RSVP het misluk');const d=body.data;document.getElementById('guestName').textContent=d.volle_naam;document.getElementById('formCard').style.display='none';document.getElementById('confirm').style.display='block';document.getElementById('tokenFallback').textContent='Toegangstoken: '+d.qr_token;if(window.QRCode){{new QRCode(document.getElementById('qr'),{{text:d.qr_value,width:240,height:240,correctLevel:QRCode.CorrectLevel.M}})}}else{{document.getElementById('qr').innerHTML='<div style="color:#111;padding:40px 10px">QR kon nie laai nie. Gebruik die toegangstoken hieronder.</div>'}}}}catch(err){{error.textContent=err.message||String(err);btn.disabled=false;btn.textContent='RSVP – EK GAAN'}}}});
+function showQr(d){{document.getElementById('guestName').textContent=d.volle_naam;document.getElementById('formCard').style.display='none';document.getElementById('confirm').style.display='block';document.getElementById('qr').innerHTML='';document.getElementById('tokenFallback').textContent='Toegangstoken: '+d.qr_token;if(window.QRCode){{new QRCode(document.getElementById('qr'),{{text:d.qr_value,width:240,height:240,correctLevel:QRCode.CorrectLevel.M}})}}else{{document.getElementById('qr').innerHTML='<div style="color:#111;padding:40px 10px">QR kon nie laai nie. Gebruik die toegangstoken hieronder.</div>'}}}}
+async function restoreSaved(){{const saved=localStorage.getItem(storageKey);if(!saved)return;const box=document.getElementById('restoreStatus');box.style.display='block';try{{const res=await fetch(window.location.pathname+'/rsvp/'+encodeURIComponent(saved));const body=await res.json();if(!res.ok||body.sukses!==true)throw new Error(body.detail||body.fout||'Bestaande RSVP kon nie laai nie');showQr(body.data);box.style.display='none'}}catch(err){{localStorage.removeItem(storageKey);box.textContent=err.message||String(err);box.style.color='#f87171'}}}}
+document.getElementById('rsvpForm').addEventListener('submit',async(ev)=>{{ev.preventDefault();const error=document.getElementById('error');error.textContent='';const form=new FormData(ev.target);const payload={{naam:String(form.get('naam')||'').trim(),van:String(form.get('van')||'').trim(),selfoon:String(form.get('selfoon')||'').trim(),epos:String(form.get('epos')||'').trim()||null}};const btn=ev.target.querySelector('button');btn.disabled=true;btn.textContent='BESIG...';try{{const res=await fetch(window.location.pathname+'/rsvp',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const body=await res.json();if(!res.ok||body.sukses!==true)throw new Error(body.detail||body.fout||'RSVP het misluk');const d=body.data;localStorage.setItem(storageKey,d.qr_token);showQr(d)}}catch(err){{error.textContent=err.message||String(err);btn.disabled=false;btn.textContent='RSVP – EK GAAN'}}}});
+restoreSaved();
 </script></body></html>'''
     return HTMLResponse(content=page)
+
+
+@router.get("/public/{share_token}/rsvp/{qr_token}")
+def restore_public_event_rsvp(
+    share_token: str,
+    qr_token: str,
+    db: Session = Depends(database.get_db),
+):
+    event = _public_event_or_404(db, share_token)
+    row = (
+        db.query(models.FunksiePubliekRSVP)
+        .filter(
+            models.FunksiePubliekRSVP.Funksie_ID == event.Funksie_ID,
+            models.FunksiePubliekRSVP.QR_Token == qr_token,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Bestaande RSVP kon nie gevind word nie")
+    if row.RSVP_Status != "GAAN":
+        raise HTTPException(status_code=410, detail="Hierdie RSVP is gekanselleer en die QR is nie meer geldig nie")
+    if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF" or event.FUN_Eind_Tyd < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Hierdie Event is nie meer aktief nie")
+    return {
+        "sukses": True,
+        "data": {
+            "publiek_rsvp_id": row.Publiek_RSVP_ID,
+            "volle_naam": f"{row.Naam} {row.Van}".strip(),
+            "qr_token": row.QR_Token,
+            "qr_value": f"MOON-EVENT:{row.QR_Token}",
+            "reeds_bestaan": True,
+        },
+        "fout": None,
+    }
 
 
 @router.post("/public/{share_token}/rsvp")
@@ -518,6 +805,7 @@ def public_event_rsvp(
     if event.FUN_Eind_Tyd < datetime.utcnow():
         db.rollback()
         raise HTTPException(status_code=400, detail="Hierdie event is reeds verby")
+
     naam = payload.naam.strip()
     van = payload.van.strip()
     selfoon = _normalise_phone(payload.selfoon)
@@ -531,14 +819,21 @@ def public_event_rsvp(
     if epos and ("@" not in epos or "." not in epos.rsplit("@", 1)[-1]):
         db.rollback()
         raise HTTPException(status_code=400, detail="Voer 'n geldige e-posadres in of los dit leeg")
-    existing = db.query(models.FunksiePubliekRSVP).filter(
+
+    identity_query = db.query(models.FunksiePubliekRSVP).filter(
         models.FunksiePubliekRSVP.Funksie_ID == event.Funksie_ID,
         models.FunksiePubliekRSVP.Selfoon == selfoon,
         func.lower(models.FunksiePubliekRSVP.Naam) == naam.lower(),
         func.lower(models.FunksiePubliekRSVP.Van) == van.lower(),
-        models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
-    ).first()
+    )
+    existing = identity_query.order_by(models.FunksiePubliekRSVP.Publiek_RSVP_ID.desc()).first()
     if existing is not None:
+        if existing.RSVP_Status != "GAAN":
+            db.rollback()
+            raise HTTPException(
+                status_code=403,
+                detail="Hierdie RSVP is deur die event-organiseerder gekanselleer. Kontak asseblief die organiseerder.",
+            )
         data = {
             "publiek_rsvp_id": existing.Publiek_RSVP_ID,
             "volle_naam": f"{existing.Naam} {existing.Van}".strip(),
@@ -548,9 +843,11 @@ def public_event_rsvp(
         }
         db.rollback()
         return {"sukses": True, "data": data, "fout": None}
+
     if _confirmed_count(db, event.Funksie_ID) >= int(event.FUN_Kapasiteit or 0):
         db.rollback()
         raise HTTPException(status_code=409, detail="Event is vol")
+
     row = models.FunksiePubliekRSVP(
         Funksie_ID=event.Funksie_ID,
         Naam=naam,
@@ -575,3 +872,4 @@ def public_event_rsvp(
         },
         "fout": None,
     }
+

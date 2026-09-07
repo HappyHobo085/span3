@@ -319,3 +319,200 @@ def decline_profile_access(
             "tyd": log.TOE_Tydstempel.isoformat(),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Eksterne Event-gaste — dieselfde Kampus Skandeer vloei
+# ---------------------------------------------------------------------------
+
+def _event_guest_from_scan(db: Session, scan_kode: str):
+    clean = (scan_kode or "").strip()
+    if clean.upper().startswith("MOON-EVENT:"):
+        token = clean.split(":", 1)[1].strip()
+    else:
+        token = clean
+    if not token:
+        raise HTTPException(status_code=400, detail="Event QR is leeg of ongeldig")
+
+    rsvp = db.query(models.FunksiePubliekRSVP).filter(
+        models.FunksiePubliekRSVP.QR_Token == token
+    ).first()
+    if rsvp is None:
+        raise HTTPException(status_code=404, detail="Event QR word nie herken nie")
+    return rsvp
+
+
+def _validate_event_guest_access(db: Session, rsvp, kampus_id: int):
+    if rsvp.RSVP_Status != "GAAN":
+        raise HTTPException(status_code=403, detail="Hierdie Event RSVP is gekanselleer; QR is ongeldig")
+
+    event = db.query(models.Funksie).filter(
+        models.Funksie.Funksie_ID == rsvp.Funksie_ID
+    ).first()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event bestaan nie meer nie")
+    if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF":
+        raise HTTPException(status_code=403, detail="Hierdie Event is nie meer aktief nie")
+    if event.Kampus_ID != kampus_id:
+        raise HTTPException(status_code=403, detail="Hierdie Event QR is vir 'n ander kampus")
+
+    now = datetime.utcnow()
+    if now < event.FUN_Begin_Tyd - timedelta(hours=4):
+        raise HTTPException(status_code=403, detail="Dit is nog te vroeg vir hierdie Event se toegang")
+    if now > event.FUN_Eind_Tyd + timedelta(hours=6):
+        raise HTTPException(status_code=403, detail="Hierdie Event se toegangstyd is reeds verby")
+
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
+    if kampus is None:
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+    return event, kampus
+
+
+def _last_event_guest_gate_log(db: Session, publiek_rsvp_id: int, event_id: int):
+    return (
+        db.query(models.FunksiePubliekToegang)
+        .filter(
+            models.FunksiePubliekToegang.Publiek_RSVP_ID == publiek_rsvp_id,
+            models.FunksiePubliekToegang.Funksie_ID == event_id,
+            models.FunksiePubliekToegang.Rigting.in_(["IN", "UIT"]),
+        )
+        .order_by(models.FunksiePubliekToegang.Tydstempel.desc())
+        .first()
+    )
+
+
+@router.post("/wagte/event/scan")
+def wagte_event_guest_scan(
+    data: schemas.WagteEventGuestScanRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
+):
+    if not current_user.Is_Aktief:
+        raise HTTPException(status_code=403, detail="Wag-gebruiker is nie aktief nie")
+
+    rsvp = _event_guest_from_scan(db, data.scan_kode)
+    event, kampus = _validate_event_guest_access(db, rsvp, data.kampus_id)
+    last = _last_event_guest_gate_log(db, rsvp.Publiek_RSVP_ID, event.Funksie_ID)
+    voorgestelde = "UIT" if last is not None and last.Rigting == "IN" else "IN"
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "publiek_rsvp_id": rsvp.Publiek_RSVP_ID,
+            "volle_naam": f"{rsvp.Naam} {rsvp.Van}".strip(),
+            "selfoon": rsvp.Selfoon,
+            "epos": rsvp.Epos,
+            "event_id": event.Funksie_ID,
+            "event_naam": event.FUN_Naam,
+            "kampus_id": kampus.Kampus_ID,
+            "kampus_naam": kampus.KAM_Naam,
+            "begin_tyd": event.FUN_Begin_Tyd.isoformat() + "Z",
+            "eind_tyd": event.FUN_Eind_Tyd.isoformat() + "Z",
+            "voorgestelde_rigting": voorgestelde,
+            "laaste_rigting": last.Rigting if last else None,
+            "laaste_tyd": last.Tydstempel.isoformat() + "Z" if last else None,
+        },
+    )
+
+
+@router.post("/wagte/event/confirm")
+def wagte_event_guest_confirm(
+    data: schemas.WagteEventGuestConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
+):
+    rigting = (data.rigting or "").strip().upper()
+    metode = (data.metode or "QR").strip().upper()
+    if rigting not in {"IN", "UIT"}:
+        raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
+    if metode not in {"QR", "HANDMATIG"}:
+        raise HTTPException(status_code=400, detail="Metode moet QR of HANDMATIG wees")
+
+    rsvp = db.query(models.FunksiePubliekRSVP).filter(
+        models.FunksiePubliekRSVP.Publiek_RSVP_ID == data.publiek_rsvp_id
+    ).first()
+    if rsvp is None:
+        raise HTTPException(status_code=404, detail="Eksterne Event RSVP nie gevind nie")
+    event, kampus = _validate_event_guest_access(db, rsvp, data.kampus_id)
+    last = _last_event_guest_gate_log(db, rsvp.Publiek_RSVP_ID, event.Funksie_ID)
+
+    if rigting == "IN" and last is not None and last.Rigting == "IN":
+        raise HTTPException(status_code=409, detail="Hierdie Event-gas is reeds IN")
+    if rigting == "UIT" and (last is None or last.Rigting != "IN"):
+        raise HTTPException(status_code=409, detail="Hierdie Event-gas is nie tans IN nie")
+
+    log = models.FunksiePubliekToegang(
+        Publiek_RSVP_ID=rsvp.Publiek_RSVP_ID,
+        Funksie_ID=event.Funksie_ID,
+        Kampus_ID=kampus.Kampus_ID,
+        Wag_ID=current_user.Gebruiker_ID,
+        Rigting=rigting,
+        Metode=metode,
+        Tydstempel=datetime.utcnow(),
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "toegang_id": log.Toegang_ID,
+            "publiek_rsvp_id": rsvp.Publiek_RSVP_ID,
+            "volle_naam": f"{rsvp.Naam} {rsvp.Van}".strip(),
+            "event_id": event.Funksie_ID,
+            "event_naam": event.FUN_Naam,
+            "kampus_id": kampus.Kampus_ID,
+            "kampus_naam": kampus.KAM_Naam,
+            "rigting": rigting,
+            "metode": metode,
+            "tyd": log.Tydstempel.isoformat() + "Z",
+        },
+    )
+
+
+@router.post("/wagte/event/decline")
+def wagte_event_guest_decline(
+    data: schemas.WagteEventGuestDeclineRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
+):
+    metode = (data.metode or "QR").strip().upper()
+    if metode not in {"QR", "HANDMATIG"}:
+        raise HTTPException(status_code=400, detail="Metode moet QR of HANDMATIG wees")
+
+    rsvp = db.query(models.FunksiePubliekRSVP).filter(
+        models.FunksiePubliekRSVP.Publiek_RSVP_ID == data.publiek_rsvp_id
+    ).first()
+    if rsvp is None:
+        raise HTTPException(status_code=404, detail="Eksterne Event RSVP nie gevind nie")
+    event, kampus = _validate_event_guest_access(db, rsvp, data.kampus_id)
+
+    log = models.FunksiePubliekToegang(
+        Publiek_RSVP_ID=rsvp.Publiek_RSVP_ID,
+        Funksie_ID=event.Funksie_ID,
+        Kampus_ID=kampus.Kampus_ID,
+        Wag_ID=current_user.Gebruiker_ID,
+        Rigting="GEWEIER",
+        Metode=metode,
+        Tydstempel=datetime.utcnow(),
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "toegang_id": log.Toegang_ID,
+            "publiek_rsvp_id": rsvp.Publiek_RSVP_ID,
+            "volle_naam": f"{rsvp.Naam} {rsvp.Van}".strip(),
+            "event_id": event.Funksie_ID,
+            "event_naam": event.FUN_Naam,
+            "rigting": "GEWEIER",
+            "tyd": log.Tydstempel.isoformat() + "Z",
+        },
+    )
