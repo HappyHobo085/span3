@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="af">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MOON Event RSVP</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #12243a 0, #070b14 42%, #05070c 100%);
+      color: #f8fafc;
+    }
+    .wrap { width: min(100%, 650px); margin: 0 auto; padding: 28px 16px 60px; }
+    .brand { color: #22d3ee; font-size: 14px; font-weight: 900; letter-spacing: 3px; margin-bottom: 14px; }
+    .card { background: rgba(17,24,39,.96); border: 1px solid #2a3a50; border-radius: 22px; padding: 22px; box-shadow: 0 22px 60px rgba(0,0,0,.38); }
+    h1 { margin: 0 0 8px; font-size: clamp(26px, 7vw, 36px); line-height: 1.12; }
+    .muted { color: #94a3b8; line-height: 1.55; font-size: 14px; }
+    .meta { display: grid; gap: 10px; margin: 18px 0; }
+    .meta > div { background: #0b1220; border: 1px solid #243247; border-radius: 14px; padding: 12px 14px; }
+    .pill { display: inline-block; margin-top: 8px; border: 1px solid #334155; border-radius: 999px; padding: 7px 10px; color: #cbd5e1; font-size: 12px; }
+    label { display: block; margin: 14px 0 6px; color: #cbd5e1; font-size: 12px; font-weight: 800; }
+    input { width: 100%; padding: 14px; border-radius: 13px; border: 1px solid #334155; background: #080f1c; color: #fff; font-size: 16px; outline: none; }
+    input:focus { border-color: #22d3ee; box-shadow: 0 0 0 3px rgba(34,211,238,.10); }
+    button { width: 100%; margin-top: 20px; border: 0; border-radius: 14px; padding: 15px 16px; background: #22d3ee; color: #03151b; font-weight: 900; font-size: 15px; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .error { margin-top: 12px; color: #f87171; font-weight: 700; }
+    .success { color: #4ade80; font-size: 22px; font-weight: 900; }
+    #confirmCard { display: none; text-align: center; }
+    #qr { width: 270px; height: 270px; max-width: 100%; margin: 22px auto 12px; padding: 10px; background: white; border-radius: 16px; }
+    #qr img, #qr canvas { width: 100% !important; height: 100% !important; }
+    .token { margin-top: 12px; color: #64748b; font-size: 10px; word-break: break-all; }
+    .loading { text-align: center; padding: 38px 16px; color: #94a3b8; }
+    .restore { display:none; margin-bottom: 14px; padding: 11px 13px; border-radius: 12px; background: #0f172a; border:1px solid #334155; color:#cbd5e1; font-size:13px; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="brand">MOON</div>
+    <div id="loading" class="card loading">Event word gelaai...</div>
+    <div id="restoreStatus" class="restore">Jou bestaande RSVP word gelaai...</div>
+
+    <section id="formCard" class="card" style="display:none">
+      <h1 id="eventName">Event</h1>
+      <div id="eventDescription" class="muted"></div>
+      <div class="meta">
+        <div><strong>Kampus:</strong> <span id="eventLocation">—</span></div>
+        <div><strong>Datum/Tyd:</strong> <span id="eventTime">—</span></div>
+        <div><strong>RSVP:</strong> <span id="eventCapacity">—</span></div>
+      </div>
+      <div id="eventStatus" class="pill">—</div>
+
+      <form id="rsvpForm">
+        <label for="naam">Naam</label>
+        <input id="naam" name="naam" maxlength="100" autocomplete="given-name" required>
+        <label for="van">Van</label>
+        <input id="van" name="van" maxlength="100" autocomplete="family-name" required>
+        <label for="selfoon">Selfoon</label>
+        <input id="selfoon" name="selfoon" maxlength="30" inputmode="tel" autocomplete="tel" required>
+        <label for="epos">E-pos (opsioneel)</label>
+        <input id="epos" name="epos" maxlength="255" type="email" autocomplete="email">
+        <button id="submitBtn" type="submit">RSVP – EK GAAN</button>
+        <div id="error" class="error"></div>
+      </form>
+    </section>
+
+    <section id="confirmCard" class="card">
+      <div class="success">✓ RSVP BEVESTIG</div>
+      <h1 id="guestName" style="margin-top:12px"></h1>
+      <div class="muted">Wys hierdie QR by die event se toegangspunt.</div>
+      <div id="qr"></div>
+      <div id="confirmedEvent" class="muted"></div>
+      <div id="tokenFallback" class="token"></div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    // Die Flutter app gebruik dieselfde backend-hostname.
+    const API_BASE_URL = 'https://humorous-endurance-production-ee64.up.railway.app';
+    const params = new URLSearchParams(window.location.search);
+    const shareToken = (params.get('token') || '').trim();
+    const storageKey = shareToken ? 'moon_event_rsvp_' + shareToken : '';
+    let eventData = null;
+
+    function messageFrom(body, fallback) {
+      return (body && (body.fout || body.detail)) || fallback;
+    }
+
+    function formatDateTime(startValue, endValue) {
+      try {
+        const start = new Date(startValue);
+        const end = new Date(endValue);
+        return start.toLocaleString('af-ZA', { dateStyle: 'medium', timeStyle: 'short' }) +
+          ' – ' + end.toLocaleTimeString('af-ZA', { hour: '2-digit', minute: '2-digit' });
+      } catch (_) {
+        return 'Tyd nie beskikbaar nie';
+      }
+    }
+
+    function showQr(data) {
+      document.getElementById('formCard').style.display = 'none';
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('confirmCard').style.display = 'block';
+      document.getElementById('guestName').textContent = data.volle_naam || 'Gas';
+      document.getElementById('confirmedEvent').textContent = eventData ? eventData.naam : '';
+      document.getElementById('tokenFallback').textContent = 'Toegangstoken: ' + data.qr_token;
+      const qr = document.getElementById('qr');
+      qr.innerHTML = '';
+      if (window.QRCode) {
+        new QRCode(qr, { text: data.qr_value, width: 250, height: 250, correctLevel: QRCode.CorrectLevel.M });
+      } else {
+        qr.innerHTML = '<div style="color:#111;padding:44px 10px">QR kon nie laai nie. Gebruik die toegangstoken hieronder.</div>';
+      }
+    }
+
+    async function restoreSaved() {
+      if (!storageKey) return false;
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) return false;
+      const box = document.getElementById('restoreStatus');
+      box.style.display = 'block';
+      try {
+        const res = await fetch(API_BASE_URL + '/events/public/' + encodeURIComponent(shareToken) + '/rsvp/' + encodeURIComponent(saved));
+        const body = await res.json();
+        if (!res.ok || body.sukses !== true) throw new Error(messageFrom(body, 'Bestaande RSVP kon nie laai nie'));
+        box.style.display = 'none';
+        showQr(body.data);
+        return true;
+      } catch (err) {
+        localStorage.removeItem(storageKey);
+        box.style.display = 'none';
+        return false;
+      }
+    }
+
+    async function loadEvent() {
+      if (!shareToken) {
+        document.getElementById('loading').textContent = 'Die Event-skakel is ongeldig: geen token is gevind nie.';
+        return;
+      }
+      try {
+        const res = await fetch(API_BASE_URL + '/events/public/' + encodeURIComponent(shareToken) + '/data');
+        const body = await res.json();
+        if (!res.ok || body.sukses !== true) throw new Error(messageFrom(body, 'Event kon nie laai nie'));
+        eventData = body.data;
+        document.getElementById('eventName').textContent = eventData.naam || 'Event';
+        document.title = (eventData.naam || 'MOON Event') + ' – RSVP';
+        document.getElementById('eventDescription').textContent = eventData.beskrywing || '';
+        document.getElementById('eventLocation').textContent = eventData.kampus_naam + (eventData.lokasie_naam ? ' · ' + eventData.lokasie_naam : '');
+        document.getElementById('eventTime').textContent = formatDateTime(eventData.begin_tyd, eventData.eind_tyd);
+        document.getElementById('eventCapacity').textContent = eventData.rsvp_aantal + ' / ' + eventData.kapasiteit;
+        document.getElementById('eventStatus').textContent = eventData.rsvp_oop ? eventData.plekke_oor + ' plekke oor' : 'RSVP is gesluit';
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('formCard').style.display = 'block';
+        if (!eventData.rsvp_oop) {
+          document.querySelectorAll('#rsvpForm input, #rsvpForm button').forEach(el => el.disabled = true);
+        }
+        await restoreSaved();
+      } catch (err) {
+        document.getElementById('loading').textContent = err.message || String(err);
+      }
+    }
+
+    document.getElementById('rsvpForm').addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      const error = document.getElementById('error');
+      const button = document.getElementById('submitBtn');
+      error.textContent = '';
+      const payload = {
+        naam: document.getElementById('naam').value.trim(),
+        van: document.getElementById('van').value.trim(),
+        selfoon: document.getElementById('selfoon').value.trim(),
+        epos: document.getElementById('epos').value.trim() || null
+      };
+      button.disabled = true;
+      button.textContent = 'BESIG...';
+      try {
+        const res = await fetch(API_BASE_URL + '/events/public/' + encodeURIComponent(shareToken) + '/rsvp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const body = await res.json();
+        if (!res.ok || body.sukses !== true) throw new Error(messageFrom(body, 'RSVP het misluk'));
+        if (storageKey) localStorage.setItem(storageKey, body.data.qr_token);
+        showQr(body.data);
+      } catch (err) {
+        error.textContent = err.message || String(err);
+        button.disabled = false;
+        button.textContent = 'RSVP – EK GAAN';
+      }
+    });
+
+    loadEvent();
+  </script>
+</body>
+</html>
