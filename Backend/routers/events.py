@@ -515,7 +515,7 @@ def share_event(
         event.Gewysig_Op = datetime.utcnow()
         db.commit()
         db.refresh(event)
-    share_url = f"{PUBLIC_SITE_BASE_URL}/events/public/{event.FUN_Deel_Token}"
+    share_url = f"{PUBLIC_SITE_BASE_URL}/event.html?token={event.FUN_Deel_Token}"
     return {
         "sukses": True,
         "data": {
@@ -704,6 +704,39 @@ def cancel_public_rsvp_by_opsigter(
             "gekanselleer": True,
             "reeds_gekanselleer": False,
             "event": _event_dict(db, event, current_user.Gebruiker_ID),
+        },
+        "fout": None,
+    }
+
+
+@router.get("/public/{share_token}/data")
+def public_event_data(
+    share_token: str,
+    db: Session = Depends(database.get_db),
+):
+    """Publieke JSON-data vir die aparte MOON website se event.html."""
+    event = _public_event_or_404(db, share_token)
+    data = _event_dict(db, event)
+    disabled = (
+        data["status"] != "AKTIEF"
+        or not data["is_aktief"]
+        or event.FUN_Eind_Tyd < datetime.utcnow()
+    )
+    return {
+        "sukses": True,
+        "data": {
+            "naam": data["naam"],
+            "kampus_naam": data["kampus_naam"],
+            "lokasie_naam": data["lokasie_naam"],
+            "begin_tyd": data["begin_tyd"],
+            "eind_tyd": data["eind_tyd"],
+            "beskrywing": data["beskrywing"],
+            "kapasiteit": data["kapasiteit"],
+            "rsvp_aantal": data["rsvp_aantal"],
+            "plekke_oor": data["plekke_oor"],
+            "status": data["status"],
+            "is_aktief": data["is_aktief"],
+            "rsvp_oop": not disabled,
         },
         "fout": None,
     }
