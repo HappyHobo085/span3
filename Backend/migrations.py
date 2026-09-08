@@ -672,3 +672,40 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 013 "
             f"(Event Live Attendance / publieke hektoegang) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 014: Indekse vir gereelde dashboard- en toegangslog-filters
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_toegangs_logs_gebruiker_metode_tyd
+                ON toegangs_logs ("Gebruiker_ID", "TOE_Metode", "TOE_Tydstempel" DESC)
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_toegangs_logs_rigting_tyd
+                ON toegangs_logs ("TOE_Rigting", "TOE_Tydstempel" DESC)
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_nfc_tags_uid_aktief
+                ON nfc_tags ("NFC_UID", "NFC_Is_Aktief")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_toegangs_logs_lokasie_rigting_tyd
+                ON toegangs_logs ("Lokasie_ID", "TOE_Rigting", "TOE_Tydstempel" DESC)
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_lokasie_kampus
+                ON lokasie ("Kampus_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_student_koshuis
+                ON student ("Koshuis_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_funksie_rsvp_event_status
+                ON funksie_rsvp ("Funksie_ID", "RSVP_Status")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 014 "
+            f"(dashboard/toegangslog-indekse) het misluk: {_migrasie_fout}"
+        )

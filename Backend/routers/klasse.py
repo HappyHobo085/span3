@@ -5,7 +5,7 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 import models, schemas, auth
@@ -155,8 +155,14 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
             .filter(models.Klas_Groep.Groep_ID.in_(groep_ids))
             .all()
         )
-        for (kid,) in klas_ids:
-            voeg_by(db.query(models.Klas).filter(models.Klas.Klas_ID == kid).first())
+        groepeer_klasse = (
+            db.query(models.Klas)
+            .options(joinedload(models.Klas.module))
+            .filter(models.Klas.Klas_ID.in_([kid for (kid,) in klas_ids]))
+            .all()
+        )
+        for klas in groepeer_klasse:
+            voeg_by(klas)
 
     # 2. Module-inskrywing: Student_Module -> Klas
     module_ids = [
@@ -168,6 +174,7 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if module_ids:
         for klas in (
             db.query(models.Klas)
+            .options(joinedload(models.Klas.module))
             .filter(models.Klas.Module_ID.in_(module_ids))
             .all()
         ):
@@ -183,6 +190,7 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if direkte_ids:
         for klas in (
             db.query(models.Klas)
+            .options(joinedload(models.Klas.module))
             .filter(models.Klas.Klas_ID.in_(direkte_ids))
             .all()
         ):
@@ -212,6 +220,7 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if module_ids:
         for klas in (
             db.query(models.Klas)
+            .options(joinedload(models.Klas.module))
             .filter(models.Klas.Module_ID.in_(module_ids))
             .all()
         ):
@@ -227,6 +236,7 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if direkte_ids:
         for klas in (
             db.query(models.Klas)
+            .options(joinedload(models.Klas.module))
             .filter(models.Klas.Klas_ID.in_(direkte_ids))
             .all()
         ):
@@ -334,7 +344,12 @@ def lys_klasse(
     db: Session = Depends(get_db),
     _: bool = Depends(auth.check_admin),
 ):
-    klasse = db.query(models.Klas).order_by(models.Klas.KLA_Dag).all()
+    klasse = (
+        db.query(models.Klas)
+        .options(joinedload(models.Klas.module))
+        .order_by(models.Klas.KLA_Dag)
+        .all()
+    )
     return schemas.APIResponse(
         sukses=True,
         data=[_klas_na_dict(k) for k in klasse],

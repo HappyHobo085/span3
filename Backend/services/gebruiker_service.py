@@ -1,7 +1,7 @@
 """Gebruiker (User) business logic — extracted from main.py helpers."""
 
 import uuid
-from typing import Optional, List
+from typing import List, Optional, cast
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -33,9 +33,10 @@ def get_user_role_ids(db: Session, gebruiker: models.Gebruikers) -> List[int]:
         .filter(models.GebruikersRolle.Gebruiker_ID == gebruiker.Gebruiker_ID)
         .all()
     )
-    role_ids = [assignment.Rol_ID for assignment in role_assignments]
-    if not role_ids and getattr(gebruiker, "Rol_ID", None) is not None:
-        role_ids = [gebruiker.Rol_ID]
+    role_ids: List[int] = [cast(int, assignment.Rol_ID) for assignment in role_assignments]
+    primary_role_id = cast(Optional[int], getattr(gebruiker, "Rol_ID", None))
+    if primary_role_id is not None and primary_role_id not in role_ids:
+        role_ids.append(primary_role_id)
     return role_ids
 
 

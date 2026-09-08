@@ -1,7 +1,7 @@
 """Dashboard, profile, and utility routes."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 from zoneinfo import ZoneInfo
 
@@ -35,10 +35,32 @@ def kry_my_profiel(
     db: Session = Depends(get_db),
 ):
     role_names = get_user_role_names(db, current_user)
-    student = db.query(models.Student).filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID).first()
-    personeel = db.query(models.Personeel).filter(models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID).first()
-    opsigter = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
-    wag = db.query(models.Sekuriteit_Wag).filter(models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID).first()
+    subrekords = (
+        db.query(
+            models.Student,
+            models.Personeel,
+            models.Kampus_Opsigter,
+            models.Sekuriteit_Wag,
+        )
+        .outerjoin(
+            models.Student,
+            models.Student.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .outerjoin(
+            models.Personeel,
+            models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .outerjoin(
+            models.Kampus_Opsigter,
+            models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .outerjoin(
+            models.Sekuriteit_Wag,
+            models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .first()
+    )
+    student, personeel, opsigter, wag = subrekords or (None, None, None, None)
 
     return {
         "sukses": True,
@@ -106,22 +128,29 @@ def kry_my_dashboard(
 ):
     role_names = get_user_role_names(db, current_user)
 
-    laaste_kampus_log = db.query(models.ToegangsLogs).filter(
-        models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
-        models.ToegangsLogs.TOE_Metode == "QR",
-        models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
-    ).order_by(models.ToegangsLogs.TOE_Tydstempel.desc()).first()
+    def laaste_log(metode):
+        return (
+            db.query(models.ToegangsLogs, models.Lokasie)
+            .join(
+                models.Lokasie,
+                models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
+            )
+            .filter(
+                models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
+                models.ToegangsLogs.TOE_Metode == metode,
+                models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+            )
+            .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+            .first()
+        )
 
-    laaste_klas_log = db.query(models.ToegangsLogs).filter(
-        models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
-        models.ToegangsLogs.TOE_Metode == "NFC",
-        models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
-    ).order_by(models.ToegangsLogs.TOE_Tydstempel.desc()).first()
+    laaste_kampus_log = laaste_log("QR")
+    laaste_klas_log = laaste_log("NFC")
 
-    def log_to_dict(log):
-        if not log:
+    def log_to_dict(log_row):
+        if not log_row:
             return None
-        lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == log.Lokasie_ID).first()
+        log, lokasie = log_row
         return {
             "log_id": log.Log_ID,
             "lokasie_id": log.Lokasie_ID,
@@ -170,31 +199,35 @@ def dashboard_live(
         .subquery()
     )
 
-    laaste_logs = (
-        db.query(models.ToegangsLogs)
+    op_kampus_subq = (
+        db.query(models.ToegangsLogs.Gebruiker_ID)
         .join(laaste_logs_subq, models.ToegangsLogs.Log_ID == laaste_logs_subq.c.max_log_id)
-        .all()
+        .filter(models.ToegangsLogs.TOE_Rigting == "IN")
+        .subquery()
     )
 
-    op_kampus_ids = [log.Gebruiker_ID for log in laaste_logs if log.TOE_Rigting == "IN"]
-
     studente_op_kampus = (
-        db.query(models.Student).filter(models.Student.Gebruiker_ID.in_(op_kampus_ids)).count()
-        if op_kampus_ids else 0
+        db.query(func.count(models.Student.Gebruiker_ID))
+        .join(op_kampus_subq, models.Student.Gebruiker_ID == op_kampus_subq.c.Gebruiker_ID)
+        .scalar()
     )
 
     personeel_op_kampus = (
-        db.query(models.Personeel).filter(models.Personeel.Gebruiker_ID.in_(op_kampus_ids)).count()
-        if op_kampus_ids else 0
+        db.query(func.count(models.Personeel.Gebruiker_ID))
+        .join(op_kampus_subq, models.Personeel.Gebruiker_ID == op_kampus_subq.c.Gebruiker_ID)
+        .scalar()
     )
 
+    dag_begin = datetime.combine(vandag, datetime.min.time())
+    dag_einde = dag_begin + timedelta(days=1)
     toegange_vandag = (
-        db.query(models.ToegangsLogs)
+        db.query(func.count(models.ToegangsLogs.Log_ID))
         .filter(
-            func.date(models.ToegangsLogs.TOE_Tydstempel) == vandag,
+            models.ToegangsLogs.TOE_Tydstempel >= dag_begin,
+            models.ToegangsLogs.TOE_Tydstempel < dag_einde,
             models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
         )
-        .count()
+        .scalar()
     )
 
     return schemas.APIResponse(

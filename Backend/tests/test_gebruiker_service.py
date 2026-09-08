@@ -1,7 +1,7 @@
 """Toetse vir outogenerering van subrekord-nommers in gebruiker_service."""
 
 import models
-from services.gebruiker_service import sync_gebruiker_subrekords
+from services.gebruiker_service import get_user_role_ids, get_user_role_names, sync_gebruiker_subrekords
 
 
 def kry_opsigter(db, gebruiker):
@@ -47,6 +47,22 @@ class TestKamoNommerOutogenerering:
         db.flush()
 
         assert kry_opsigter(db, gebruiker).KAMO_Nommer == "KAMO9000"
+
+
+class TestVeelvuldigeRolle:
+    def test_primere_rol_word_behou_saam_met_toegewysde_rolle(self, db, maak_gebruiker):
+        gebruiker = maak_gebruiker("Personeel")
+        student_rol = models.Rolle(ROL_Naam="Student")
+        db.add(student_rol)
+        db.flush()
+        db.add(models.GebruikersRolle(
+            Gebruiker_ID=gebruiker.Gebruiker_ID,
+            Rol_ID=student_rol.Rol_ID,
+        ))
+        db.flush()
+
+        assert set(get_user_role_ids(db, gebruiker)) == {gebruiker.Rol_ID, student_rol.Rol_ID}
+        assert set(get_user_role_names(db, gebruiker)) == {"Student", "Personeel"}
 
 
 class TestSekNommerOutogenerering:

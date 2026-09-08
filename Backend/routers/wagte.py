@@ -116,7 +116,11 @@ def opsigter_kampus_besoekers(
     end_utc = end_sa.astimezone(timezone.utc).replace(tzinfo=None)
 
     besoekers = (
-        db.query(models.BesoekerUitnodiging)
+        db.query(models.BesoekerUitnodiging, models.Gebruikers)
+        .join(
+            models.Gebruikers,
+            models.Gebruikers.Gebruiker_ID == models.BesoekerUitnodiging.Gasheer_ID,
+        )
         .filter(
             models.BesoekerUitnodiging.Kampus_ID == kampus_id,
             models.BesoekerUitnodiging.BES_Status == "TOEGELAAT",
@@ -128,13 +132,8 @@ def opsigter_kampus_besoekers(
     )
 
     data = []
-    for item in besoekers:
-        gasheer = db.query(models.Gebruikers).filter(
-            models.Gebruikers.Gebruiker_ID == item.Gasheer_ID
-        ).first()
-        gasheer_naam = ""
-        if gasheer:
-            gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
+    for item, gasheer in besoekers:
+        gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
 
         data.append({
             "uitnodiging_id": item.Uitnodiging_ID,

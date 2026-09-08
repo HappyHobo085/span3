@@ -9,12 +9,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import auth
 import database
 import models
 import schemas
+from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -43,8 +44,14 @@ def _require_active(current_user: models.Gebruikers) -> None:
         raise HTTPException(status_code=403, detail="Jou gebruiker is nie aktief nie")
 
 
-def _require_opsigter(db: Session, current_user: models.Gebruikers) -> models.Kampus_Opsigter:
+def _require_opsigter(
+    db: Session,
+    current_user: models.Gebruikers,
+) -> Optional[models.Kampus_Opsigter]:
     _require_active(current_user)
+    role_names = set(get_user_role_names(db, current_user))
+    if "Administrateur" in role_names:
+        return None
     opsigter = (
         db.query(models.Kampus_Opsigter)
         .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
@@ -142,12 +149,30 @@ def _my_rsvp(db: Session, event_id: int, user_id: int) -> Optional[str]:
     return row.RSVP_Status if row is not None else None
 
 
-def _event_dict(db: Session, event: models.Funksie, current_user_id: Optional[int] = None) -> dict:
-    app_count = _app_confirmed_count(db, event.Funksie_ID)
-    external_count = _external_confirmed_count(db, event.Funksie_ID)
+def _event_dict(
+    db: Session,
+    event: models.Funksie,
+    current_user_id: Optional[int] = None,
+    app_counts: Optional[dict[int, int]] = None,
+    external_counts: Optional[dict[int, int]] = None,
+    my_statuses: Optional[dict[int, str]] = None,
+) -> dict:
+    app_count = (
+        app_counts.get(event.Funksie_ID, 0)
+        if app_counts is not None
+        else _app_confirmed_count(db, event.Funksie_ID)
+    )
+    external_count = (
+        external_counts.get(event.Funksie_ID, 0)
+        if external_counts is not None
+        else _external_confirmed_count(db, event.Funksie_ID)
+    )
     rsvp_count = app_count + external_count
     capacity = int(event.FUN_Kapasiteit or 0)
-    my_status = _my_rsvp(db, event.Funksie_ID, current_user_id) if current_user_id is not None else None
+    if my_statuses is not None:
+        my_status = my_statuses.get(event.Funksie_ID)
+    else:
+        my_status = _my_rsvp(db, event.Funksie_ID, current_user_id) if current_user_id is not None else None
     return {
         "event_id": event.Funksie_ID,
         "naam": event.FUN_Naam,
@@ -382,6 +407,7 @@ def _normalise_phone(value: str) -> str:
 @router.get("")
 def list_events(
     view: str = Query("komende"),
+    limit: int = Query(100, ge=1, le=200),
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
@@ -390,7 +416,11 @@ def list_events(
     if view not in {"komende", "my", "vorige"}:
         raise HTTPException(status_code=400, detail="Ongeldige event-filter")
     now = datetime.utcnow()
-    query = db.query(models.Funksie)
+    query = db.query(models.Funksie).options(
+        joinedload(models.Funksie.kampus),
+        joinedload(models.Funksie.lokasie),
+        joinedload(models.Funksie.geskep_deur),
+    )
     if view == "komende":
         query = query.filter(
             models.Funksie.FUN_Is_Aktief.is_(True),
@@ -409,8 +439,58 @@ def list_events(
             models.Funksie.FUN_Status == "AKTIEF",
             models.Funksie.FUN_Eind_Tyd >= now,
         )
-    events = query.order_by(models.Funksie.FUN_Begin_Tyd.asc()).all()
-    return {"sukses": True, "data": [_event_dict(db, e, current_user.Gebruiker_ID) for e in events], "fout": None}
+    events = query.order_by(models.Funksie.FUN_Begin_Tyd.asc()).limit(limit).all()
+    event_ids = [event.Funksie_ID for event in events]
+    app_counts = {}
+    external_counts = {}
+    my_statuses = {}
+    if event_ids:
+        app_counts = {
+            event_id: count
+            for event_id, count in db.query(
+                models.FunksieRSVP.Funksie_ID,
+                func.count(models.FunksieRSVP.Gebruiker_ID),
+            )
+            .filter(
+                models.FunksieRSVP.Funksie_ID.in_(event_ids),
+                models.FunksieRSVP.RSVP_Status == "GAAN",
+            )
+            .group_by(models.FunksieRSVP.Funksie_ID)
+            .all()
+        }
+        external_counts = {
+            event_id: count
+            for event_id, count in db.query(
+                models.FunksiePubliekRSVP.Funksie_ID,
+                func.count(models.FunksiePubliekRSVP.Publiek_RSVP_ID),
+            )
+            .filter(
+                models.FunksiePubliekRSVP.Funksie_ID.in_(event_ids),
+                models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
+            )
+            .group_by(models.FunksiePubliekRSVP.Funksie_ID)
+            .all()
+        }
+        my_statuses = {
+            event_id: status
+            for event_id, status in db.query(
+                models.FunksieRSVP.Funksie_ID,
+                models.FunksieRSVP.RSVP_Status,
+            )
+            .filter(
+                models.FunksieRSVP.Funksie_ID.in_(event_ids),
+                models.FunksieRSVP.Gebruiker_ID == current_user.Gebruiker_ID,
+            )
+            .all()
+        }
+    return {
+        "sukses": True,
+        "data": [
+            _event_dict(db, event, current_user.Gebruiker_ID, app_counts, external_counts, my_statuses)
+            for event in events
+        ],
+        "fout": None,
+    }
 
 
 @router.post("")

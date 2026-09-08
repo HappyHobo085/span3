@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from typing import List, Optional
 
 from database import get_db
@@ -31,15 +31,31 @@ def lys_lokasies(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
-    lokasies = db.query(models.Lokasie).all()
+    active_tag_id = (
+        db.query(func.max(models.NFC_Tags.NFC_Tags_ID))
+        .filter(
+            models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True,
+        )
+        .correlate(models.Lokasie)
+        .scalar_subquery()
+    )
+    lokasies = (
+        db.query(models.Lokasie, models.NFC_Tags)
+        .outerjoin(
+            models.NFC_Tags,
+            and_(
+                models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
+                models.NFC_Tags.NFC_Is_Aktief == True,
+                models.NFC_Tags.NFC_Tags_ID == active_tag_id,
+            ),
+        )
+        .all()
+    )
     result = []
+    created_tag = False
 
-    for l in lokasies:
-        tag = db.query(models.NFC_Tags).filter(
-            models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
-            models.NFC_Tags.NFC_Is_Aktief == True
-        ).first()
-
+    for l, tag in lokasies:
         if not tag:
             tag = models.NFC_Tags(
                 NFC_UID=genereer_unieke_nfc_uid(db),
@@ -50,6 +66,7 @@ def lys_lokasies(
             )
             db.add(tag)
             db.flush()
+            created_tag = True
 
         result.append({
             "Lokasie_ID": l.Lokasie_ID,
@@ -59,7 +76,8 @@ def lys_lokasies(
             "NFC_UID": tag.NFC_UID
         })
 
-    db.commit()
+    if created_tag:
+        db.commit()
     return schemas.APIResponse(sukses=True, data=result)
 
 
@@ -69,13 +87,30 @@ def lys_klasse(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     """Gee 'n lys van alle klasse (lokasies met LOK_Tipe == 'Klaskamer')."""
-    lokasies = db.query(models.Lokasie).filter(models.Lokasie.LOK_Tipe == "Klaskamer").all()
+    active_tag_id = (
+        db.query(func.max(models.NFC_Tags.NFC_Tags_ID))
+        .filter(
+            models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
+            models.NFC_Tags.NFC_Is_Aktief == True,
+        )
+        .correlate(models.Lokasie)
+        .scalar_subquery()
+    )
+    lokasies = (
+        db.query(models.Lokasie, models.NFC_Tags)
+        .outerjoin(
+            models.NFC_Tags,
+            and_(
+                models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
+                models.NFC_Tags.NFC_Is_Aktief == True,
+                models.NFC_Tags.NFC_Tags_ID == active_tag_id,
+            ),
+        )
+        .filter(models.Lokasie.LOK_Tipe == "Klaskamer")
+        .all()
+    )
     result = []
-    for l in lokasies:
-        tag = db.query(models.NFC_Tags).filter(
-            models.NFC_Tags.Lokasie_ID == l.Lokasie_ID,
-            models.NFC_Tags.NFC_Is_Aktief == True
-        ).first()
+    for l, tag in lokasies:
         result.append({
             "Lokasie_ID": l.Lokasie_ID,
             "LOK_Naam": l.LOK_Naam,
@@ -129,7 +164,7 @@ def kry_klas_bywoning(
 
     Response bevat: total_students (est), present_count, present list (met tyd), absent list.
     """
-    from datetime import datetime, date as _date
+    from datetime import datetime, timedelta
 
     if date:
         try:
@@ -139,19 +174,48 @@ def kry_klas_bywoning(
     else:
         day = datetime.utcnow().date()
 
-    # Students who scanned IN on that day for this lokasie
-    present_rows = (
-        db.query(models.ToegangsLogs.Gebruiker_ID)
+    day_start = datetime.combine(day, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+
+    # Select the latest IN scan per student in one query.
+    latest_in = (
+        db.query(
+            models.ToegangsLogs.Gebruiker_ID,
+            func.max(models.ToegangsLogs.TOE_Tydstempel).label("latest_scan"),
+        )
         .filter(
             models.ToegangsLogs.Lokasie_ID == lokasie_id,
-            func.date(models.ToegangsLogs.TOE_Tydstempel) == day,
+            models.ToegangsLogs.TOE_Tydstempel >= day_start,
+            models.ToegangsLogs.TOE_Tydstempel < day_end,
             models.ToegangsLogs.TOE_Rigting == "IN",
         )
-        .distinct()
+        .group_by(models.ToegangsLogs.Gebruiker_ID)
+        .subquery()
+    )
+
+    present_rows = (
+        db.query(models.Gebruikers, models.Student, models.ToegangsLogs)
+        .join(
+            latest_in,
+            models.Gebruikers.Gebruiker_ID == latest_in.c.Gebruiker_ID,
+        )
+        .outerjoin(
+            models.Student,
+            models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID,
+        )
+        .join(
+            models.ToegangsLogs,
+            and_(
+                models.ToegangsLogs.Gebruiker_ID == latest_in.c.Gebruiker_ID,
+                models.ToegangsLogs.TOE_Tydstempel == latest_in.c.latest_scan,
+                models.ToegangsLogs.Lokasie_ID == lokasie_id,
+                models.ToegangsLogs.TOE_Rigting == "IN",
+            ),
+        )
         .all()
     )
 
-    present_ids = [r[0] for r in present_rows]
+    present_ids = [gebruiker.Gebruiker_ID for gebruiker, _, _ in present_rows]
 
     # Roster = distinct users who have ever scanned at this lokasie (best-effort)
     roster_rows = (
@@ -163,35 +227,17 @@ def kry_klas_bywoning(
     roster_ids = [r[0] for r in roster_rows]
 
     # Fetch user details for present and roster
-    present = []
-    if present_ids:
-        for uid in present_ids:
-            gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == uid).first()
-            if not gebruiker:
-                continue
-            last_in = (
-                db.query(models.ToegangsLogs)
-                .filter(
-                    models.ToegangsLogs.Gebruiker_ID == uid,
-                    models.ToegangsLogs.Lokasie_ID == lokasie_id,
-                    func.date(models.ToegangsLogs.TOE_Tydstempel) == day,
-                    models.ToegangsLogs.TOE_Rigting == "IN",
-                )
-                .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
-                .first()
-            )
-            tyd = None
-            if last_in is not None and getattr(last_in, "TOE_Tydstempel", None) is not None:
-                tyd = last_in.TOE_Tydstempel.isoformat()
-
-            present.append({
-                "Gebruiker_ID": gebruiker.Gebruiker_ID,
-                "GEB_Naam": gebruiker.GEB_Naam,
-                "GEB_Van": gebruiker.GEB_Van,
-                "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
-                "STU_Nommer": db.query(models.Student.STU_Nommer).filter(models.Student.Gebruiker_ID == gebruiker.Gebruiker_ID).scalar(),
-                "Tyd": tyd,
-            })
+    present = [
+        {
+            "Gebruiker_ID": gebruiker.Gebruiker_ID,
+            "GEB_Naam": gebruiker.GEB_Naam,
+            "GEB_Van": gebruiker.GEB_Van,
+            "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+            "STU_Nommer": student.STU_Nommer if student else None,
+            "Tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
+        }
+        for gebruiker, student, log in present_rows
+    ]
 
     roster_users = []
     if roster_ids:

@@ -39,6 +39,7 @@ class UserBase(BaseModel):
     Is_Aktief: bool = True
 
 class UserCreate(UserBase):
+    Rol_IDs: Optional[List[int]] = None
     GEB_Wagwoord: str
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: bool = False
@@ -53,6 +54,7 @@ class UserCreate(UserBase):
     NFC_Is_Aktief: bool = True
 
 class UserUpdate(BaseModel):
+    Rol_IDs: Optional[List[int]] = None
     GEB_Naam: Optional[str] = None
     GEB_Van: Optional[str] = None
     GEB_ID_Nommer: Optional[str] = None

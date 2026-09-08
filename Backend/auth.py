@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 import os
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from dotenv import load_dotenv
 
 import database, models
@@ -54,7 +55,14 @@ def _dev_fallback_user(db: Session) -> models.Gebruikers:
     if admin_rol:
         user = (
             db.query(models.Gebruikers)
-            .filter(models.Gebruikers.Rol_ID == admin_rol.Rol_ID)
+            .outerjoin(
+                models.GebruikersRolle,
+                models.GebruikersRolle.Gebruiker_ID == models.Gebruikers.Gebruiker_ID,
+            )
+            .filter(or_(
+                models.Gebruikers.Rol_ID == admin_rol.Rol_ID,
+                models.GebruikersRolle.Rol_ID == admin_rol.Rol_ID,
+            ))
             .first()
         )
         if user:
