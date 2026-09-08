@@ -44,6 +44,77 @@ class GebruikersRolle(Base):
     gebruiker = relationship("Gebruikers", back_populates="gebruikers_rolle")
     rol       = relationship("Rolle",      back_populates="gebruikers_rolle")
 
+class Instelling(Base):
+    __tablename__ = 'instelling'
+
+    Instelling_ID = Column(Integer, primary_key=True, index=True)
+    Sleutel = Column(String(200), nullable=False, unique=True)
+    Waarde = Column(String(500), nullable=False, default='')
+    Beskrywing = Column(Text, nullable=True)
+
+class Module(Base):
+    __tablename__ = 'module'
+
+    Module_ID = Column(Integer, primary_key=True, index=True)
+    MOD_Kode = Column(String(50), nullable=False, unique=True)
+    MOD_Naam = Column(String(200), nullable=True)
+
+    klasse = relationship("Klas", back_populates="module")
+
+class Groep(Base):
+    __tablename__ = 'groep'
+
+    Groep_ID = Column(Integer, primary_key=True, index=True)
+    GRO_Naam = Column(String(100), nullable=False, unique=True)
+
+class Klas(Base):
+    __tablename__ = 'klas'
+
+    Klas_ID = Column(Integer, primary_key=True, index=True)
+    Module_ID = Column(Integer, ForeignKey('module.Module_ID'), nullable=False)
+    KLA_Lokaal = Column(String(100), nullable=False)
+    KLA_Dag = Column(String(50), nullable=False)
+    KLA_Begin_Tyd = Column(String(20), nullable=False)
+    KLA_Eind_Tyd = Column(String(20), nullable=False)
+
+    module = relationship("Module", back_populates="klasse")
+
+class Student_Groep(Base):
+    __tablename__ = 'student_groep'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Groep_ID = Column(Integer, ForeignKey('groep.Groep_ID'), primary_key=True)
+
+class Student_Module(Base):
+    __tablename__ = 'student_module'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Module_ID = Column(Integer, ForeignKey('module.Module_ID'), primary_key=True)
+
+class Student_Klas(Base):
+    __tablename__ = 'student_klas'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Klas_ID = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)
+
+class Personeel_Module(Base):
+    __tablename__ = 'personeel_module'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Module_ID = Column(Integer, ForeignKey('module.Module_ID'), primary_key=True)
+
+class Personeel_Klas(Base):
+    __tablename__ = 'personeel_klas'
+
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Klas_ID = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)
+
+class Klas_Groep(Base):
+    __tablename__ = 'klas_groep'
+
+    Klas_ID = Column(Integer, ForeignKey('klas.Klas_ID'), primary_key=True)
+    Groep_ID = Column(Integer, ForeignKey('groep.Groep_ID'), primary_key=True)
+
 class Student(Base):
     __tablename__ = 'student'
 

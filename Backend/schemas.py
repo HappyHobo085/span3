@@ -261,6 +261,102 @@ class KlasSkepResult(BaseModel):
     class Config:
         from_attributes = True
 
+class ModuleBase(BaseModel):
+    MOD_Kode: str
+    MOD_Naam: Optional[str] = None
+
+class ModuleCreate(ModuleBase):
+    pass
+
+class Module(ModuleBase):
+    Module_ID: int
+
+    class Config:
+        from_attributes = True
+
+class GroepBase(BaseModel):
+    GRO_Naam: str
+
+class GroepCreate(GroepBase):
+    pass
+
+class Groep(GroepBase):
+    Groep_ID: int
+
+    class Config:
+        from_attributes = True
+
+class KlasBase(BaseModel):
+    Module_ID: int
+    KLA_Lokaal: str
+    KLA_Dag: str
+    KLA_Begin_Tyd: str
+    KLA_Eind_Tyd: str
+
+class KlasCreate(KlasBase):
+    pass
+
+class Klas(KlasBase):
+    Klas_ID: int
+
+    class Config:
+        from_attributes = True
+
+class KlasGroepAssign(BaseModel):
+    Groep_ID: int
+
+class StudentGroepAssign(BaseModel):
+    Groep_ID: int
+
+class StudentModuleAssign(BaseModel):
+    Module_ID: int
+
+class StudentKlasAssign(BaseModel):
+    Klas_ID: int
+
+class PersoneelModuleAssign(BaseModel):
+    Module_ID: int
+
+class PersoneelKlasAssign(BaseModel):
+    Klas_ID: int
+
+class InstellingBase(BaseModel):
+    Sleutel: str
+    Waarde: str
+    Beskrywing: Optional[str] = None
+
+class InstellingCreate(InstellingBase):
+    pass
+
+class InstellingUpdate(BaseModel):
+    Waarde: str
+    Beskrywing: Optional[str] = None
+
+class InstellingRead(InstellingBase):
+    Instelling_ID: int
+
+    class Config:
+        from_attributes = True
+
+class KlasImportResult(BaseModel):
+    klasse_geskep: int = 0
+    modules_geskep: int = 0
+    groepe_geskep: int = 0
+    foute: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+class StudentToewysingImportResult(BaseModel):
+    studente_verwerk: int = 0
+    groep_koppelings: int = 0
+    module_koppelings: int = 0
+    groepe_geskep: int = 0
+    foute: List[str] = []
+
+    class Config:
+        from_attributes = True
+
 # --- TOEGANGS_LOGS SCHEMAS ---
 # Model: Log_ID, NFC_Tags_ID, Gebruiker_ID, Lokasie_ID, LOG_Tydstempel, LOG_Status
 

@@ -35,32 +35,26 @@ def kry_my_profiel(
     db: Session = Depends(get_db),
 ):
     role_names = get_user_role_names(db, current_user)
-    subrekords = (
-        db.query(
-            models.Student,
-            models.Personeel,
-            models.Kampus_Opsigter,
-            models.Sekuriteit_Wag,
-        )
-        .outerjoin(
-            models.Student,
-            models.Student.Gebruiker_ID == current_user.Gebruiker_ID,
-        )
-        .outerjoin(
-            models.Personeel,
-            models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID,
-        )
-        .outerjoin(
-            models.Kampus_Opsigter,
-            models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID,
-        )
-        .outerjoin(
-            models.Sekuriteit_Wag,
-            models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID,
-        )
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
         .first()
     )
-    student, personeel, opsigter, wag = subrekords or (None, None, None, None)
+    personeel = (
+        db.query(models.Personeel)
+        .filter(models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    opsigter = (
+        db.query(models.Kampus_Opsigter)
+        .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    wag = (
+        db.query(models.Sekuriteit_Wag)
+        .filter(models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
 
     return {
         "sukses": True,
@@ -94,6 +88,8 @@ async def upload_my_profile_photo(
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Slegs foto lêers word toegelaat")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in [".jpg", ".jpeg", ".png", ".webp"]:

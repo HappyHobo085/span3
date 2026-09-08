@@ -274,7 +274,7 @@ def opdateer_gebruiker_status(
 ):
     # Liggaam ({"Is_Aktief": ...}) geniet voorrang bo die vraagparameter.
     if update is not None:
-        is_aktief = update.Is_Aktief
+        is_aktief = update.is_aktief
     if is_aktief is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
