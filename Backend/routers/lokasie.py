@@ -54,6 +54,7 @@ def lys_lokasies(
         result.append({
             "Lokasie_ID": l.Lokasie_ID,
             "LOK_Naam": l.LOK_Naam,
+            "LOK_Tipe": l.LOK_Tipe,
             "Kampus_ID": l.Kampus_ID,
             "NFC_UID": tag.NFC_UID
         })

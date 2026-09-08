@@ -28,6 +28,9 @@
   const venueList = document.getElementById('venue-list');
   const venueSearch = document.getElementById('venue-search');
   const venueCampusFilter = document.getElementById('venue-campus-filter');
+  const gateList = document.getElementById('gate-list');
+  const gateSearch = document.getElementById('gate-search');
+  const gateCampusFilter = document.getElementById('gate-campus-filter');
   const openVenueModalBtn = document.getElementById('open-create-venue-modal');
   const classModalOverlay = document.getElementById('class-modal-overlay');
   const closeClassModalBtn = document.getElementById('close-class-modal');
@@ -611,6 +614,15 @@
         venueCampusFilter.appendChild(opt);
       });
     }
+    if (gateCampusFilter) {
+      gateCampusFilter.innerHTML = '<option value="">Alle Kampusse</option>';
+      json.data.forEach(function (k) {
+        const opt = document.createElement('option');
+        opt.value = String(k.Kampus_ID);
+        opt.textContent = k.KAM_Naam;
+        gateCampusFilter.appendChild(opt);
+      });
+    }
 
     // Vul die kampus-keuselys in die koshuis-venster.
     if (newKoshuisKampus) {
@@ -792,15 +804,17 @@
 
     // Maak die lys leeg en bou dit dan ry vir ry op.
     venueList.innerHTML = '';
+    if (gateList) gateList.innerHTML = '';
     json.data.forEach(function (lok) {
-      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID);
+      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID, lok.LOK_Tipe);
     });
   }
 
   // Hierdie funksie voeg een lokaal-ry by die lys: naam,
   // kampus-etiket en 'n "Wysig"-knoppie.
-  function addVenueRow(lokasieId, name, kampusId) {
-    if (!venueList) return;
+  function addVenueRow(lokasieId, name, kampusId, lokasieType) {
+    const targetList = lokasieType === 'Kampus' ? gateList : venueList;
+    if (!targetList) return;
 
     const row = document.createElement('div');
     row.className = 'admin-venue-row';
@@ -825,7 +839,7 @@
     row.appendChild(nameSpan);
     row.appendChild(badge);
     row.appendChild(editBtn);
-    venueList.appendChild(row);
+    targetList.appendChild(row);
   }
 
   /** Update an existing venue row in place with fresh data. */
@@ -834,7 +848,7 @@
   function updateVenueRow(lokasieId, name, kampusId) {
     if (!venueList) return;
 
-    const row = venueList.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]');
+    const row = document.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]');
     if (!row) return;
 
     const nameSpan = row.querySelector('.admin-venue-name');
@@ -851,28 +865,20 @@
  // gekose kampus pas, en steek die res weg.
  function applyVenueFilter() {
   console.log('applyVenueFilter running');
-  if (!venueList) return;
+  function filterList(list, search, campusFilter) {
+    if (!list) return;
+    const query = search ? search.value.trim().toLowerCase() : '';
+    const campus = campusFilter ? campusFilter.value : '';
+    list.querySelectorAll('.admin-venue-row').forEach(function (row) {
+      const matchesSearch = query === '' || (row.dataset.name || '').includes(query);
+      const matchesCampus = campus === '' || (row.dataset.kampusId || '') === campus;
+      row.style.display = (matchesSearch && matchesCampus) ? '' : 'none';
+    });
+    capListHeight(list, '.admin-venue-row', 6);
+  }
 
-  const query = venueSearch ? venueSearch.value.trim().toLowerCase() : '';
-  const campusFilter = venueCampusFilter ? venueCampusFilter.value : '';
-
-  const rows = venueList.querySelectorAll('.admin-venue-row');
-
-  // Kyk vir elke ry of dit by die soekwoord én die kampus-filter pas.
-  rows.forEach(function (row) {
-    const name = row.dataset.name || '';
-    const kampusId = row.dataset.kampusId || '';
-
-    const matchesSearch =
-      query === '' || name.includes(query);
-
-    const matchesCampus =
-      campusFilter === '' || kampusId === campusFilter;
-
-    row.style.display = (matchesSearch && matchesCampus) ? '' : 'none';
-  });
-
-  capListHeight(venueList, '.admin-venue-row', 6);
+  filterList(venueList, venueSearch, venueCampusFilter);
+  filterList(gateList, gateSearch, gateCampusFilter);
 }
 
   // Hierdie funksie stoor die lokaal-venster se inligting:
@@ -921,7 +927,7 @@
       alert('Lokaal suksesvol geskep.');
       closeClassModal();
       const nuweId = json.data && json.data.lokasie ? json.data.lokasie.Lokasie_ID : '';
-      addVenueRow(nuweId, roomName, kampusId);
+      addVenueRow(nuweId, roomName, kampusId, 'Klaskamer');
       capListHeight(venueList, '.admin-venue-row', 6);
     } else {
       alert((json && json.fout) || 'Kon nie lokaal skep nie.');
@@ -1717,6 +1723,12 @@ const json = await window.MoonApi.createGebruiker(payload);
       console.log('VENUE CAMPUS FILTER FIRED');
       applyVenueFilter();
     });
+  }
+  if (gateSearch) {
+    gateSearch.addEventListener('input', applyVenueFilter);
+  }
+  if (gateCampusFilter) {
+    gateCampusFilter.addEventListener('change', applyVenueFilter);
   }
 
   // --- Kampus events ---

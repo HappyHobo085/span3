@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from sqlalchemy import inspect, select, text
+from sqlalchemy import inspect, select, text, update, UniqueConstraint
 from sqlalchemy.orm import Session
 
 
@@ -239,6 +239,7 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
     """Import all tables from a ZIP file containing CSVs."""
     import_mode = _normalize_import_mode(mode)
     results: Dict[str, Any] = {"imported": {}, "errors": {}, "skipped": [], "details": {}}
+    id_maps: Dict[str, Dict[Any, Any]] = {}
 
     # Read ZIP into memory
     zip_content = zip_file.file.read()
@@ -280,7 +281,14 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
                     continue
 
                 verslag: Dict[str, Any] = {}
-                inserted = _insert_csv_rows(db, table_name, rows, mode=import_mode, report=verslag)
+                inserted = _insert_csv_rows(
+                    db,
+                    table_name,
+                    rows,
+                    mode=import_mode,
+                    report=verslag,
+                    id_maps=id_maps,
+                )
                 results["imported"][table_name] = inserted
                 results["details"][table_name] = verslag
                 savepoint.commit()
@@ -333,6 +341,87 @@ def _normalize_import_mode(mode: Optional[str]) -> str:
     if value not in {'merge', 'replace'}:
         raise ValueError("Import mode must be either 'merge' or 'replace'.")
     return value
+
+
+def _primary_key_columns(table):
+    return [column for column in table.columns if column.primary_key]
+
+
+def _unique_column_sets(table) -> List[List[str]]:
+    """Return usable single-column and composite unique keys for matching exports."""
+    keys = []
+    for column in table.columns:
+        if column.unique:
+            keys.append([column.name])
+    for constraint in table.constraints:
+        if isinstance(constraint, UniqueConstraint):
+            columns = [column.name for column in constraint.columns]
+            if columns:
+                keys.append(columns)
+    return keys
+
+
+def _find_existing_row(db: Session, table, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Find the local row represented by an exported row, including unique-key matches."""
+    primary_keys = _primary_key_columns(table)
+    identity_is_foreign_key = any(column.foreign_keys for column in primary_keys)
+
+    if identity_is_foreign_key and primary_keys and all(
+        row.get(column.name) is not None for column in primary_keys
+    ):
+        filters = [table.c[column.name] == row[column.name] for column in primary_keys]
+        existing = db.execute(select(table).where(*filters)).mappings().first()
+        if existing is not None:
+            return dict(existing)
+
+    key_sets = _unique_column_sets(table)
+
+    for key_columns in key_sets:
+        if not key_columns or any(row.get(column) is None for column in key_columns):
+            continue
+        filters = [table.c[column] == row[column] for column in key_columns]
+        existing = db.execute(select(table).where(*filters)).mappings().first()
+        if existing is not None:
+            return dict(existing)
+
+    if primary_keys and all(row.get(column.name) is not None for column in primary_keys):
+        filters = [table.c[column.name] == row[column.name] for column in primary_keys]
+        existing = db.execute(select(table).where(*filters)).mappings().first()
+        if existing is not None:
+            existing = dict(existing)
+            comparable_columns = [column.name for column in table.columns if not column.primary_key]
+            if all(
+                column not in row
+                or row[column] is None
+                or existing.get(column) == row[column]
+                for column in comparable_columns
+            ):
+                return existing
+    return None
+
+
+def _remap_foreign_keys(table, row: Dict[str, Any], id_maps: Dict[str, Dict[Any, Any]]) -> Dict[str, Any]:
+    """Translate exported FK values to local PK values learned earlier in the import."""
+    remapped = dict(row)
+    for foreign_key in table.foreign_keys:
+        column_name = foreign_key.parent.name
+        if column_name not in remapped or remapped[column_name] is None:
+            continue
+        parent_table = foreign_key.column.table.name
+        mapped_value = id_maps.get(parent_table, {}).get(remapped[column_name])
+        if mapped_value is not None:
+            remapped[column_name] = mapped_value
+    return remapped
+
+
+def _remember_id_mapping(table, source_row: Dict[str, Any], local_row: Dict[str, Any], id_maps: Dict[str, Dict[Any, Any]]) -> None:
+    primary_keys = _primary_key_columns(table)
+    if len(primary_keys) != 1:
+        return
+    source_id = source_row.get(primary_keys[0].name)
+    local_id = local_row.get(primary_keys[0].name)
+    if source_id is not None and local_id is not None:
+        id_maps.setdefault(table.name, {})[source_id] = local_id
 
 
 def _next_student_numbers(db: Session, count: int) -> List[str]:
@@ -460,6 +549,7 @@ def _insert_csv_rows(
     rows: Iterable[Dict[str, Any]],
     mode: str = 'merge',
     report: Optional[Dict[str, Any]] = None,
+    id_maps: Optional[Dict[str, Dict[Any, Any]]] = None,
 ) -> int:
     """Insert rows using PostgreSQL ON CONFLICT for upsert, with per-row savepoints for constraint violations.
 
@@ -472,6 +562,8 @@ def _insert_csv_rows(
 
     if report is None:
         report = {}
+    if id_maps is None:
+        id_maps = {}
     report.update({"rye": 0, "nuut": 0, "bestaan_reeds": 0, "misluk": 0, "ontbrekende_velde": 0, "aangepas": 0, "foute": []})
 
     table = _resolve_table(table_name)
@@ -491,6 +583,8 @@ def _insert_csv_rows(
     for ry_nr, row in enumerate(rows, start=2):  # ry 1 is die kop-ry
         report["rye"] += 1
         row = _vertaal_verouderde_waardes(table.name, row, report)
+        source_row = dict(row)
+        row = _remap_foreign_keys(table, row, id_maps)
         sanitized = _normalize_insert_row(table, row)
 
         insertable = {
@@ -522,6 +616,47 @@ def _insert_csv_rows(
         # Use a savepoint per row so constraint violations don't abort the table transaction
         row_savepoint = db.begin_nested()
         try:
+            existing = _find_existing_row(db, table, sanitized)
+            if existing is not None:
+                _remember_id_mapping(table, source_row, existing, id_maps)
+                if mode_name == 'replace' or table.name == 'student':
+                    primary_keys = {column.name for column in _primary_key_columns(table)}
+                    changes = {
+                        key: value for key, value in insertable.items()
+                        if key not in primary_keys
+                    }
+                    if changes:
+                        db.execute(
+                            update(table)
+                            .where(*[table.c[key] == existing[key] for key in primary_keys])
+                            .values(**changes)
+                        )
+                        inserted_count += 1
+                    else:
+                        report["bestaan_reeds"] += 1
+                else:
+                    report["bestaan_reeds"] += 1
+                row_savepoint.commit()
+                continue
+
+            primary_key_columns = _primary_key_columns(table)
+            primary_key_collision = None
+            if primary_key_columns:
+                primary_key_collision = db.execute(
+                    select(table).where(*[
+                        table.c[column.name] == sanitized[column.name]
+                        for column in primary_key_columns
+                        if sanitized.get(column.name) is not None
+                    ])
+                ).mappings().first()
+            generated_primary_key = (
+                primary_key_collision is not None
+                and not any(column.foreign_keys for column in primary_key_columns)
+            )
+            if generated_primary_key:
+                for column in primary_key_columns:
+                    insertable.pop(column.name, None)
+
             if conflict_columns and mode_name == 'replace':
                 # Upsert: INSERT ... ON CONFLICT DO UPDATE
                 stmt = pg_insert(table).values(**insertable)
@@ -551,6 +686,10 @@ def _insert_csv_rows(
                 # No primary key or no conflict handling - just insert
                 db.execute(table.insert(), [insertable])
                 inserted_count += 1
+
+            local_row = _find_existing_row(db, table, insertable)
+            if local_row is not None:
+                _remember_id_mapping(table, source_row, local_row, id_maps)
 
             row_savepoint.commit()
         except Exception as exc:

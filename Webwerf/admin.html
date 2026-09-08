@@ -30,7 +30,7 @@
       </div>
       <div class="control-group" style="flex-direction:row;gap:10px;flex-wrap:wrap">
         <button class="btn-outline" id="open-create-kampus-modal" type="button">+ Kampus</button>
-        <button class="btn-outline" id="open-create-venue-modal" type="button">+ Lokaal</button>
+        <button class="btn-outline" id="open-create-venue-modal" type="button">+ Klaskamer</button>
         <button class="btn-outline" id="open-create-koshuis-modal" type="button">+ Koshuis</button>
       </div>
     </section>
@@ -52,13 +52,28 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
-      <!-- Paneel 2: Lys van alle lokale (klaskamers), met soek en kampus-filter -->
-      <article class="glass-card panel" aria-label="Lokale">
-        <h2>Lokale</h2>
+      <!-- Paneel 2: Lys van alle hekke, met soek en kampus-filter -->
+      <article class="glass-card panel" aria-label="Hekke">
+        <h2>Hekke</h2>
+        <div class="list-search" style="display:flex;gap:8px">
+          <input class="glass-input" type="search" id="gate-search" autocomplete="off"
+                 aria-label="Soek hek" placeholder="Soek hek..." style="flex:1">
+          <select class="glass-select" id="gate-campus-filter" aria-label="Filter hekke volgens kampus" style="width:160px">
+            <option value="">Alle Kampusse</option>
+            <!-- Loaded from API by admin.js -->
+          </select>
+        </div>
+        <div class="admin-list" id="gate-list">
+          <!-- Loaded from API by admin.js -->
+        </div>
+      </article>
+      <!-- Paneel 3: Lys van alle klaskamers, met soek en kampus-filter -->
+      <article class="glass-card panel" aria-label="Klaskamers">
+        <h2>Klaskamers</h2>
         <div class="list-search" style="display:flex;gap:8px">
           <input class="glass-input" type="search" id="venue-search" autocomplete="off"
-                 aria-label="Soek lokaal" placeholder="Soek lokaal..." style="flex:1">
-          <select class="glass-select" id="venue-campus-filter" aria-label="Filter volgens kampus" style="width:160px">
+                 aria-label="Soek klaskamer" placeholder="Soek klaskamer..." style="flex:1">
+          <select class="glass-select" id="venue-campus-filter" aria-label="Filter klaskamers volgens kampus" style="width:160px">
             <option value="">Alle Kampusse</option>
             <!-- Loaded from API by admin.js -->
           </select>
@@ -67,7 +82,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
-      <!-- Paneel 3: Lys van alle kampusse, met 'n soekveld -->
+      <!-- Paneel 4: Lys van alle kampusse, met 'n soekveld -->
       <article class="glass-card panel" aria-label="Kampusse">
         <h2>Kampusse</h2>
         <div class="list-search">
@@ -78,7 +93,7 @@
           <!-- Loaded from API by admin.js -->
         </div>
       </article>
-      <!-- Paneel 4: Lys van alle koshuise, met 'n soekveld -->
+      <!-- Paneel 5: Lys van alle koshuise, met 'n soekveld -->
       <article class="glass-card panel" aria-label="Koshuise">
         <h2>Koshuise</h2>
         <div class="list-search">

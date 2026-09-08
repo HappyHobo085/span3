@@ -33,6 +33,30 @@ def run_pre_migrations(engine):
 
 def run_migrations(engine):
     """Run idempotent schema migrations at startup."""
+    # Herstel die ou NFC-lokasie-FK wat na die vorige `lokasies(id)`-tabel gewys het.
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'nfc_tags_Lokasie_ID_fkey'
+                          AND conrelid = 'nfc_tags'::regclass
+                    ) THEN
+                        ALTER TABLE nfc_tags
+                        DROP CONSTRAINT "nfc_tags_Lokasie_ID_fkey";
+                    END IF;
+
+                    ALTER TABLE nfc_tags
+                    ADD CONSTRAINT "nfc_tags_Lokasie_ID_fkey"
+                    FOREIGN KEY ("Lokasie_ID") REFERENCES lokasie("Lokasie_ID");
+                END $$;
+            """))
+    except Exception as _migrasie_fout:
+        print(f"Waarskuwing: migrasie NFC-lokasie-FK het misluk: {_migrasie_fout}")
+
     # Migrasie 006: Maak koshuis.Kampus_ID nullable (create_all verander nie bestaande tabelle nie)
     try:
         with engine.connect() as _conn:
