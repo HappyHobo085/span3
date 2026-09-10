@@ -25,13 +25,9 @@
       return stored;
     }
 
-    // Plaaslike ontwikkeling gebruik poort 8000; andersins die Railway-bediener
-    const host = window.location.hostname || 'localhost';
-    if (host === 'localhost' || host === '127.0.0.1') {
-      const protocol = window.location.protocol || 'http:';
-      return `${protocol}//${host}:8000`;
-    }
-    return 'https://humorous-endurance-production-ee64.up.railway.app';
+    // Konfigureer via localStorage('apiBaseUrl') of laat foute boodskap wys
+    console.warn('apiBaseUrl nie gestel nie — stel dit via localStorage');
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
   }
 
   // Backend URL
