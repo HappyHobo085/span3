@@ -4,8 +4,6 @@ services:
     container_name: moon_db
     restart: always
     env_file: .env
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -13,6 +11,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   backend:
     build: ./Backend
@@ -23,11 +25,22 @@ services:
       - "8000:8000"
     environment:
       - DB_HOST=db
-      # Span-toetsing: sit op 0 of verwyder vir regte JWT- / rolbeveiliging
-      - DISABLE_AUTH=0
     depends_on:
       db:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   webwerf-frontend:
     image: nginx:alpine
@@ -39,6 +52,10 @@ services:
       - ./Webwerf/assets:/usr/share/nginx/assets:ro
       - ./Webwerf/nginx.docker.conf:/etc/nginx/conf.d/default.conf:ro
     restart: always
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   postgres_data:
