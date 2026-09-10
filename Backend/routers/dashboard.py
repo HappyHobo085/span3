@@ -5,13 +5,13 @@ from datetime import datetime, timedelta
 from typing import List
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
 import models, schemas, auth
-from services.gebruiker_service import get_user_role_names, kies_primere_rol
+from services.gebruiker_service import kies_primere_rol
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -34,27 +34,13 @@ def kry_my_profiel(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    role_names = get_user_role_names(db, current_user)
-    student = (
-        db.query(models.Student)
-        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
-    personeel = (
-        db.query(models.Personeel)
-        .filter(models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
-    opsigter = (
-        db.query(models.Kampus_Opsigter)
-        .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
-    wag = (
-        db.query(models.Sekuriteit_Wag)
-        .filter(models.Sekuriteit_Wag.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
+    # Gebruik eager-loaded relasies (geen ekstra queries nodig nie)
+    role_names = []
+    for assignment in (current_user.gebruikers_rolle or []):
+        if assignment.rol is not None:
+            role_names.append(assignment.rol.ROL_Naam)
+    if not role_names and current_user.rol is not None:
+        role_names = [current_user.rol.ROL_Naam]
 
     return {
         "sukses": True,
@@ -69,12 +55,12 @@ def kry_my_profiel(
             "selfoon": current_user.GEB_Selfoon_Nr,
             "foto_url": current_user.GEB_Profiel_Foto,
             "status": "Aktief" if current_user.Is_Aktief else "Onaktief",
-            "student_nommer": student.STU_Nommer if student else None,
-            "student_is_koshuis": student.STU_Is_Koshuis if student else False,
-            "personeel_nommer": personeel.PER_Nommer if personeel else None,
-            "departement": personeel.PER_Departement if personeel else None,
-            "opsigter_nommer": opsigter.KAMO_Nommer if opsigter else None,
-            "wag_nommer": wag.SEK_Nommer if wag else None,
+            "student_nommer": current_user.student.STU_Nommer if current_user.student else None,
+            "student_is_koshuis": current_user.student.STU_Is_Koshuis if current_user.student else False,
+            "personeel_nommer": current_user.personeel.PER_Nommer if current_user.personeel else None,
+            "departement": current_user.personeel.PER_Departement if current_user.personeel else None,
+            "opsigter_nommer": current_user.kampus_opsigter.KAMO_Nommer if current_user.kampus_opsigter else None,
+            "wag_nommer": current_user.sekuriteit_wag.SEK_Nommer if current_user.sekuriteit_wag else None,
             "kampus": None,
         },
     }
@@ -122,7 +108,13 @@ def kry_my_dashboard(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    role_names = get_user_role_names(db, current_user)
+    # Gebruik eager-loaded relasies (geen ekstra queries nodig nie)
+    role_names = []
+    for assignment in (current_user.gebruikers_rolle or []):
+        if assignment.rol is not None:
+            role_names.append(assignment.rol.ROL_Naam)
+    if not role_names and current_user.rol is not None:
+        role_names = [current_user.rol.ROL_Naam]
 
     def laaste_log(metode):
         return (
@@ -268,12 +260,15 @@ def kry_lokasie_deur_uid(
 
 @router.get("/toegangslogs")
 def lys_toegangslogs(
+    skip: int = Query(0, ge=0, description="Aantal om oor te slaan"),
+    limit: int = Query(50, ge=1, le=500, description="Maksimum aantal resultate"),
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
     logs = db.query(models.ToegangsLogs)\
         .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())\
-        .limit(50)\
+        .offset(skip)\
+        .limit(limit)\
         .all()
 
     # Slaan die name van die gebruikers en lokasies in een slag op sodat die

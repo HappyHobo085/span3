@@ -132,8 +132,12 @@ def opsigter_kampus_besoekers(
     )
 
     data = []
-    for item, gasheer in besoekers:
-        gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
+    for item in besoekers:
+        # Gebruik eager-loaded gasheer relationship (geen ekstra query nodig nie)
+        gasheer = item.gasheer
+        gasheer_naam = ""
+        if gasheer:
+            gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
 
         data.append({
             "uitnodiging_id": item.Uitnodiging_ID,

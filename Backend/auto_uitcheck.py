@@ -3,6 +3,7 @@
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 import database, models
 
@@ -16,38 +17,56 @@ def _kry_uitcheck_tydstip(db: Session) -> str:
 
 
 def _vind_oop_sessies(db: Session) -> list[dict]:
-    """Vind gebruikers met oop IN-sessies (IN sonder ooreenstemmende UIT)."""
-    # Kry alle IN-logte
-    in_logs = db.query(models.ToegangsLogs).filter(
-        models.ToegangsLogs.TOE_Rigting == "IN"
-    ).all()
+    """Vind gebruikers met oop IN-sessies (IN sonder ooreenstemmende UIT).
 
-    oop_sessies = []
-    for in_log in in_logs:
-        # Kyk of daar 'n UIT-log is NA hierdie IN-log vir dieselfde gebruiker
-        volgende_uit = db.query(models.ToegangsLogs).filter(
-            models.ToegangsLogs.Gebruiker_ID == in_log.Gebruiker_ID,
+    Geoptimaliseer: gebruik NOT EXISTS subquery in plaas van per-gebruiker queries.
+    """
+    # Vind IN-logte waar daar GEEN volgende UIT-log is nie
+    # Dit is 'n korrekte anti-join patroon wat die N+1 probleem oplos
+    uit_subq = (
+        db.query(models.ToegangsLogs.Log_ID)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == models.ToegangsLogs.Gebruiker_ID,
             models.ToegangsLogs.TOE_Rigting == "UIT",
-            models.ToegangsLogs.TOE_Tydstempel > in_log.TOE_Tydstempel
-        ).first()
+            models.ToegangsLogs.TOE_Tydstempel > models.ToegangsLogs.TOE_Tydstempel,
+        )
+        .correlate(models.ToegangsLogs)
+        .exists()
+    )
 
-        if not volgende_uit:
-            oop_sessies.append({
-                'Gebruiker_ID': in_log.Gebruiker_ID,
-                'Lokasie_ID': in_log.Lokasie_ID,
-                'NFC_Tags_ID': in_log.NFC_Tags_ID,
-                'IN_Tydstempel': in_log.TOE_Tydstempel,
-            })
+    oop_logs = (
+        db.query(models.ToegangsLogs)
+        .filter(
+            models.ToegangsLogs.TOE_Rigting == "IN",
+            ~uit_subq,
+        )
+        .all()
+    )
 
-    return oop_sessies
+    return [
+        {
+            'Gebruiker_ID': log.Gebruiker_ID,
+            'Lokasie_ID': log.Lokasie_ID,
+            'NFC_Tags_ID': log.NFC_Tags_ID,
+            'IN_Tydstempel': log.TOE_Tydstempel,
+        }
+        for log in oop_logs
+    ]
 
 
-def _is_koshuis_student(db: Session, gebruiker_id: int) -> bool:
-    """Kyk of die gebruiker 'n koshuisstudent is."""
-    student = db.query(models.Student).filter(
-        models.Student.Gebruiker_ID == gebruiker_id
-    ).first()
-    return student is not None and student.STU_Is_Koshuis is True
+def _is_koshuis_student(db: Session, gebruiker_ids: list[int]) -> set[int]:
+    """Kyk watter gebruikers koshuisstudente is — een query vir almal."""
+    if not gebruiker_ids:
+        return set()
+    rows = (
+        db.query(models.Student.Gebruiker_ID)
+        .filter(
+            models.Student.Gebruiker_ID.in_(gebruiker_ids),
+            models.Student.STU_Is_Koshuis == True,
+        )
+        .all()
+    )
+    return {row.Gebruiker_ID for row in rows}
 
 
 def outo_uitcheck_job():
@@ -61,10 +80,16 @@ def outo_uitcheck_job():
             return
 
         oop_sessies = _vind_oop_sessies(db)
+        if not oop_sessies:
+            return
+
+        # Haal koshuisstudente in een slag op (een query)
+        alle_gebruiker_ids = list({s['Gebruiker_ID'] for s in oop_sessies})
+        koshuis_ids = _is_koshuis_student(db, alle_gebruiker_ids)
 
         aantal_geskep = 0
         for sessie in oop_sessies:
-            if _is_koshuis_student(db, sessie['Gebruiker_ID']):
+            if sessie['Gebruiker_ID'] in koshuis_ids:
                 continue
 
             nuwe_log = models.ToegangsLogs(

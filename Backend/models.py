@@ -3,12 +3,16 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
+# --- selectinload defaults for frequently-accessed relationships ---
+# These prevent N+1 queries on the most common traversal patterns.
+# Heavy collections (nfc_tags, toegangs_logs, waarskuwings) stay lazy.
+
 class Rolle(Base):
     __tablename__ = 'rolle'
     Rol_ID   = Column(Integer, primary_key=True, index=True)
     ROL_Naam = Column(String(50), nullable=False, unique=True)
 
-    gebruikers_rolle = relationship("GebruikersRolle", back_populates="rol")
+    gebruikers_rolle = relationship("GebruikersRolle", back_populates="rol", lazy="selectin")
 
 class Gebruikers(Base):
     __tablename__ = 'gebruikers'
@@ -25,12 +29,12 @@ class Gebruikers(Base):
     Geskep_Op        = Column(DateTime, default=datetime.utcnow)
     Gewysig_Op       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    rol              = relationship("Rolle")
-    gebruikers_rolle = relationship("GebruikersRolle", back_populates="gebruiker")
-    student          = relationship("Student",         back_populates="gebruiker", uselist=False)
-    personeel        = relationship("Personeel",       back_populates="gebruiker", uselist=False)
-    kampus_opsigter  = relationship("Kampus_Opsigter", back_populates="gebruiker", uselist=False)
-    sekuriteit_wag   = relationship("Sekuriteit_Wag",  back_populates="gebruiker", uselist=False)
+    rol              = relationship("Rolle", lazy="selectin")
+    gebruikers_rolle = relationship("GebruikersRolle", back_populates="gebruiker", lazy="selectin")
+    student          = relationship("Student",         back_populates="gebruiker", uselist=False, lazy="selectin")
+    personeel        = relationship("Personeel",       back_populates="gebruiker", uselist=False, lazy="selectin")
+    kampus_opsigter  = relationship("Kampus_Opsigter", back_populates="gebruiker", uselist=False, lazy="selectin")
+    sekuriteit_wag   = relationship("Sekuriteit_Wag",  back_populates="gebruiker", uselist=False, lazy="selectin")
     nfc_tags         = relationship("NFC_Tags", back_populates="gebruiker")
     toegangs_logs    = relationship("ToegangsLogs",    back_populates="gebruiker")
     waarskuwings     = relationship("Waarskuwings",    back_populates="gebruiker")
@@ -42,7 +46,7 @@ class GebruikersRolle(Base):
     Rol_ID       = Column(Integer, ForeignKey('rolle.Rol_ID'),            primary_key=True)
 
     gebruiker = relationship("Gebruikers", back_populates="gebruikers_rolle")
-    rol       = relationship("Rolle",      back_populates="gebruikers_rolle")
+    rol       = relationship("Rolle",      back_populates="gebruikers_rolle", lazy="selectin")
 
 class Instelling(Base):
     __tablename__ = 'instelling'
@@ -143,8 +147,8 @@ class NFC_Tags(Base):
     NFC_Tipe      = Column(String(32), nullable=False)
     NFC_Is_Aktief = Column(Boolean, nullable=False, default=True)
                            
-    gebruiker = relationship("Gebruikers", back_populates="nfc_tags")
-    lokasie   = relationship("Lokasie", back_populates="nfc_tags")
+    gebruiker = relationship("Gebruikers", back_populates="nfc_tags", lazy="selectin")
+    lokasie   = relationship("Lokasie", back_populates="nfc_tags", lazy="selectin")
     toegangs_logs = relationship("ToegangsLogs", back_populates="nfc_tag")
     
 class Kampus(Base):
@@ -153,8 +157,8 @@ class Kampus(Base):
     KAM_Naam   = Column(String(100), nullable=False)
     KAM_Adres  = Column(String(255))
 
-    lokasies  = relationship("Lokasie",  back_populates="kampus")
-    koshuise  = relationship("Koshuis",  back_populates="kampus")
+    lokasies  = relationship("Lokasie",  back_populates="kampus", lazy="selectin")
+    koshuise  = relationship("Koshuis",  back_populates="kampus", lazy="selectin")
     funksies  = relationship("Funksie",  back_populates="kampus")
 
 
@@ -165,8 +169,8 @@ class Lokasie(Base):
     LOK_Tipe   = Column(String(50),  nullable=False)
     Kampus_ID  = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
 
-    kampus    = relationship("Kampus", back_populates="lokasies")
-    nfc_tags  = relationship("NFC_Tags", back_populates="lokasie")
+    kampus    = relationship("Kampus", back_populates="lokasies", lazy="selectin")
+    nfc_tags  = relationship("NFC_Tags", back_populates="lokasie", lazy="selectin")
     toegangs_logs = relationship("ToegangsLogs", back_populates="lokasie")
 
 class ToegangsLogs(Base):
@@ -184,8 +188,8 @@ class ToegangsLogs(Base):
     Saamry_Bestuurder_Log_ID = Column(Integer, ForeignKey('toegangs_logs.Log_ID'), nullable=True)
 
     nfc_tag   = relationship("NFC_Tags",    back_populates="toegangs_logs")
-    gebruiker = relationship("Gebruikers", back_populates="toegangs_logs")
-    lokasie   = relationship("Lokasie",    back_populates="toegangs_logs")
+    gebruiker = relationship("Gebruikers", back_populates="toegangs_logs", lazy="selectin")
+    lokasie   = relationship("Lokasie",    back_populates="toegangs_logs", lazy="selectin")
 
 class Besoekers_Groep(Base):
     __tablename__ = 'besoekers_groep'
@@ -254,7 +258,7 @@ class Koshuis(Base):
     KOS_Kapasiteit = Column(Integer, nullable=False)
     Kampus_ID     = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
 
-    kampus   = relationship("Kampus", back_populates="koshuise")
+    kampus   = relationship("Kampus", back_populates="koshuise", lazy="selectin")
     studente = relationship("Student", back_populates="koshuis")
 
 class Funksie(Base):
@@ -276,19 +280,21 @@ class Funksie(Base):
     Geskep_Op       = Column(DateTime, default=datetime.utcnow, nullable=False)
     Gewysig_Op      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    kampus            = relationship("Kampus", back_populates="funksies")
-    lokasie           = relationship("Lokasie", foreign_keys=[Lokasie_ID])
-    geskep_deur       = relationship("Gebruikers", foreign_keys=[Geskep_Deur_ID])
+    kampus            = relationship("Kampus", back_populates="funksies", lazy="selectin")
+    lokasie           = relationship("Lokasie", foreign_keys=[Lokasie_ID], lazy="selectin")
+    geskep_deur       = relationship("Gebruikers", foreign_keys=[Geskep_Deur_ID], lazy="selectin")
     funksie_besoekers = relationship("Funksie_Besoekers", back_populates="funksie")
     rsvps             = relationship(
         "FunksieRSVP",
         back_populates="funksie",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     publieke_rsvps    = relationship(
         "FunksiePubliekRSVP",
         back_populates="funksie",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     publieke_toegange = relationship(
         "FunksiePubliekToegang",
@@ -314,7 +320,7 @@ class FunksieRSVP(Base):
     Gewysig_Op   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     funksie   = relationship("Funksie", back_populates="rsvps")
-    gebruiker = relationship("Gebruikers")
+    gebruiker = relationship("Gebruikers", lazy="selectin")
 
     __table_args__ = (
         CheckConstraint(
@@ -432,7 +438,7 @@ class SaamryGroep(Base):
     Geskep_Op        = Column(DateTime, default=datetime.utcnow, nullable=False)
     Gewysig_Op       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    bestuurder = relationship('Gebruikers', foreign_keys=[Bestuurder_ID])
+    bestuurder = relationship('Gebruikers', foreign_keys=[Bestuurder_ID], lazy="selectin")
     lede = relationship(
         'SaamryGroepLid',
         back_populates='groep',
@@ -498,9 +504,9 @@ class BesoekerUitnodiging(Base):
     Verwerk_Deur_ID  = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
     Kampus_ID        = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
 
-    gasheer = relationship('Gebruikers', foreign_keys=[Gasheer_ID])
+    gasheer = relationship('Gebruikers', foreign_keys=[Gasheer_ID], lazy="selectin")
     verwerk_deur = relationship('Gebruikers', foreign_keys=[Verwerk_Deur_ID])
-    kampus = relationship('Kampus', foreign_keys=[Kampus_ID])
+    kampus = relationship('Kampus', foreign_keys=[Kampus_ID], lazy="selectin")
 
     __table_args__ = (
         CheckConstraint(

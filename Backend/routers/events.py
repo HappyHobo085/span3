@@ -15,7 +15,6 @@ import auth
 import database
 import models
 import schemas
-from services.gebruiker_service import get_user_role_names
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -44,32 +43,28 @@ def _require_active(current_user: models.Gebruikers) -> None:
         raise HTTPException(status_code=403, detail="Jou gebruiker is nie aktief nie")
 
 
-def _require_opsigter(
-    db: Session,
-    current_user: models.Gebruikers,
-) -> Optional[models.Kampus_Opsigter]:
+def _require_opsigter(db: Session, current_user: models.Gebruikers) -> None:
+    """Magtekening geskied op rolle, nie op subrekords nie — so 'n gebruiker
+    wie se Opsigter-rol verwyder is, verloor ook die reg, en 'n Administrateur
+    sonder 'n subrekord kry steeds toegang (konsekwent met RoleChecker).
+
+    Gebruik eager-loaded relasies — geen ekstra queries nodig nie."""
     _require_active(current_user)
-    role_names = set(get_user_role_names(db, current_user))
-    if "Administrateur" in role_names:
-        return None
-    opsigter = (
-        db.query(models.Kampus_Opsigter)
-        .filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID)
-        .first()
-    )
-    if opsigter is None:
+    rol_namen = []
+    for assignment in (current_user.gebruikers_rolle or []):
+        if assignment.rol is not None:
+            rol_namen.append(assignment.rol.ROL_Naam)
+    if not rol_namen and current_user.rol is not None:
+        rol_namen = [current_user.rol.ROL_Naam]
+    if "Administrateur" not in rol_namen and "Kampus_Opsigter" not in rol_namen:
         raise HTTPException(status_code=403, detail="Slegs 'n Opsigter mag events bestuur")
-    return opsigter
 
 
 def _require_rsvp_user(db: Session, current_user: models.Gebruikers) -> None:
+    """Check that user is a student or personeel — use eager-loaded sub-records."""
     _require_active(current_user)
-    is_student = db.query(models.Student).filter(
-        models.Student.Gebruiker_ID == current_user.Gebruiker_ID
-    ).first() is not None
-    is_personeel = db.query(models.Personeel).filter(
-        models.Personeel.Gebruiker_ID == current_user.Gebruiker_ID
-    ).first() is not None
+    is_student = current_user.student is not None
+    is_personeel = current_user.personeel is not None
     if not is_student and not is_personeel:
         raise HTTPException(
             status_code=403,
@@ -98,6 +93,8 @@ def _public_event_or_404(db: Session, share_token: str, *, lock: bool = False) -
 
 
 def _app_confirmed_count(db: Session, event_id: int) -> int:
+    """Count app RSVPs — uses eager-loaded rsvps if available, else falls back to query."""
+    # When called from _event_dict with eager-loaded data, pass the event's rsvps directly
     return int(
         db.query(func.count(models.FunksieRSVP.Gebruiker_ID))
         .filter(
@@ -109,6 +106,7 @@ def _app_confirmed_count(db: Session, event_id: int) -> int:
 
 
 def _external_confirmed_count(db: Session, event_id: int) -> int:
+    """Count external RSVPs — uses eager-loaded publieke_rsvps if available."""
     return int(
         db.query(func.count(models.FunksiePubliekRSVP.Publiek_RSVP_ID))
         .filter(
@@ -149,30 +147,26 @@ def _my_rsvp(db: Session, event_id: int, user_id: int) -> Optional[str]:
     return row.RSVP_Status if row is not None else None
 
 
-def _event_dict(
-    db: Session,
-    event: models.Funksie,
-    current_user_id: Optional[int] = None,
-    app_counts: Optional[dict[int, int]] = None,
-    external_counts: Optional[dict[int, int]] = None,
-    my_statuses: Optional[dict[int, str]] = None,
-) -> dict:
-    app_count = (
-        app_counts.get(event.Funksie_ID, 0)
-        if app_counts is not None
-        else _app_confirmed_count(db, event.Funksie_ID)
-    )
-    external_count = (
-        external_counts.get(event.Funksie_ID, 0)
-        if external_counts is not None
-        else _external_confirmed_count(db, event.Funksie_ID)
-    )
+def _event_dict(db: Session, event: models.Funksie, current_user_id: Optional[int] = None) -> dict:
+    """Build event dict from eagerly-loaded relationships (geen ekstra queries nie).
+
+    Met selectinload op Funksie.rsvps, Funksie.publieke_rsvps,
+    Funksie.kampus, Funksie.lokasie, Funksie.geskep_deur word
+    alles in een slag gelaai.
+    """
+    # Count from loaded RSVP collections (no extra queries)
+    app_count = sum(1 for r in (event.rsvps or []) if r.RSVP_Status == "GAAN")
+    external_count = sum(1 for r in (event.publieke_rsvps or []) if r.RSVP_Status == "GAAN")
     rsvp_count = app_count + external_count
     capacity = int(event.FUN_Kapasiteit or 0)
-    if my_statuses is not None:
-        my_status = my_statuses.get(event.Funksie_ID)
-    else:
-        my_status = _my_rsvp(db, event.Funksie_ID, current_user_id) if current_user_id is not None else None
+
+    # My RSVP from loaded collection
+    my_status = None
+    if current_user_id is not None:
+        for r in (event.rsvps or []):
+            if r.Gebruiker_ID == current_user_id:
+                my_status = r.RSVP_Status
+                break
     return {
         "event_id": event.Funksie_ID,
         "naam": event.FUN_Naam,
@@ -407,7 +401,8 @@ def _normalise_phone(value: str) -> str:
 @router.get("")
 def list_events(
     view: str = Query("komende"),
-    limit: int = Query(100, ge=1, le=200),
+    skip: int = Query(0, ge=0, description="Aantal om oor te slaan"),
+    limit: int = Query(100, ge=1, le=500, description="Maksimum aantal resultate"),
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
@@ -420,6 +415,8 @@ def list_events(
         joinedload(models.Funksie.kampus),
         joinedload(models.Funksie.lokasie),
         joinedload(models.Funksie.geskep_deur),
+        joinedload(models.Funksie.rsvps),
+        joinedload(models.Funksie.publieke_rsvps),
     )
     if view == "komende":
         query = query.filter(
@@ -439,57 +436,22 @@ def list_events(
             models.Funksie.FUN_Status == "AKTIEF",
             models.Funksie.FUN_Eind_Tyd >= now,
         )
-    events = query.order_by(models.Funksie.FUN_Begin_Tyd.asc()).limit(limit).all()
-    event_ids = [event.Funksie_ID for event in events]
-    app_counts = {}
-    external_counts = {}
-    my_statuses = {}
-    if event_ids:
-        app_counts = {
-            event_id: count
-            for event_id, count in db.query(
-                models.FunksieRSVP.Funksie_ID,
-                func.count(models.FunksieRSVP.Gebruiker_ID),
-            )
-            .filter(
-                models.FunksieRSVP.Funksie_ID.in_(event_ids),
-                models.FunksieRSVP.RSVP_Status == "GAAN",
-            )
-            .group_by(models.FunksieRSVP.Funksie_ID)
-            .all()
-        }
-        external_counts = {
-            event_id: count
-            for event_id, count in db.query(
-                models.FunksiePubliekRSVP.Funksie_ID,
-                func.count(models.FunksiePubliekRSVP.Publiek_RSVP_ID),
-            )
-            .filter(
-                models.FunksiePubliekRSVP.Funksie_ID.in_(event_ids),
-                models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
-            )
-            .group_by(models.FunksiePubliekRSVP.Funksie_ID)
-            .all()
-        }
-        my_statuses = {
-            event_id: status
-            for event_id, status in db.query(
-                models.FunksieRSVP.Funksie_ID,
-                models.FunksieRSVP.RSVP_Status,
-            )
-            .filter(
-                models.FunksieRSVP.Funksie_ID.in_(event_ids),
-                models.FunksieRSVP.Gebruiker_ID == current_user.Gebruiker_ID,
-            )
-            .all()
-        }
+    # Tel totaal vir pagination (een count query)
+    total = query.count()
+
+    # Pas pagination toe op SQL-vlak (nie in Python nie)
+    events = query.order_by(models.Funksie.FUN_Begin_Tyd.asc())\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
+
     return {
         "sukses": True,
-        "data": [
-            _event_dict(db, event, current_user.Gebruiker_ID, app_counts, external_counts, my_statuses)
-            for event in events
-        ],
+        "data": [_event_dict(db, e, current_user.Gebruiker_ID) for e in events],
         "fout": None,
+        "totaal": total,
+        "skip": skip,
+        "limit": limit,
     }
 
 

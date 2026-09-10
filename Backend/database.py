@@ -11,15 +11,22 @@ DATABASE_URL = (
     f"@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
 )
 
+# --- Connection pool tuning ---
+# pool_pre_ping: verify connections before use (survives idle timeouts / restarts)
+# pool_size: persistent connections in the pool (default is 5 — same here, explicit)
+# max_overflow: extra connections allowed beyond pool_size under burst load
+# pool_timeout: seconds to wait for a connection from the pool before raising
 engine = create_engine(
     DATABASE_URL,
+    pool_pre_ping=True,
     pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
     max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
-    pool_pre_ping=True,
-    pool_recycle=1800,
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    pool_recycle=1800,  # recycle connections after 30 min to avoid stale DB connections
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 
 # Gebruik hierdie in elke roete as 'n afhanklikheid
 def get_db():

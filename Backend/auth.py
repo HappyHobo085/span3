@@ -12,7 +12,7 @@ from sqlalchemy import or_
 from dotenv import load_dotenv
 
 import database, models
-from services.gebruiker_service import get_user_role_names, kies_primere_rol
+from services.gebruiker_service import kies_primere_rol
 
 load_dotenv()
 
@@ -27,6 +27,21 @@ DISABLE_AUTH = os.getenv("DISABLE_AUTH", "").strip().lower() in ("1", "true", "y
 import bcrypt
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)
+
+
+def _haal_rol_names_uit_loaded(gebruiker: models.Gebruikers) -> list:
+    """Haal rolname uit die eager-loaded relasies sonder ekstra queries.
+
+    Met selectinload op Gebruikers.rol en Gebruikers.gebruikers_rolle
+    plus GebruikersRolle.rol is alles reeds gelaai — geen DB-navraag nodig nie.
+    """
+    role_names = []
+    for assignment in (gebruiker.gebruikers_rolle or []):
+        if assignment.rol is not None:
+            role_names.append(assignment.rol.ROL_Naam)
+    if not role_names and gebruiker.rol is not None:
+        role_names = [gebruiker.rol.ROL_Naam]
+    return role_names
 
 
 # def _dev_fallback_user(db: Session) -> models.Gebruikers:
@@ -106,7 +121,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 fallback = _dev_fallback_user(db)
                 if fallback:
                     request.state.user = fallback
-                    request.state.roles = get_user_role_names(db, fallback)
+                    # Gebruik eager-loaded relasies — geen ekstra queries nodig nie
+                    request.state.roles = _haal_rol_names_uit_loaded(fallback)
                     if request.state.roles:
                         request.state.role = kies_primere_rol(request.state.roles)
             except Exception:
@@ -150,7 +166,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     user = None
                 if user:
                     request.state.user = user
-                    request.state.roles = get_user_role_names(db, user)
+                    # Gebruik eager-loaded relasies — selectin op Gebruikers.rol,
+                    # gebruikers_rolle, en GebruikersRolle.rol maak dit gratis
+                    request.state.roles = _haal_rol_names_uit_loaded(user)
                     if request.state.roles:
                         request.state.role = kies_primere_rol(request.state.roles)
             except Exception:
@@ -196,7 +214,7 @@ async def get_current_user(
                     )
                 if user:
                     request.state.user = user
-                    request.state.roles = get_user_role_names(db, user)
+                    request.state.roles = _haal_rol_names_uit_loaded(user)
                     if request.state.roles:
                         request.state.role = kies_primere_rol(request.state.roles)
                     return user
@@ -226,7 +244,8 @@ class RoleChecker:
 
         role_names = list(getattr(request.state, "roles", []) or [])
         if not role_names:
-            role_names = get_user_role_names(db, current_user)
+            # Gebruik eager-loaded relasies — geen ekstra queries nodig nie
+            role_names = _haal_rol_names_uit_loaded(current_user)
             request.state.roles = role_names
 
         if not role_names:
@@ -262,7 +281,8 @@ async def verifieer_kampus_toegang(
 
     role_names = list(getattr(request.state, "roles", []) or [])
     if not role_names:
-        role_names = get_user_role_names(db, current_user)
+        # Gebruik eager-loaded relasies — geen ekstra queries nodig nie
+        role_names = _haal_rol_names_uit_loaded(current_user)
         request.state.roles = role_names
 
     request.state.role = kies_primere_rol(role_names) if role_names else None
@@ -271,12 +291,8 @@ async def verifieer_kampus_toegang(
         return True
 
     if "Kampus_Opsigter" in role_names:
-        opsigter_rekord = db.query(models.Kampus_Opsigter).filter(
-            models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID,
-            models.Kampus_Opsigter.Kampus_ID == kampus_id
-        ).first()
-        
-        if opsigter_rekord:
+        # Gebruik eager-loaded kampus_opsigter subrekord
+        if current_user.kampus_opsigter is not None and current_user.kampus_opsigter.Kampus_ID == kampus_id:
             return True
             
     raise HTTPException(

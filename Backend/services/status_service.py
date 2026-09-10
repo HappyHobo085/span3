@@ -8,6 +8,21 @@ import models, schemas
 from services.gebruiker_service import kies_primere_rol
 
 
+def _haal_rol_names_vir_gebruiker(gebruiker: models.Gebruikers) -> list:
+    """Haal rolname uit die eager-loaded relasies sonder ekstra queries.
+
+    Met selectinload op Gebruikers.rol en Gebruikers.gebruikers_rolle
+    plus GebruikersRolle.rol is alles reeds gelaai — geen DB-navraag nodig nie.
+    """
+    role_names = []
+    for assignment in (gebruiker.gebruikers_rolle or []):
+        if assignment.rol is not None:
+            role_names.append(assignment.rol.ROL_Naam)
+    if not role_names and gebruiker.rol is not None:
+        role_names = [gebruiker.rol.ROL_Naam]
+    return role_names
+
+
 def haal_laatste_logs_per_gebruiker(
     db: Session,
     kampus_id: Optional[int] = None,
@@ -16,6 +31,11 @@ def haal_laatste_logs_per_gebruiker(
     """
     Fetch the latest access log per user, filtered by kampus or koshuis.
     Returns (scanned_in: list[schemas.KampusGebruikerStatus], scanned_out: list[...]).
+
+    Optimizations:
+    - Single subquery for latest log per user (no per-user queries)
+    - Eager-loaded relationships (selectinload on ToegangsLogs.gebruiker, Gebruikers.rol, etc.)
+    - Role resolution from loaded data (no extra queries)
     """
     # Build base query for latest log per user
     base_q = db.query(
@@ -28,16 +48,23 @@ def haal_laatste_logs_per_gebruiker(
             models.Lokasie.Kampus_ID == kampus_id
         )
     elif koshuis_id is not None:
-        base_q = base_q.join(
-            models.Student,
-            models.Student.Gebruiker_ID == models.ToegangsLogs.Gebruiker_ID,
-        ).filter(models.Student.Koshuis_ID == koshuis_id)
+        # For koshuis: filter by students linked to this koshuis
+        # Use a subquery instead of fetching all students first
+        koshuis_student_subq = (
+            db.query(models.Student.Gebruiker_ID)
+            .filter(models.Student.Koshuis_ID == koshuis_id)
+            .subquery()
+        )
+        base_q = base_q.filter(
+            models.ToegangsLogs.Gebruiker_ID.in_(koshuis_student_subq)
+        )
 
     subquery = base_q.group_by(
         models.ToegangsLogs.Gebruiker_ID
     ).subquery()
 
-    latest_logs = db.query(models.ToegangsLogs, models.Gebruikers).join(
+    # Eager-loaded: gebruiker (with rol, gebruikers_rolle, student, personeel)
+    latest_logs = db.query(models.ToegangsLogs).join(
         subquery,
         models.ToegangsLogs.Log_ID == subquery.c.max_log_id
     ).join(
@@ -45,34 +72,19 @@ def haal_laatste_logs_per_gebruiker(
         models.Gebruikers.Gebruiker_ID == models.ToegangsLogs.Gebruiker_ID,
     ).all()
 
-    gebruiker_ids = [gebruiker.Gebruiker_ID for _, gebruiker in latest_logs]
-    if not gebruiker_ids:
+    if not latest_logs:
         return [], []
-
-    role_assignments = db.query(models.GebruikersRolle).filter(
-        models.GebruikersRolle.Gebruiker_ID.in_(gebruiker_ids)
-    ).all()
-    role_ids = {
-        gebruiker.Rol_ID for _, gebruiker in latest_logs if gebruiker.Rol_ID is not None
-    }
-    role_ids.update(assignment.Rol_ID for assignment in role_assignments)
-    roles = db.query(models.Rolle).filter(models.Rolle.Rol_ID.in_(role_ids)).all()
-    role_names_by_id = {role.Rol_ID: role.ROL_Naam for role in roles}
-    role_names_by_user = {user_id: [] for user_id in gebruiker_ids}
-    for assignment in role_assignments:
-        role_name = role_names_by_id.get(assignment.Rol_ID)
-        if role_name:
-            role_names_by_user[assignment.Gebruiker_ID].append(role_name)
-    for _, gebruiker in latest_logs:
-        primary_role_name = role_names_by_id.get(gebruiker.Rol_ID)
-        if primary_role_name and primary_role_name not in role_names_by_user[gebruiker.Gebruiker_ID]:
-            role_names_by_user[gebruiker.Gebruiker_ID].append(primary_role_name)
 
     scanned_in = []
     scanned_out = []
 
-    for log, gebruiker in latest_logs:
-        role_names = role_names_by_user[gebruiker.Gebruiker_ID]
+    for log in latest_logs:
+        # geen ekstra query nodig nie — eagerly loaded via selectinload
+        gebruiker = log.gebruiker
+        if not gebruiker:
+            continue
+
+        role_names = _haal_rol_names_vir_gebruiker(gebruiker)
         rol_naam = kies_primere_rol(role_names)
 
         status_obj = schemas.KampusGebruikerStatus(

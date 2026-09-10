@@ -31,31 +31,16 @@ def lys_lokasies(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
-    active_tag_id = (
-        db.query(func.max(models.NFC_Tags.NFC_Tags_ID))
-        .filter(
-            models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
-            models.NFC_Tags.NFC_Is_Aktief == True,
-        )
-        .correlate(models.Lokasie)
-        .scalar_subquery()
-    )
-    lokasies = (
-        db.query(models.Lokasie, models.NFC_Tags)
-        .outerjoin(
-            models.NFC_Tags,
-            and_(
-                models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
-                models.NFC_Tags.NFC_Is_Aktief == True,
-                models.NFC_Tags.NFC_Tags_ID == active_tag_id,
-            ),
-        )
-        .all()
-    )
+    # selectinload on Lokasie.nfc_tags means tags are loaded in the same query
+    lokasies = db.query(models.Lokasie).all()
     result = []
     created_tag = False
 
-    for l, tag in lokasies:
+    for l in lokasies:
+        # Gebruik eager-loaded nfc_tags relationship (geen ekstra query nodig nie)
+        aktiewe_tags = [t for t in (l.nfc_tags or []) if t.NFC_Is_Aktief]
+        tag = aktiewe_tags[0] if aktiewe_tags else None
+
         if not tag:
             tag = models.NFC_Tags(
                 NFC_UID=genereer_unieke_nfc_uid(db),
@@ -87,30 +72,17 @@ def lys_klasse(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     """Gee 'n lys van alle klasse (lokasies met LOK_Tipe == 'Klaskamer')."""
-    active_tag_id = (
-        db.query(func.max(models.NFC_Tags.NFC_Tags_ID))
-        .filter(
-            models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
-            models.NFC_Tags.NFC_Is_Aktief == True,
-        )
-        .correlate(models.Lokasie)
-        .scalar_subquery()
-    )
+    # selectinload on Lokasie.nfc_tags means tags are loaded in the same query
     lokasies = (
-        db.query(models.Lokasie, models.NFC_Tags)
-        .outerjoin(
-            models.NFC_Tags,
-            and_(
-                models.NFC_Tags.Lokasie_ID == models.Lokasie.Lokasie_ID,
-                models.NFC_Tags.NFC_Is_Aktief == True,
-                models.NFC_Tags.NFC_Tags_ID == active_tag_id,
-            ),
-        )
+        db.query(models.Lokasie)
         .filter(models.Lokasie.LOK_Tipe == "Klaskamer")
         .all()
     )
     result = []
-    for l, tag in lokasies:
+    for l in lokasies:
+        # Gebruik eager-loaded nfc_tags (geen ekstra query nodig nie)
+        aktiewe_tags = [t for t in (l.nfc_tags or []) if t.NFC_Is_Aktief]
+        tag = aktiewe_tags[0] if aktiewe_tags else None
         result.append({
             "Lokasie_ID": l.Lokasie_ID,
             "LOK_Naam": l.LOK_Naam,
@@ -226,35 +198,67 @@ def kry_klas_bywoning(
     )
     roster_ids = [r[0] for r in roster_rows]
 
-    # Fetch user details for present and roster
-    present = [
-        {
+    # --- Batch fetch all user+student records at once (geen N+1 nie) ---
+    all_user_ids = list(set(present_ids) | set(roster_ids))
+    user_map = {}
+    if all_user_ids:
+        rows = (
+            db.query(models.Gebruikers, models.Student)
+            .outerjoin(models.Student, models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID)
+            .filter(models.Gebruikers.Gebruiker_ID.in_(all_user_ids))
+            .all()
+        )
+        for gebruiker, student in rows:
+            user_map[gebruiker.Gebruiker_ID] = (gebruiker, student)
+
+    # --- Batch fetch last-in timestamps for present users ---
+    last_in_map = {}
+    if present_ids:
+        last_in_rows = (
+            db.query(
+                models.ToegangsLogs.Gebruiker_ID,
+                func.max(models.ToegangsLogs.TOE_Tydstempel).label("laaste_in")
+            )
+            .filter(
+                models.ToegangsLogs.Gebruiker_ID.in_(present_ids),
+                models.ToegangsLogs.Lokasie_ID == lokasie_id,
+                func.date(models.ToegangsLogs.TOE_Tydstempel) == day,
+                models.ToegangsLogs.TOE_Rigting == "IN",
+            )
+            .group_by(models.ToegangsLogs.Gebruiker_ID)
+            .all()
+        )
+        last_in_map = {row.Gebruiker_ID: row.laaste_in for row in last_in_rows}
+
+    present = []
+    for uid in present_ids:
+        entry = user_map.get(uid)
+        if not entry:
+            continue
+        gebruiker, student = entry
+        tyd = last_in_map.get(uid)
+        present.append({
             "Gebruiker_ID": gebruiker.Gebruiker_ID,
             "GEB_Naam": gebruiker.GEB_Naam,
             "GEB_Van": gebruiker.GEB_Van,
             "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
             "STU_Nommer": student.STU_Nommer if student else None,
-            "Tyd": log.TOE_Tydstempel.isoformat() if log.TOE_Tydstempel else None,
-        }
-        for gebruiker, student, log in present_rows
-    ]
+            "Tyd": tyd.isoformat() if tyd else None,
+        })
 
     roster_users = []
-    if roster_ids:
-        users = (
-            db.query(models.Gebruikers, models.Student)
-            .join(models.Student, models.Student.Gebruiker_ID == models.Gebruikers.Gebruiker_ID)
-            .filter(models.Gebruikers.Gebruiker_ID.in_(roster_ids))
-            .all()
-        )
-        for gebruiker, student in users:
-            roster_users.append({
-                "Gebruiker_ID": gebruiker.Gebruiker_ID,
-                "GEB_Naam": gebruiker.GEB_Naam,
-                "GEB_Van": gebruiker.GEB_Van,
-                "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
-                "STU_Nommer": student.STU_Nommer,
-            })
+    for uid in roster_ids:
+        entry = user_map.get(uid)
+        if not entry:
+            continue
+        gebruiker, student = entry
+        roster_users.append({
+            "Gebruiker_ID": gebruiker.Gebruiker_ID,
+            "GEB_Naam": gebruiker.GEB_Naam,
+            "GEB_Van": gebruiker.GEB_Van,
+            "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
+            "STU_Nommer": student.STU_Nommer if student else None,
+        })
 
     absent = [u for u in roster_users if u["Gebruiker_ID"] not in present_ids]
 

@@ -709,3 +709,84 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 014 "
             f"(dashboard/toegangslog-indekse) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 015: Performance indexes for high-traffic query patterns
+    try:
+        with engine.connect() as _conn:
+            # --- toegangs_logs: heaviest table, queried constantly ---
+            # Composite index for "latest log per user" pattern (status_service, dashboard)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_gebruiker_tydstempel '
+                'ON toegangs_logs ("Gebruiker_ID", "TOE_Tydstempel" DESC)'
+            ))
+            # Index for lokasie-based queries (lokasie attendance, guard scan)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_lokasie '
+                'ON toegangs_logs ("Lokasie_ID")'
+            ))
+            # Index for date-range queries (dashboard live, today's stats)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_tydstempel '
+                'ON toegangs_logs ("TOE_Tydstempel")'
+            ))
+            # Index for rigting filter (IN/UIT) used in status_service and auto_uitcheck
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_rigting '
+                'ON toegangs_logs ("TOE_Rigting")'
+            ))
+            # Composite index for auto_uitcheck: find UIT after IN per user
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_toegangs_logs_gebruiker_rigting_tydstempel '
+                'ON toegangs_logs ("Gebruiker_ID", "TOE_Rigting", "TOE_Tydstempel" DESC)'
+            ))
+
+            # --- nfc_tags: looked up on every NFC/QR scan ---
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_nfc_tags_uid '
+                'ON nfc_tags ("NFC_UID")'
+            ))
+            # Index for lokasie-tag lookup (lokasie listing)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_nfc_tags_lokasie '
+                'ON nfc_tags ("Lokasie_ID")'
+            ))
+            # Index for user-tag lookup (user NFC management)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_nfc_tags_gebruiker '
+                'ON nfc_tags ("Gebruiker_ID")'
+            ))
+
+            # --- gebruikers: queried during login, guard scans ---
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_gebruikers_epos '
+                'ON gebruikers ("GEB_Epos")'
+            ))
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_gebruikers_id_nommer '
+                'ON gebruikers ("GEB_ID_Nommer")'
+            ))
+            # Index for Rol_ID filter (used in _dev_fallback_user)
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_gebruikers_rol_id '
+                'ON gebruikers ("Rol_ID")'
+            ))
+
+            # --- student: queried by Koshuis_ID in koshuis status ---
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_student_koshuis_id '
+                'ON student ("Koshuis_ID")'
+            ))
+
+            # --- funksie: listing by begin_tyd already indexed, add end_tyd ---
+            _conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_funksie_eind_tyd '
+                'ON funksie ("FUN_Eind_Tyd")'
+            ))
+
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 015 "
+            f"(Performance indexes) het misluk: {_migrasie_fout}"
+        )
+
