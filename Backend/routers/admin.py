@@ -47,6 +47,9 @@ from config import Config
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
+# Tabelle wat NIE geëksport mag word nie (bevat wagwoorde of sensitiw data)
+EXPORT_EXCLUDED_TABLES = {"gebruikers"}
+
 
 def check_csv_import_export_enabled():
     """Dependency to check if CSV import/export is enabled."""
@@ -725,6 +728,12 @@ def export_table_csv(
         actual_table = _resolve_table(table)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if actual_table.name in EXPORT_EXCLUDED_TABLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Tabel '{actual_table.name}' mag nie geëksport word nie"
+        )
 
     rows = _table_rows_for_export(db, actual_table.name)
     filename = f"{actual_table.name}.csv"
