@@ -24,6 +24,12 @@ engine = create_engine(
     pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
     pool_recycle=1800,  # recycle connections after 30 min to avoid stale DB connections
 )
+
+# Redacteer wagwoord vir veilige logging
+_db_pass = os.getenv('DB_PASS', '')
+if _db_pass:
+    DATABASE_URL = DATABASE_URL.replace(f":{_db_pass}@", ":***@")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
