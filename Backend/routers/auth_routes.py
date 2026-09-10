@@ -73,6 +73,8 @@ def login_vir_toegang_token(
     request.session["rol_naam"] = rol_naam
     request.session["roles"] = role_names
 
+    import os
+    is_production = os.getenv("ENVIRONMENT", "development").lower() in ("production", "prod")
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -80,7 +82,7 @@ def login_vir_toegang_token(
         max_age=auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         expires=auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
-        secure=False
+        secure=is_production,
     )
 
     return schemas.APIResponse(
