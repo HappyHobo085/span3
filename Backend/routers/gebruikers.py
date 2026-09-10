@@ -1,8 +1,11 @@
 """Gebruikers (Users) CRUD routes."""
 
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger("moon")
 from sqlalchemy.orm import Session
 from typing import List, Any, Optional
 
@@ -86,7 +89,8 @@ def skep_gebruiker(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Kon nie gebruiker skep nie: {str(e)}")
+        logger.exception("Kon nie gebruiker skep nie")
+        raise HTTPException(status_code=500, detail="Kon nie gebruiker skep nie")
 
 
 @router.put("/{user_id}", response_model=schemas.APIResponse[Any])
@@ -164,7 +168,8 @@ def opdateer_gebruiker(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Kon nie gebruiker opdateer nie: {str(e)}")
+        logger.exception("Kon nie gebruiker opdateer nie")
+        raise HTTPException(status_code=500, detail="Kon nie gebruiker opdateer nie")
 
 
 @router.delete("/{user_id}", response_model=schemas.APIResponse[dict])
