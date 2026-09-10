@@ -1,8 +1,20 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional, Generic, TypeVar, List
 from datetime import datetime
+import re
 
 T = TypeVar("T")
+
+
+def _valideer_wagwoord(w: str) -> str:
+    """Verifieer wagwoord kompleksiteit — minstens 8 karakters, 1 syfer, 1 spesiaalteken."""
+    if len(w) < 8:
+        raise ValueError("Wagwoord moet ten minste 8 karakters lank wees")
+    if not re.search(r"\d", w):
+        raise ValueError("Wagwoord moet ten minste 1 syfer bevat")
+    if not re.search(r"[^a-zA-Z0-9]", w):
+        raise ValueError("Wagwoord moet ten minste 1 spesiaalteken bevat")
+    return w
 
 # --- Standaard Response Schema ---
 class APIResponse(BaseModel, Generic[T]):
@@ -40,7 +52,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     Rol_IDs: Optional[List[int]] = None
-    GEB_Wagwoord: str
+    GEB_Wagwoord: str = Field(..., min_length=8)
     STU_Nommer: Optional[str] = None
     STU_Is_Koshuis: bool = False
     Koshuis_ID: Optional[int] = None
@@ -52,6 +64,11 @@ class UserCreate(UserBase):
     NFC_UID: Optional[str] = None
     NFC_Tipe: str = "Gebruiker"
     NFC_Is_Aktief: bool = True
+
+    @field_validator("GEB_Wagwoord")
+    @classmethod
+    def val_wagwoord(cls, v: str) -> str:
+        return _valideer_wagwoord(v)
 
 class UserUpdate(BaseModel):
     Rol_IDs: Optional[List[int]] = None
@@ -75,6 +92,13 @@ class UserUpdate(BaseModel):
     NFC_UID: Optional[str] = None
     NFC_Tipe: Optional[str] = None
     NFC_Is_Aktief: Optional[bool] = None
+
+    @field_validator("GEB_Wagwoord")
+    @classmethod
+    def val_wagwoord(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return _valideer_wagwoord(v)
+        return v
 
 
 # --- GEBRUIKER STATUS UPDATE ---
