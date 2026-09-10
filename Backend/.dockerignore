@@ -2,5 +2,12 @@ venv/
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
 .git
 .gitignore
+.DS_Store
+*.md
+tests/
+docs/
+uploads/
