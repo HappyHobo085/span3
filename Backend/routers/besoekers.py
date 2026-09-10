@@ -74,7 +74,7 @@ def _expire_old_invites(db: Session) -> int:
 
 def _generate_otp(db: Session) -> str:
     for _ in range(100):
-        otp = f"{secrets.randbelow(1_000_000):06d}"
+        otp = f"{secrets.randbelow(100_000_000):08d}"
         exists = (
             db.query(models.BesoekerUitnodiging)
             .filter(models.BesoekerUitnodiging.BES_Aktief_Sleutel == otp)
