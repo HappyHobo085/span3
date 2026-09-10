@@ -20,7 +20,11 @@ def sekuriteit_toegang_toets(
 
 
 @router.get("/wagte/kampusse", response_model=schemas.APIResponse[List[dict]])
-def wagte_kampusse(db: Session = Depends(get_db)):
+def wagte_kampusse(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
+):
     kampusse = db.query(models.Kampus).all()
     return schemas.APIResponse(
         sukses=True,
@@ -35,6 +39,8 @@ def wagte_kampusse(db: Session = Depends(get_db)):
 def wagte_nommer_check(
     nommer: str,
     db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
     """Ligte live-validasie vir handmatige wag-invoer."""
     scan = nommer.strip()
@@ -101,6 +107,8 @@ def wagte_nommer_check(
 def opsigter_kampus_besoekers(
     kampus_id: int,
     db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_opsigter),
 ):
     """Besoekers wat vandag by die gekose kampus toegelaat is."""
     kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
@@ -160,6 +168,8 @@ def opsigter_kampus_besoekers(
 def wagte_profile_scan(
     data: schemas.WagteProfileScanRequest,
     db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
     scan = data.scan_kode.strip()
     gebruiker = None
@@ -213,6 +223,8 @@ def wagte_profile_scan(
 def wagte_profile_verify(
     data: schemas.WagteProfileVerifyRequest,
     db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
     if data.rigting not in ["IN", "UIT"]:
         raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
@@ -271,6 +283,8 @@ def wagte_profile_verify(
 def decline_profile_access(
     data: schemas.WagteProfileDeclineRequest,
     db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
     if data.metode not in ["NFC", "QR", "HANDMATIG"]:
         raise HTTPException(status_code=400, detail="Metode moet NFC, QR of HANDMATIG wees")
