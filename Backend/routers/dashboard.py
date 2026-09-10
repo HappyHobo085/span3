@@ -16,6 +16,7 @@ from services.gebruiker_service import kies_primere_rol
 router = APIRouter(tags=["Dashboard"])
 
 UPLOAD_DIR = "uploads/profile_photos"
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 @router.get("/rolle", response_model=schemas.APIResponse[List[schemas.Rol]])
@@ -85,6 +86,8 @@ async def upload_my_profile_photo(
     file_path = os.path.join(UPLOAD_DIR, filename)
 
     contents = await file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail=f"Lêer te groot — maksimum {MAX_UPLOAD_BYTES // (1024*1024)} MB toegelaat")
     with open(file_path, "wb") as f:
         f.write(contents)
 
