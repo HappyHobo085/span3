@@ -17,7 +17,12 @@ from services.gebruiker_service import kies_primere_rol
 load_dotenv()
 
 # Konfigurasie
-SECRET_KEY = os.getenv("SECRET_KEY", "jou-geheime-sleutel-vir-toetsing")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required — refusing to start without it")
+
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY") or SECRET_KEY
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dag
 
