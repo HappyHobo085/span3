@@ -24,6 +24,12 @@ COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 RUN sed -i 's/\r$//' entrypoint.sh
 
+# Veiligheid: Nie-root gebruiker
+RUN groupadd -r app && useradd --no-log-init -r -g app app \
+    && mkdir -p /app/uploads/profile_photos \
+    && chown -R app:app /app
+USER app
+
 EXPOSE 8000
 
 CMD ["./entrypoint.sh"]
