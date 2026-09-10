@@ -10,6 +10,11 @@ import models, schemas, auth
 router = APIRouter(tags=["Student"])
 
 
+def _escape_like(value: str) -> str:
+    """Escapeer LIKE-wildcards (% en _) om SQL-inspuiting te voorkom."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.post("/student/scan-klas")
 def student_scan_klas(
     data: schemas.StudentKlasScanRequest,
@@ -89,9 +94,9 @@ def soek_studente(
         .filter(
             models.Gebruikers.Is_Aktief == True,
             or_(
-                models.Gebruikers.GEB_Naam.ilike(f"%{search}%"),
-                models.Gebruikers.GEB_Van.ilike(f"%{search}%"),
-                models.Student.STU_Nommer.ilike(f"%{search}%"),
+                models.Gebruikers.GEB_Naam.ilike(f"%{_escape_like(search)}%", escape="\\"),
+                models.Gebruikers.GEB_Van.ilike(f"%{_escape_like(search)}%", escape="\\"),
+                models.Student.STU_Nommer.ilike(f"%{_escape_like(search)}%", escape="\\"),
             ),
         )
         .limit(20)
