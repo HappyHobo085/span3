@@ -20,10 +20,12 @@ router = APIRouter(prefix="/events", tags=["Events"])
 
 # Publieke Event-RSVP skakels moet na die MOON webwerf wys, nie na die
 # Flutter API-hostname nie. Railway kan dit met PUBLIC_SITE_BASE_URL oorskryf.
-PUBLIC_SITE_BASE_URL = os.getenv(
-    "PUBLIC_SITE_BASE_URL",
-    "https://capstone-production-3673.up.railway.app",
-).rstrip("/")
+PUBLIC_SITE_BASE_URL = os.getenv("PUBLIC_SITE_BASE_URL", "").rstrip("/")
+if not PUBLIC_SITE_BASE_URL:
+    import logging
+    logging.getLogger("moon").warning(
+        "PUBLIC_SITE_BASE_URL is nie gestel nie — publieke RSVP-skakels sal nie werk nie"
+    )
 
 
 def _utc_naive(value: datetime) -> datetime:
