@@ -326,6 +326,85 @@ def test_geen_gemeenskaplike_dae():
     assert resultaat.gemeenskaplike_dae == []
 
 
+def test_konsekwente_tyd_vs_wisselvallige_tyd():
+    """Twee studente met 'n 5 min verskil en lae variansie is beter as 'n 5 min verskil met hoë variansie."""
+    # Scenario 1: Baie konsekwent
+    skedule_k_kons = _maak_standaard_skedule(465, 990, afwyking=1.0)
+    student_a_kons = StudentSaamryData(
+        gebruiker_id=1, naam="A", van="A", saamry_rol="BESTUURDER", kampus_id=1,
+        skedule_per_dag=_maak_standaard_skedule(460, 990, afwyking=1.0)
+    )
+    student_b_kons = StudentSaamryData(
+        gebruiker_id=2, naam="B", van="B", saamry_rol="PASSASIER", kampus_id=1,
+        skedule_per_dag=skedule_k_kons
+    )
+    res_kons = bereken_saamry_versoenbaarheid(student_a_kons, student_b_kons)
+
+    # Scenario 2: Baie wisselvallig (groot standaardafwyking)
+    skedule_k_wissel = _maak_standaard_skedule(465, 990, afwyking=35.0)
+    student_a_wissel = StudentSaamryData(
+        gebruiker_id=1, naam="A", van="A", saamry_rol="BESTUURDER", kampus_id=1,
+        skedule_per_dag=_maak_standaard_skedule(460, 990, afwyking=35.0)
+    )
+    student_b_wissel = StudentSaamryData(
+        gebruiker_id=3, naam="C", van="C", saamry_rol="PASSASIER", kampus_id=1,
+        skedule_per_dag=skedule_k_wissel
+    )
+    res_wissel = bereken_saamry_versoenbaarheid(student_a_wissel, student_b_wissel)
+
+    # Konsekwente passing moet 'n hoër tyd telling hê weens 'n baie kleiner effektiewe verskil.
+    assert res_kons.faktore["tyd_telling"] > res_wissel.faktore["tyd_telling"]
+
+
+def test_klein_steekproef_straf():
+    """As studente 'n lae aantal logs het, moet die betroubaarheid telling drasties daal."""
+    skedule_1 = _maak_standaard_skedule(monsters=1)
+    student_a = StudentSaamryData(
+        gebruiker_id=1, naam="A", van="A", saamry_rol="BESTUURDER", kampus_id=1,
+        skedule_per_dag=skedule_1
+    )
+    student_b = StudentSaamryData(
+        gebruiker_id=2, naam="B", van="B", saamry_rol="PASSASIER", kampus_id=1,
+        skedule_per_dag=skedule_1
+    )
+    res_min = bereken_saamry_versoenbaarheid(student_a, student_b)
+
+    skedule_20 = _maak_standaard_skedule(monsters=20)
+    student_c = StudentSaamryData(
+        gebruiker_id=3, naam="C", van="C", saamry_rol="BESTUURDER", kampus_id=1,
+        skedule_per_dag=skedule_20
+    )
+    student_d = StudentSaamryData(
+        gebruiker_id=4, naam="D", van="D", saamry_rol="PASSASIER", kampus_id=1,
+        skedule_per_dag=skedule_20
+    )
+    res_baie = bereken_saamry_versoenbaarheid(student_c, student_d)
+
+    assert res_min.faktore["betroubaarheid_telling"] < res_baie.faktore["betroubaarheid_telling"]
+    assert res_min.faktore["betroubaarheid_telling"] <= 50.0  # Steekproef is slegs 1
+
+
+def test_nul_dae_oorvleueling_zero_division():
+    """Toets dat zero division hanteer word wanneer studente na dieselfde kampus ry, maar 0 dae deel."""
+    skedule_a = _maak_standaard_skedule(aktiewe_dae=["Maandag"])
+    skedule_b = _maak_standaard_skedule(aktiewe_dae=["Vrydag"])
+
+    student_a = StudentSaamryData(
+        gebruiker_id=1, naam="A", van="A", saamry_rol="BESTUURDER", kampus_id=1,
+        skedule_per_dag=skedule_a
+    )
+    student_b = StudentSaamryData(
+        gebruiker_id=2, naam="B", van="B", saamry_rol="PASSASIER", kampus_id=1,
+        skedule_per_dag=skedule_b
+    )
+    # Behoort nie the crash nie
+    resultaat = bereken_saamry_versoenbaarheid(student_a, student_b)
+    
+    assert resultaat.is_geskik is False
+    assert resultaat.totale_telling == 0.0
+
+
+
 def test_herlei_geslag_uit_id():
     """Toets die geslag-herleiding vanaf 'n SA ID-nommer."""
     from services.compatibiliteit_service import herlei_geslag_uit_id

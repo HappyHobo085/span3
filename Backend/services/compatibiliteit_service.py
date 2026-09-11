@@ -62,7 +62,7 @@ def minuut_na_tydstring(minuut: Optional[int]) -> Optional[str]:
     return f"{ure:02d}:{mins:02d}"
 
 
-def bereken_tyd_telling(verskil_min: int) -> float:
+def bereken_tyd_telling(verskil_min: float) -> float:
     """Lineêre stuksgewyse vervalfunksie vir tydverskil tussen twee persone.
 
     - 0..10 min: 100%
@@ -70,15 +70,15 @@ def bereken_tyd_telling(verskil_min: int) -> float:
     - 30..60 min: daal lineêr van 60% na 10%
     - > 60 min: 0%
     """
-    v = abs(int(verskil_min))
-    if v <= 10:
+    v = abs(float(verskil_min))
+    if v <= 10.0:
         return 100.0
-    if v <= 30:
+    if v <= 30.0:
         # lineêr van 100 by 10 na 60 by 30
-        return round(100.0 - ((v - 10) / 20.0) * 40.0, 1)
-    if v <= 60:
+        return round(100.0 - ((v - 10.0) / 20.0) * 40.0, 1)
+    if v <= 60.0:
         # lineêr van 60 by 30 na 10 by 60
-        return round(60.0 - ((v - 30) / 30.0) * 50.0, 1)
+        return round(60.0 - ((v - 30.0) / 30.0) * 50.0, 1)
     return 0.0
 
 
@@ -302,7 +302,6 @@ def bereken_saamry_versoenbaarheid(
 
     totale_monsters_s = 0
     totale_monsters_k = 0
-    maks_afwyking = 0.0
 
     for dag in DAE_VAN_DIE_WEEK:
         dag_s = skedule_s.get(dag)
@@ -321,17 +320,24 @@ def bereken_saamry_versoenbaarheid(
         gemeenskaplike_dae.append(dag)
         totale_monsters_s += dag_s.aantal_monsters
         totale_monsters_k += dag_k.aantal_monsters
-        maks_afwyking = max(maks_afwyking, dag_s.standaardafwyking_min, dag_k.standaardafwyking_min)
 
+        # Inkorporeer beide gemiddelde verskil asook historiese onsekerheid (variansie)
+        # Twee studente met lae variansie is baie meer betroubaar as studente met 40min variansie!
         verskil_in = abs(dag_s.aankoms_minuut - dag_k.aankoms_minuut)
-        score_in = bereken_tyd_telling(verskil_in)
+        gesamentlike_afwyking_in = (dag_s.standaardafwyking_min + dag_k.standaardafwyking_min) / 2.0
+        effektiewe_verskil_in = math.sqrt(verskil_in**2 + gesamentlike_afwyking_in**2)
+        score_in = bereken_tyd_telling(effektiewe_verskil_in)
 
         if dag_s.vertrek_minuut is not None and dag_k.vertrek_minuut is not None:
             verskil_uit = abs(dag_s.vertrek_minuut - dag_k.vertrek_minuut)
-            score_uit = bereken_tyd_telling(verskil_uit)
+            gesamentlike_afwyking_uit = (dag_s.standaardafwyking_min + dag_k.standaardafwyking_min) / 2.0
+            effektiewe_verskil_uit = math.sqrt(verskil_uit**2 + gesamentlike_afwyking_uit**2)
+            score_uit = bereken_tyd_telling(effektiewe_verskil_uit)
             dag_score = round(0.55 * score_in + 0.45 * score_uit, 1)
         else:
             verskil_uit = None
+            effektiewe_verskil_uit = None
+            gesamentlike_afwyking_uit = None
             dag_score = score_in
 
         dag_tellings.append(dag_score)
@@ -339,12 +345,20 @@ def bereken_saamry_versoenbaarheid(
             beste_dag_telling = dag_score
             beste_dag = dag
 
+        # Voeg deursigtige verduidelikings by vir die UI
+        verduideliking = (
+            f"Basiese tydverskil is {verskil_in} min. "
+            f"Met onsekerheid ({round(gesamentlike_afwyking_in, 1)} min afwyking) is die effektiewe faktor {round(effektiewe_verskil_in, 1)} min."
+        )
+
         per_dag_afbreking[dag] = {
             "aankoms_verskil_min": verskil_in,
             "vertrek_verskil_min": verskil_uit,
             "telling": dag_score,
             "aankoms_geskat": minuut_na_tydstring(dag_k.aankoms_minuut),
             "vertrek_geskat": minuut_na_tydstring(dag_k.vertrek_minuut),
+            "gesamentlike_variansie": round((gesamentlike_afwyking_in + (gesamentlike_afwyking_uit or gesamentlike_afwyking_in)) / 2.0, 1),
+            "verduideliking": verduideliking,
         }
 
     if not gemeenskaplike_dae:
@@ -363,40 +377,46 @@ def bereken_saamry_versoenbaarheid(
     # Basis tydtelling = gemiddeld oor slegs die gemeenskaplike dae
     basis_tyd_telling = sum(dag_tellings) / len(dag_tellings)
 
-    # Dae-faktor (bonus vir meer gedeelde dae, sonder om min dae te penaliseer)
+    # Dae-faktor (bonus vir goeie oorvleueling van BESKIKBARE dae, ipv absolute dae)
+    # Penaliseer nie 'n student wat net 2 dae klas het as hulle daardie 2 dae ten volle deel nie.
     aantal_dae = len(gemeenskaplike_dae)
-    if aantal_dae >= 3:
-        dae_faktor = 1.0
-    elif aantal_dae == 2:
-        dae_faktor = 0.95
-    else:
-        dae_faktor = 0.85
+    aktiewe_dae_s = sum(1 for d in skedule_s.values() if d.het_aktiwiteit)
+    aktiewe_dae_k = sum(1 for d in skedule_k.values() if d.het_aktiwiteit)
+    max_moontlike_dae = min(aktiewe_dae_s, aktiewe_dae_k)
 
-    finale_tyd_telling = round(basis_tyd_telling * dae_faktor, 1)
+    if max_moontlike_dae > 0:
+        oorvleueling_verhouding = aantal_dae / float(max_moontlike_dae)
+        if oorvleueling_verhouding == 1.0:
+            dae_faktor = 1.05  # Bonus vir perfekte dekking van behoefte
+        elif oorvleueling_verhouding >= 0.5:
+            dae_faktor = 1.0   # Aanvaarbaar
+        else:
+            dae_faktor = 0.90  # Ligte afslag
+    else:
+        dae_faktor = 1.0
+
+    finale_tyd_telling = min(round(basis_tyd_telling * dae_faktor, 1), 100.0)
 
     # 3. Liggingtelling
     ligging_telling = bereken_voorstad_ooreenstemming(student.voorstad, kandidaat.voorstad)
 
     # 4. Betroubaarheid & Vertrouetelling
-    # Minimum gemiddelde monsters tussen die twee studente
-    gem_monsters_s = totale_monsters_s / max(aantal_dae, 1)
-    gem_monsters_k = totale_monsters_k / max(aantal_dae, 1)
-    gem_monsters = min(gem_monsters_s, gem_monsters_k)
+    # Minimum gemiddelde monsters oor die gemeenskaplike dae
+    gem_monsters = min(totale_monsters_s, totale_monsters_k) / float(aantal_dae)
 
-    if gem_monsters >= 8:
+    if gem_monsters >= 10:
         monster_faktor = 1.0
-    elif gem_monsters >= 3:
-        monster_faktor = gem_monsters / 8.0
+    elif gem_monsters >= 5:
+        # Verval lineêr van 1.0 tot 0.85 vir monsters tussen 10 en 5
+        monster_faktor = 0.85 + 0.15 * ((gem_monsters - 5) / 5.0)
+    elif gem_monsters >= 1:
+        # Verval lineêr van 0.85 tot 0.50 vir monsters tussen 5 en 1
+        monster_faktor = 0.50 + 0.35 * ((gem_monsters - 1) / 4.0)
     else:
-        monster_faktor = 0.60
+        monster_faktor = 0.40
 
-    # Variasiestraf vir onreëlmatige aankomstye (std dev > 30 min)
-    if maks_afwyking > 30.0:
-        variansie_faktor = max(0.70, 1.0 - ((maks_afwyking - 30.0) / 100.0))
-    else:
-        variansie_faktor = 1.0
-
-    betroubaarheid_telling = round(100.0 * monster_faktor * variansie_faktor, 1)
+    # Variansie is reeds by die effektiewe_tyd ingesluit, so hierdie is slegs monster-vertroue
+    betroubaarheid_telling = round(100.0 * monster_faktor, 1)
 
     # 5. Saamgestelde Totale Telling
     # Gewigte: Tyd 40%, Ligging 30%, Rol 15%, Betroubaarheid 15%
@@ -422,7 +442,7 @@ def bereken_saamry_versoenbaarheid(
     else:
         gehalte = "ONVERSOENBAAR"
 
-    # Aanbeveling teks
+    # Aanbeveling teks — verryk met deursigtige inligting
     if is_geskik:
         dae_str = ", ".join(gemeenskaplike_dae)
         if ligging_telling >= 90.0:
@@ -432,12 +452,19 @@ def bereken_saamry_versoenbaarheid(
         else:
             lokasie_deel = "reis na dieselfde kampus"
 
+        vertroue_deel = (
+            "met 'n hoë vertroue" if betroubaarheid_telling > 80.0 else
+            "met matige vertroue (min geskiedkundige logs)" if betroubaarheid_telling > 50.0 else
+            "met lae vertroue"
+        )
+
         aanbeveling_teks = (
-            f"{gehalte.capitalize()} pasmaat — julle {lokasie_deel} en deel {len(gemeenskaplike_dae)} dag(e) "
-            f"({dae_str}) met beste ooreenstemming op {beste_dag}."
+            f"{gehalte.capitalize()} pasmaat: julle {lokasie_deel} en deel {len(gemeenskaplike_dae)} dag/dae "
+            f"({dae_str}). Berekende tydtelling is {finale_tyd_telling} {vertroue_deel}. "
+            f"Beste passing op {beste_dag}."
         )
     else:
-        aanbeveling_teks = "Beperkte versoenbaarheid weens tyd- of roete-afwykings."
+        aanbeveling_teks = "Beperkte versoenbaarheid weens aansienlike tyd- of roete-afwykings of klein steekproewe."
 
     return VersoenbaarheidResultaat(
         kandidaat_id=kandidaat.gebruiker_id,
