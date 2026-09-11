@@ -38,6 +38,7 @@ class Gebruikers(Base):
     nfc_tags         = relationship("NFC_Tags", back_populates="gebruiker")
     toegangs_logs    = relationship("ToegangsLogs",    back_populates="gebruiker")
     waarskuwings     = relationship("Waarskuwings",    back_populates="gebruiker")
+    saamry_profiel   = relationship("SaamryProfiel",   back_populates="gebruiker", uselist=False, lazy="selectin")
 
 class GebruikersRolle(Base):
     __tablename__ = 'gebruikers_rolle'
@@ -475,6 +476,37 @@ class SaamryGroepLid(Base):
         CheckConstraint(
             '"SAA_Status" IN (\'HANGEND\', \'AANVAAR\', \'GEWEIER\', \'VERLAAT\')',
             name='ck_saamry_groep_lid_status',
+        ),
+    )
+
+
+class SaamryProfiel(Base):
+    __tablename__ = 'saamry_profiel'
+
+    Profiel_ID         = Column(Integer, primary_key=True, index=True)
+    Gebruiker_ID       = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False, unique=True, index=True)
+    Rol_Tipe           = Column(String(20), nullable=False, default='BEIDE')
+    Voorstad           = Column(String(120), nullable=True)
+    Sone_Kode          = Column(String(50), nullable=True)
+    Kampus_ID          = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
+    Geslag             = Column(String(20), nullable=True)
+    Geslag_Voorkeur    = Column(String(20), nullable=False, default='ENIGE')
+    Maks_Ompad_Minute  = Column(Integer, nullable=False, default=15)
+    Is_Aktief_Saamryer = Column(Boolean, nullable=False, default=True)
+    Geskep_Op          = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op         = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    gebruiker = relationship('Gebruikers', back_populates='saamry_profiel')
+    kampus    = relationship('Kampus', lazy="selectin")
+
+    __table_args__ = (
+        CheckConstraint(
+            '"Rol_Tipe" IN (\'BESTUURDER\', \'PASSASIER\', \'BEIDE\')',
+            name='ck_saamry_profiel_rol',
+        ),
+        CheckConstraint(
+            '"Geslag_Voorkeur" IN (\'ENIGE\', \'DIESELFDE\')',
+            name='ck_saamry_profiel_geslag_voorkeur',
         ),
     )
 

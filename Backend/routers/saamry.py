@@ -11,6 +11,11 @@ import auth
 import database
 import models
 import schemas
+from services.compatibiliteit_service import (
+    vind_saamry_voorstelle,
+    bou_student_saamry_data_van_db,
+    bereken_saamry_versoenbaarheid,
+)
 
 
 router = APIRouter(prefix="/saamry", tags=["Saamry"])
@@ -1035,4 +1040,160 @@ def confirm_group_at_gate(
             ),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Saamry Profiel & Versoenbaarheidsalgoritme (Saamry-Algo)
+# ---------------------------------------------------------------------------
+
+@router.get("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
+def kry_saamry_profiel(
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Haal die huidige gebruiker se saamryprofiel op (skep verstek indien nog nie bestaan)."""
+    _require_saamry_user(db, current_user)
+
+    profiel = db.query(models.SaamryProfiel).filter(
+        models.SaamryProfiel.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    if not profiel:
+        from services.compatibiliteit_service import herlei_geslag_uit_id
+        geslag = herlei_geslag_uit_id(current_user.GEB_ID_Nommer)
+        profiel = models.SaamryProfiel(
+            Gebruiker_ID=current_user.Gebruiker_ID,
+            Rol_Tipe="BEIDE",
+            Geslag=geslag,
+            Geslag_Voorkeur="ENIGE",
+            Maks_Ompad_Minute=15,
+            Is_Aktief_Saamryer=True,
+        )
+        db.add(profiel)
+        db.commit()
+        db.refresh(profiel)
+
+    return schemas.APIResponse(sukses=True, data=profiel)
+
+
+@router.put("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
+def werk_saamry_profiel_by(
+    payload: schemas.SaamryProfielUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Dateer die huidige gebruiker se saamryprofiel en voorkeure op."""
+    _require_saamry_user(db, current_user)
+
+    profiel = db.query(models.SaamryProfiel).filter(
+        models.SaamryProfiel.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+
+    if not profiel:
+        profiel = models.SaamryProfiel(Gebruiker_ID=current_user.Gebruiker_ID)
+        db.add(profiel)
+
+    data = payload.dict(exclude_unset=True)
+
+    if "rol_tipe" in data and data["rol_tipe"]:
+        rol = data["rol_tipe"].strip().upper()
+        if rol not in ("BESTUURDER", "PASSASIER", "BEIDE"):
+            raise HTTPException(status_code=400, detail="Ongeldige rol_tipe. Kies BESTUURDER, PASSASIER of BEIDE.")
+        profiel.Rol_Tipe = rol
+
+    if "voorstad" in data:
+        profiel.Voorstad = data["voorstad"].strip() if data["voorstad"] else None
+
+    if "sone_kode" in data:
+        profiel.Sone_Kode = data["sone_kode"].strip() if data["sone_kode"] else None
+
+    if "kampus_id" in data:
+        if data["kampus_id"] is not None:
+            kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == data["kampus_id"]).first()
+            if not kampus:
+                raise HTTPException(status_code=400, detail="Kampus bestaan nie")
+        profiel.Kampus_ID = data["kampus_id"]
+
+    if "geslag" in data and data["geslag"]:
+        profiel.Geslag = data["geslag"].strip().upper()
+
+    if "geslag_voorkeur" in data and data["geslag_voorkeur"]:
+        voorkeur = data["geslag_voorkeur"].strip().upper()
+        if voorkeur not in ("ENIGE", "DIESELFDE"):
+            raise HTTPException(status_code=400, detail="Ongeldige geslag_voorkeur. Kies ENIGE of DIESELFDE.")
+        profiel.Geslag_Voorkeur = voorkeur
+
+    if "maks_ompad_minute" in data and data["maks_ompad_minute"] is not None:
+        if data["maks_ompad_minute"] < 0 or data["maks_ompad_minute"] > 120:
+            raise HTTPException(status_code=400, detail="Maksimum ompad moet tussen 0 en 120 minute wees.")
+        profiel.Maks_Ompad_Minute = data["maks_ompad_minute"]
+
+    if "is_aktief_saamryer" in data and data["is_aktief_saamryer"] is not None:
+        profiel.Is_Aktief_Saamryer = bool(data["is_aktief_saamryer"])
+
+    profiel.Gewysig_Op = datetime.utcnow()
+    db.commit()
+    db.refresh(profiel)
+
+    return schemas.APIResponse(sukses=True, data=profiel)
+
+
+@router.get("/voorstelle")
+def kry_saamry_voorstelle(
+    limiet: int = Query(default=10, ge=1, le=50),
+    min_telling: float = Query(default=50.0, ge=0.0, le=100.0),
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Vind en rangskik versoenbare saamrymaats volgens die Saamry-Algo."""
+    _require_saamry_user(db, current_user)
+    voorstelle = vind_saamry_voorstelle(db, current_user, limiet=limiet, min_telling=min_telling)
+    return schemas.APIResponse(sukses=True, data={"voorstelle": voorstelle, "totaal": len(voorstelle)})
+
+
+@router.get("/versoenbaarheid/{kandidaat_id}")
+def kry_kandidaat_versoenbaarheid(
+    kandidaat_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Bereken 'n volledige wiskundige en per-dag afbreking vir 'n spesifieke student."""
+    _require_saamry_user(db, current_user)
+
+    kandidaat = db.query(models.Gebruikers).filter(
+        models.Gebruikers.Gebruiker_ID == kandidaat_id,
+        models.Gebruikers.Is_Aktief == True,
+    ).first()
+
+    if not kandidaat:
+        raise HTTPException(status_code=404, detail="Kandidaat nie gevind nie")
+
+    student_data = bou_student_saamry_data_van_db(db, current_user)
+    kandidaat_data = bou_student_saamry_data_van_db(db, kandidaat)
+
+    res = bereken_saamry_versoenbaarheid(student_data, kandidaat_data)
+
+    friendship = _friendship_between(db, current_user.Gebruiker_ID, kandidaat.Gebruiker_ID)
+    is_vriend = friendship is not None and friendship.SAA_Status == "AANVAAR"
+
+    data = {
+        "gebruiker_id": kandidaat.Gebruiker_ID,
+        "naam": kandidaat.GEB_Naam,
+        "van": kandidaat.GEB_Van,
+        "foto_url": kandidaat.GEB_Profiel_Foto,
+        "saamry_rol": kandidaat_data.saamry_rol,
+        "voorstad": kandidaat_data.voorstad or "Onbekend",
+        "totale_telling": res.totale_telling,
+        "gehalte": res.gehalte,
+        "is_geskik": res.is_geskik,
+        "gemeenskaplike_dae": res.gemeenskaplike_dae,
+        "beste_dag": res.beste_dag,
+        "is_reeds_vriend": is_vriend,
+        "faktore": res.faktore,
+        "per_dag_afbreking": res.per_dag_afbreking,
+        "aanbeveling_teks": res.aanbeveling_teks,
+    }
+
+    return schemas.APIResponse(sukses=True, data=data)
+
 

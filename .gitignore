@@ -38,6 +38,9 @@ venv.bak/
 *.sqlite3
 *.db
 
+# Uploads
+uploads/
+
 # OS
 .DS_Store
 Thumbs.db

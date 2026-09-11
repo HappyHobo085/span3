@@ -790,3 +790,35 @@ def run_migrations(engine):
             f"(Performance indexes) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 016: Skep saamry_profiel tabel en indekse indien dit nie bestaan nie
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS saamry_profiel (
+                    "Profiel_ID" SERIAL PRIMARY KEY,
+                    "Gebruiker_ID" INTEGER NOT NULL UNIQUE REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    "Rol_Tipe" VARCHAR(20) NOT NULL DEFAULT 'BEIDE',
+                    "Voorstad" VARCHAR(120),
+                    "Sone_Kode" VARCHAR(50),
+                    "Kampus_ID" INTEGER REFERENCES kampus("Kampus_ID") ON DELETE SET NULL,
+                    "Geslag" VARCHAR(20),
+                    "Geslag_Voorkeur" VARCHAR(20) NOT NULL DEFAULT 'ENIGE',
+                    "Maks_Ompad_Minute" INTEGER NOT NULL DEFAULT 15,
+                    "Is_Aktief_Saamryer" BOOLEAN NOT NULL DEFAULT TRUE,
+                    "Geskep_Op" TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc') NOT NULL,
+                    "Gewysig_Op" TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc') NOT NULL,
+                    CONSTRAINT ck_saamry_profiel_rol CHECK ("Rol_Tipe" IN ('BESTUURDER', 'PASSASIER', 'BEIDE')),
+                    CONSTRAINT ck_saamry_profiel_geslag_voorkeur CHECK ("Geslag_Voorkeur" IN ('ENIGE', 'DIESELFDE'))
+                );
+                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_gebruiker ON saamry_profiel ("Gebruiker_ID");
+                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_kampus ON saamry_profiel ("Kampus_ID");
+                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_aktief ON saamry_profiel ("Is_Aktief_Saamryer");
+            """))
+            _conn.commit()
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 016 "
+            f"(saamry_profiel tabel) het misluk: {_migrasie_fout}"
+        )
+
+

@@ -1,5 +1,9 @@
+import os
 import sys
 from pathlib import Path
+
+os.environ.setdefault("SECRET_KEY", "toets_geheim_sleutel_vir_toetse_123456789")
+os.environ.setdefault("ENVIRONMENT", "testing")
 
 import pytest
 from sqlalchemy import create_engine

@@ -748,6 +748,32 @@ class SaamryHekBevestigRequest(BaseModel):
     gebruiker_ids: List[int]
 
 
+class SaamryProfielUpdate(BaseModel):
+    rol_tipe: Optional[str] = None
+    voorstad: Optional[str] = None
+    sone_kode: Optional[str] = None
+    kampus_id: Optional[int] = None
+    geslag: Optional[str] = None
+    geslag_voorkeur: Optional[str] = None
+    maks_ompad_minute: Optional[int] = None
+    is_aktief_saamryer: Optional[bool] = None
+
+
+class SaamryProfielOut(BaseModel):
+    gebruiker_id: int
+    rol_tipe: str
+    voorstad: Optional[str] = None
+    sone_kode: Optional[str] = None
+    kampus_id: Optional[int] = None
+    geslag: Optional[str] = None
+    geslag_voorkeur: str
+    maks_ompad_minute: int
+    is_aktief_saamryer: bool
+
+    class Config:
+        from_attributes = True
+
+
 # --- BESOEKER OTP SCHEMAS ---
 
 class BesoekerUitnodigingCreate(BaseModel):
