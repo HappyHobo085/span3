@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_background/flutter_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_shared.dart';
@@ -12,19 +13,58 @@ import 'sekuriteitswag.dart';
 import 'admin.dart';
 import 'moon_api.dart';
 import 'mqtt_noodgeval_service.dart';
+import 'noodgeval_notification_service.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-Future<void> _startMqttStep2Listener() async {
+Future<void> _enableNoodgevalBackgroundExecution() async {
+  const androidConfig = FlutterBackgroundAndroidConfig(
+    notificationTitle: 'MOON Noodgevaldiens aktief',
+    notificationText: 'MOON luister vir kampus-noodgevalle.',
+    notificationImportance: AndroidNotificationImportance.normal,
+    enableWifiLock: true,
+  );
+
+  final initialized =
+      await FlutterBackground.initialize(androidConfig: androidConfig);
+
+  if (!initialized) {
+    throw Exception(
+      'Android het nie die nodige agtergrondtoestemming toegestaan nie.',
+    );
+  }
+
+  if (!FlutterBackground.isBackgroundExecutionEnabled) {
+    final enabled = await FlutterBackground.enableBackgroundExecution();
+    if (!enabled) {
+      throw Exception('MOON kon nie die foreground service begin nie.');
+    }
+  }
+}
+
+Future<void> _startMqttStep3Listener() async {
   try {
+    await NoodgevalNotificationService.instance.initialize();
+    await _enableNoodgevalBackgroundExecution();
+
     await NoodgevalMqttService.instance.connect(
-      // STAP 2 gebruik doelbewus kampus 1 vir die eerste end-to-end toets.
-      // In die volgende fase lees ons die werklike Kampus_ID uit die gebruikerprofiel.
+      // STAP 3 toets nog doelbewus Kampus 1.
+      // Later lees ons die regte Kampus_ID uit die gebruikerprofiel.
       kampusId: 1,
       onMessage: (topic, payload) {
         debugPrint('MQTT ONTVANG [$topic]: $payload');
 
+        // Hierdie system notification is doelbewus stil in Stap 3.
+        // Dit bewys dat MQTT ontvang is selfs nadat die app wegge-swipe is.
+        unawaited(
+          NoodgevalNotificationService.instance.showMqttTest(
+            topic: topic,
+            payload: payload,
+          ),
+        );
+
+        // As die Flutter UI nog sigbaar is, wys ons ook die bestaande rooi SnackBar.
         final messenger = rootScaffoldMessengerKey.currentState;
         messenger
           ?..hideCurrentSnackBar()
@@ -45,27 +85,20 @@ Future<void> _startMqttStep2Listener() async {
     );
 
     debugPrint(
-      'MQTT GEKOPPEL: ${NoodgevalMqttService.host}:${NoodgevalMqttService.port} '
+      'MQTT + FOREGROUND SERVICE AKTIEF: '
+      '${NoodgevalMqttService.host}:${NoodgevalMqttService.port} '
       '-> ${NoodgevalMqttService.instance.currentTopic}',
     );
-
-    rootScaffoldMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.green.shade700,
-        content: Text(
-          'MQTT gekoppel — luister na '
-          '${NoodgevalMqttService.instance.currentTopic}',
-        ),
-      ),
-    );
   } catch (e) {
-    debugPrint('MQTT CONNECT ERROR: $e');
-    rootScaffoldMessengerKey.currentState?.showSnackBar(
+    debugPrint('MQTT/BACKGROUND ERROR: $e');
+
+    final messenger = rootScaffoldMessengerKey.currentState;
+    messenger?.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 8),
         backgroundColor: Colors.orange.shade800,
         content: Text(
-          'MQTT kon nie koppel nie: $e',
+          'Noodgevaldiens kon nie begin nie: $e',
           style: const TextStyle(color: Colors.white),
         ),
       ),
@@ -74,6 +107,7 @@ Future<void> _startMqttStep2Listener() async {
 }
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -228,7 +262,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // MQTT is nie deel van login-sukses nie; dit begin in die agtergrond.
       // As die plaaslike broker nie bereikbaar is nie, kan die gebruiker steeds inteken.
-      unawaited(_startMqttStep2Listener());
+      unawaited(_startMqttStep3Listener());
 
       if (!mounted) return;
 
