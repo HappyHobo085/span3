@@ -816,13 +816,45 @@ class WagteEventGuestDeclineRequest(BaseModel):
     kampus_id: int
     metode: str = "QR"
 
-# --- NOODGEVAL / MQTT STAP 1 ---
+# --- NOODGEVAL SCHEMAS ---
 class NoodgevalMqttToetsRequest(BaseModel):
     kampus_id: int = Field(..., gt=0)
-    titel: str = Field(default="MQTT TOETS", min_length=1, max_length=120)
-    boodskap: str = Field(
-        default="MOON MQTT toetsboodskap",
-        min_length=1,
-        max_length=500,
-    )
+    titel: str = Field(default="MQTT TOETS", min_length=1, max_length=150)
+    boodskap: str = Field(default="MOON MQTT toets", min_length=1, max_length=1000)
 
+
+class NoodgevalCreateRequest(BaseModel):
+    kampus_id: int = Field(..., gt=0)
+    tipe: str = Field(default="NOODGEVAL", min_length=1, max_length=50)
+    titel: str = Field(..., min_length=1, max_length=150)
+    boodskap: str = Field(..., min_length=1, max_length=2000)
+
+
+class NoodgevalRead(BaseModel):
+    Noodgeval_ID: int
+    Kampus_ID: int
+    Geskep_Deur_ID: int
+    Gesluit_Deur_ID: Optional[int] = None
+    NOO_Tipe: str
+    NOO_Titel: str
+    NOO_Boodskap: str
+    NOO_Status: str
+    NOO_Boodskap_ID: str
+    NOO_Begin_Op: datetime
+    NOO_Mqtt_Gestuur_Op: Optional[datetime] = None
+    NOO_Gesluit_Op: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NoodgevalKennisnameRead(BaseModel):
+    Kennisname_ID: int
+    Noodgeval_ID: int
+    Gebruiker_ID: int
+    NOK_Status: str
+    NOK_Ontvang_Op: Optional[datetime] = None
+    NOK_Kennis_Geneem_Op: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

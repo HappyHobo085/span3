@@ -790,3 +790,73 @@ def run_migrations(engine):
             f"(Performance indexes) het misluk: {_migrasie_fout}"
         )
 
+
+    # Migrasie 016: Noodgeval + ontvang/kennisname persistence
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval (
+                    "Noodgeval_ID" SERIAL PRIMARY KEY,
+                    "Kampus_ID" INT NOT NULL,
+                    "Geskep_Deur_ID" INT NOT NULL,
+                    "Gesluit_Deur_ID" INT,
+                    "NOO_Tipe" VARCHAR(50) NOT NULL DEFAULT 'NOODGEVAL',
+                    "NOO_Titel" VARCHAR(150) NOT NULL,
+                    "NOO_Boodskap" TEXT NOT NULL,
+                    "NOO_Status" VARCHAR(20) NOT NULL DEFAULT 'AKTIEF',
+                    "NOO_Boodskap_ID" VARCHAR(64) NOT NULL UNIQUE,
+                    "NOO_Begin_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "NOO_Mqtt_Gestuur_Op" TIMESTAMP,
+                    "NOO_Gesluit_Op" TIMESTAMP,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_noodgeval_kampus
+                        FOREIGN KEY ("Kampus_ID") REFERENCES kampus("Kampus_ID"),
+                    CONSTRAINT fk_noodgeval_geskep_deur
+                        FOREIGN KEY ("Geskep_Deur_ID") REFERENCES gebruikers("Gebruiker_ID"),
+                    CONSTRAINT fk_noodgeval_gesluit_deur
+                        FOREIGN KEY ("Gesluit_Deur_ID") REFERENCES gebruikers("Gebruiker_ID"),
+                    CONSTRAINT ck_noodgeval_status
+                        CHECK ("NOO_Status" IN ('AKTIEF', 'GESLUIT'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval_kennisname (
+                    "Kennisname_ID" SERIAL PRIMARY KEY,
+                    "Noodgeval_ID" INT NOT NULL,
+                    "Gebruiker_ID" INT NOT NULL,
+                    "NOK_Status" VARCHAR(20) NOT NULL DEFAULT 'ONTVANG',
+                    "NOK_Ontvang_Op" TIMESTAMP,
+                    "NOK_Kennis_Geneem_Op" TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_noodgeval_kennisname_noodgeval
+                        FOREIGN KEY ("Noodgeval_ID")
+                        REFERENCES noodgeval("Noodgeval_ID") ON DELETE CASCADE,
+                    CONSTRAINT fk_noodgeval_kennisname_gebruiker
+                        FOREIGN KEY ("Gebruiker_ID")
+                        REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    CONSTRAINT uq_noodgeval_kennisname_gebruiker
+                        UNIQUE ("Noodgeval_ID", "Gebruiker_ID"),
+                    CONSTRAINT ck_noodgeval_kennisname_status
+                        CHECK ("NOK_Status" IN ('ONTVANG', 'KENNIS_GENEEM'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kampus_status_begin
+                ON noodgeval ("Kampus_ID", "NOO_Status", "NOO_Begin_Op" DESC)
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kennisname_noodgeval_status
+                ON noodgeval_kennisname ("Noodgeval_ID", "NOK_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kennisname_gebruiker
+                ON noodgeval_kennisname ("Gebruiker_ID")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 016 "
+            f"(Noodgeval persistence) het misluk: {_migrasie_fout}"
+        )

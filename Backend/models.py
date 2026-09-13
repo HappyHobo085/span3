@@ -515,3 +515,49 @@ class BesoekerUitnodiging(Base):
             name='ck_besoeker_uitnodiging_status',
         ),
     )
+# --- NOODGEVAL ---
+class Noodgeval(Base):
+    __tablename__ = 'noodgeval'
+    __table_args__ = (
+        CheckConstraint(
+            '"NOO_Status" IN (\'AKTIEF\', \'GESLUIT\')',
+            name='ck_noodgeval_status',
+        ),
+    )
+
+    Noodgeval_ID         = Column(Integer, primary_key=True, index=True)
+    Kampus_ID            = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False, index=True)
+    Geskep_Deur_ID       = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Gesluit_Deur_ID      = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True)
+    NOO_Tipe             = Column(String(50), nullable=False, default='NOODGEVAL')
+    NOO_Titel            = Column(String(150), nullable=False)
+    NOO_Boodskap         = Column(Text, nullable=False)
+    NOO_Status           = Column(String(20), nullable=False, default='AKTIEF')
+    NOO_Boodskap_ID      = Column(String(64), nullable=False, unique=True)
+    NOO_Begin_Op         = Column(DateTime, nullable=False, default=datetime.utcnow)
+    NOO_Mqtt_Gestuur_Op  = Column(DateTime, nullable=True)
+    NOO_Gesluit_Op       = Column(DateTime, nullable=True)
+    Geskep_Op            = Column(DateTime, nullable=False, default=datetime.utcnow)
+    Gewysig_Op           = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NoodgevalKennisname(Base):
+    __tablename__ = 'noodgeval_kennisname'
+    __table_args__ = (
+        UniqueConstraint(
+            'Noodgeval_ID', 'Gebruiker_ID',
+            name='uq_noodgeval_kennisname_gebruiker',
+        ),
+        CheckConstraint(
+            '"NOK_Status" IN (\'ONTVANG\', \'KENNIS_GENEEM\')',
+            name='ck_noodgeval_kennisname_status',
+        ),
+    )
+
+    Kennisname_ID         = Column(Integer, primary_key=True, index=True)
+    Noodgeval_ID          = Column(Integer, ForeignKey('noodgeval.Noodgeval_ID', ondelete='CASCADE'), nullable=False, index=True)
+    Gebruiker_ID          = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID', ondelete='CASCADE'), nullable=False, index=True)
+    NOK_Status            = Column(String(20), nullable=False, default='ONTVANG')
+    NOK_Ontvang_Op        = Column(DateTime, nullable=True)
+    NOK_Kennis_Geneem_Op  = Column(DateTime, nullable=True)
+    Gewysig_Op            = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
