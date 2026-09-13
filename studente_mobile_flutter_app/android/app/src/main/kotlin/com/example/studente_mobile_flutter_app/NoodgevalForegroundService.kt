@@ -7,8 +7,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Log
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
@@ -17,6 +22,7 @@ import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import org.json.JSONObject
 import java.util.concurrent.Executors
 import kotlin.math.abs
 
@@ -25,6 +31,10 @@ class NoodgevalForegroundService : Service() {
         const val EXTRA_MQTT_HOST = "mqtt_host"
         const val EXTRA_MQTT_PORT = "mqtt_port"
         const val EXTRA_KAMPUS_ID = "kampus_id"
+        const val EXTRA_COMMAND = "command"
+        const val EXTRA_NOODGEVAL_ID = "noodgeval_id"
+
+        const val COMMAND_ACK = "ACK"
 
         private const val PREFS = "moon_noodgeval_service"
         private const val PREF_HOST = "host"
@@ -32,8 +42,9 @@ class NoodgevalForegroundService : Service() {
         private const val PREF_KAMPUS_ID = "kampus_id"
 
         private const val SERVICE_CHANNEL_ID = "moon_noodgeval_service_native"
-        private const val ALERT_CHANNEL_ID = "moon_noodgeval_alerts_native"
+        private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native"
         private const val SERVICE_NOTIFICATION_ID = 7001
+        private const val ALERT_NOTIFICATION_ID = 8001
         private const val TAG = "MOON-NoodgevalService"
     }
 
@@ -51,6 +62,9 @@ class NoodgevalForegroundService : Service() {
     @Volatile
     private var kampusId: Int = 1
 
+    private var alarmPlayer: MediaPlayer? = null
+    private var activeNoodgevalId: String? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
@@ -58,6 +72,12 @@ class NoodgevalForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getStringExtra(EXTRA_COMMAND) == COMMAND_ACK) {
+            val id = intent.getStringExtra(EXTRA_NOODGEVAL_ID)
+            acknowledgeLocally(id)
+            return START_STICKY
+        }
+
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
 
         mqttHost = intent?.getStringExtra(EXTRA_MQTT_HOST)
@@ -83,19 +103,17 @@ class NoodgevalForegroundService : Service() {
             .apply()
 
         connectMqttAsync()
-
-        // Android mag die proses later herstel indien dit om geheue-redes gestop word.
         return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Belangrik: moenie die service stop wanneer die gebruiker die Flutter task
-        // uit Recent Apps weg-swipe nie.
         Log.i(TAG, "Flutter task verwyder; native noodgevaldiens bly aktief.")
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        stopAlarmAndVibration()
+
         try {
             mqttClient?.let { client ->
                 if (client.isConnected) {
@@ -165,13 +183,13 @@ class NoodgevalForegroundService : Service() {
                     }
 
                     override fun messageArrived(topic: String?, message: MqttMessage?) {
-                        val payload = message?.payload
+                        val rawPayload = message?.payload
                             ?.toString(Charsets.UTF_8)
-                            ?.takeIf { it.isNotBlank() }
-                            ?: "Noodgevalboodskap ontvang"
+                            ?.trim()
+                            .orEmpty()
 
-                        Log.i(TAG, "MQTT ONTVANG [$topic]: $payload")
-                        showAlertNotification(payload)
+                        Log.i(TAG, "MQTT ONTVANG [$topic]: $rawPayload")
+                        handleIncomingPayload(rawPayload)
                     }
 
                     override fun deliveryComplete(token: IMqttDeliveryToken?) {
@@ -208,6 +226,202 @@ class NoodgevalForegroundService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "MQTT subscribe fout", e)
         }
+    }
+
+    private fun handleIncomingPayload(rawPayload: String) {
+        if (rawPayload.isBlank()) {
+            return
+        }
+
+        // STAP 3B:
+        // Net JSON met status=AKTIEF begin die alarm.
+        // Plain-text MQTT bly 'n gewone stille toetsnotification.
+        val json = try {
+            JSONObject(rawPayload)
+        } catch (_: Exception) {
+            showTestNotification(rawPayload)
+            return
+        }
+
+        val status = json.optString("status", "").trim().uppercase()
+        val noodgevalId = json.opt("noodgeval_id")?.toString()
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: "local-${System.currentTimeMillis()}"
+
+        when (status) {
+            "AKTIEF", "ACTIVE" -> {
+                val titel = json.optString("titel", "MOON NOODGEVAL")
+                    .ifBlank { "MOON NOODGEVAL" }
+                val boodskap = json.optString(
+                    "boodskap",
+                    "Noodgevalboodskap ontvang."
+                ).ifBlank { "Noodgevalboodskap ontvang." }
+
+                startEmergencyAlarm(
+                    noodgevalId = noodgevalId,
+                    titel = titel,
+                    boodskap = boodskap,
+                )
+            }
+
+            "GESTOP", "GESLUIT", "GEKANSELLEER", "STOP", "CANCELLED", "CLOSED" -> {
+                stopAlarmAndVibration()
+                activeNoodgevalId = null
+                getSystemService(NotificationManager::class.java)
+                    .cancel(ALERT_NOTIFICATION_ID)
+
+                updateForegroundNotification(
+                    "Geen aktiewe noodgeval • MQTT gekoppel"
+                )
+            }
+
+            else -> {
+                showTestNotification(rawPayload)
+            }
+        }
+    }
+
+    private fun startEmergencyAlarm(
+        noodgevalId: String,
+        titel: String,
+        boodskap: String,
+    ) {
+        activeNoodgevalId = noodgevalId
+
+        startAlarmSound()
+        startVibration()
+        showEmergencyNotification(
+            noodgevalId = noodgevalId,
+            titel = titel,
+            boodskap = boodskap,
+        )
+
+        updateForegroundNotification(
+            "AKTIEWE NOODGEVAL • kennisname word vereis"
+        )
+    }
+
+    private fun startAlarmSound() {
+        try {
+            if (alarmPlayer?.isPlaying == true) {
+                return
+            }
+
+            alarmPlayer?.release()
+            alarmPlayer = null
+
+            val alarmUri =
+                Settings.System.DEFAULT_ALARM_ALERT_URI
+                    ?: Settings.System.DEFAULT_RINGTONE_URI
+                    ?: Settings.System.DEFAULT_NOTIFICATION_URI
+
+            val player = MediaPlayer()
+            player.setDataSource(applicationContext, alarmUri)
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            player.isLooping = true
+            player.prepare()
+            player.start()
+
+            alarmPlayer = player
+        } catch (e: Exception) {
+            Log.e(TAG, "Kon nie alarmklank begin nie", e)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun startVibration() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getSystemService(VibratorManager::class.java)
+                manager.defaultVibrator
+            } else {
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+
+            if (!vibrator.hasVibrator()) {
+                return
+            }
+
+            val pattern = longArrayOf(
+                0,
+                900, 450,
+                900, 450,
+                1400, 700
+            )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(pattern, 0)
+                )
+            } else {
+                vibrator.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Kon nie vibrasie begin nie", e)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopAlarmAndVibration() {
+        try {
+            alarmPlayer?.let { player ->
+                if (player.isPlaying) {
+                    player.stop()
+                }
+                player.release()
+            }
+        } catch (_: Exception) {
+        } finally {
+            alarmPlayer = null
+        }
+
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getSystemService(VibratorManager::class.java)
+                manager.defaultVibrator
+            } else {
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+            vibrator.cancel()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun acknowledgeLocally(noodgevalId: String?) {
+        if (
+            noodgevalId != null &&
+            activeNoodgevalId != null &&
+            noodgevalId != activeNoodgevalId
+        ) {
+            Log.w(
+                TAG,
+                "ACK vir ou noodgeval geïgnoreer: $noodgevalId "
+                    + "(aktief=$activeNoodgevalId)"
+            )
+            return
+        }
+
+        stopAlarmAndVibration()
+
+        getSystemService(NotificationManager::class.java)
+            .cancel(ALERT_NOTIFICATION_ID)
+
+        updateForegroundNotification(
+            "Kennis geneem • MQTT gekoppel • kampus $kampusId"
+        )
+
+        Log.i(
+            TAG,
+            "EK HET KENNIS GENEEM: ${activeNoodgevalId ?: noodgevalId ?: "onbekend"}"
+        )
+
+        // In die volgende fase POST ons hierdie acknowledgement na FastAPI/PostgreSQL.
+        activeNoodgevalId = null
     }
 
     private fun brokerUri(): String {
@@ -274,20 +488,73 @@ class NoodgevalForegroundService : Service() {
         return builder.build()
     }
 
-    private fun showAlertNotification(payload: String) {
+    private fun showEmergencyNotification(
+        noodgevalId: String,
+        titel: String,
+        boodskap: String,
+    ) {
         val manager = getSystemService(NotificationManager::class.java)
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
 
-        val pendingIntent = if (launchIntent != null) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val contentPendingIntent = if (launchIntent != null) {
             PendingIntent.getActivity(
                 this,
-                1,
+                10,
                 launchIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
         } else {
             null
         }
+
+        val ackIntent = Intent(
+            this,
+            NoodgevalActionReceiver::class.java
+        ).apply {
+            action = NoodgevalActionReceiver.ACTION_ACK
+            putExtra(EXTRA_NOODGEVAL_ID, noodgevalId)
+        }
+
+        val ackPendingIntent = PendingIntent.getBroadcast(
+            this,
+            11,
+            ackIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, ALERT_CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+                .setPriority(Notification.PRIORITY_MAX)
+        }
+
+        builder
+            .setSmallIcon(R.drawable.ic_stat_moon)
+            .setContentTitle("🚨 $titel")
+            .setContentText(boodskap)
+            .setStyle(Notification.BigTextStyle().bigText(boodskap))
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .addAction(
+                R.drawable.ic_stat_moon,
+                "EK HET KENNIS GENEEM",
+                ackPendingIntent
+            )
+
+        if (contentPendingIntent != null) {
+            builder.setContentIntent(contentPendingIntent)
+        }
+
+        manager.notify(
+            ALERT_NOTIFICATION_ID,
+            builder.build()
+        )
+    }
+
+    private fun showTestNotification(payload: String) {
+        val manager = getSystemService(NotificationManager::class.java)
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, ALERT_CHANNEL_ID)
@@ -298,21 +565,16 @@ class NoodgevalForegroundService : Service() {
 
         builder
             .setSmallIcon(R.drawable.ic_stat_moon)
-            .setContentTitle("🚨 MOON MQTT TOETS ONTVANG")
+            .setContentTitle("MOON MQTT TOETS ONTVANG")
             .setContentText(payload)
             .setStyle(Notification.BigTextStyle().bigText(payload))
             .setAutoCancel(true)
-            .setCategory(Notification.CATEGORY_ALARM)
 
-        if (pendingIntent != null) {
-            builder.setContentIntent(pendingIntent)
-        }
-
-        val notificationId = 8000 + abs(
+        val id = 8200 + abs(
             (System.currentTimeMillis() % 100000).toInt()
         )
 
-        manager.notify(notificationId, builder.build())
+        manager.notify(id, builder.build())
     }
 
     private fun createNotificationChannels() {
@@ -332,12 +594,14 @@ class NoodgevalForegroundService : Service() {
             enableVibration(false)
         }
 
+        // Die alarmklank/vibrasie word deur die native service self beheer.
+        // Die notification channel is stil sodat ons nie twee klanke gelyk kry nie.
         val alertChannel = NotificationChannel(
             ALERT_CHANNEL_ID,
             "MOON Noodgeval Waarskuwings",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Noodgeval-toetsboodskappe vanaf MOON."
+            description = "Aktiewe kampus-noodgevalle vanaf MOON."
             setSound(null, null)
             enableVibration(false)
         }
