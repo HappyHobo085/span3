@@ -14,7 +14,7 @@ class NoodgevalNotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    const androidSettings = AndroidInitializationSettings('ic_launcher');
+    const androidSettings = AndroidInitializationSettings('ic_stat_moon');
     const settings = InitializationSettings(android: androidSettings);
 
     await _plugin.initialize(settings);
