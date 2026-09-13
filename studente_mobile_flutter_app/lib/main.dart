@@ -1,8 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_background/flutter_background.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_shared.dart';
@@ -12,88 +11,44 @@ import 'opsigter.dart';
 import 'sekuriteitswag.dart';
 import 'admin.dart';
 import 'moon_api.dart';
-import 'mqtt_noodgeval_service.dart';
-import 'noodgeval_notification_service.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-Future<void> _enableNoodgevalBackgroundExecution() async {
-  const androidConfig = FlutterBackgroundAndroidConfig(
-    notificationTitle: 'MOON Noodgevaldiens aktief',
-    notificationText: 'MOON luister vir kampus-noodgevalle.',
-    notificationImportance: AndroidNotificationImportance.normal,
-    enableWifiLock: true,
-  );
+const MethodChannel _noodgevalServiceChannel =
+    MethodChannel('moon/noodgeval_service');
 
-  final initialized =
-      await FlutterBackground.initialize(androidConfig: androidConfig);
+const String _mqttHost = String.fromEnvironment(
+  'MQTT_HOST',
+  defaultValue: '10.0.2.2',
+);
 
-  if (!initialized) {
-    throw Exception(
-      'Android het nie die nodige agtergrondtoestemming toegestaan nie.',
-    );
-  }
+const int _mqttPort = int.fromEnvironment(
+  'MQTT_PORT',
+  defaultValue: 1883,
+);
 
-  if (!FlutterBackground.isBackgroundExecutionEnabled) {
-    final enabled = await FlutterBackground.enableBackgroundExecution();
-    if (!enabled) {
-      throw Exception('MOON kon nie die foreground service begin nie.');
-    }
-  }
-}
-
-Future<void> _startMqttStep3Listener() async {
+Future<void> _startNativeNoodgevalService() async {
   try {
-    await NoodgevalNotificationService.instance.initialize();
-    await _enableNoodgevalBackgroundExecution();
-
-    await NoodgevalMqttService.instance.connect(
-      // STAP 3 toets nog doelbewus Kampus 1.
-      // Later lees ons die regte Kampus_ID uit die gebruikerprofiel.
-      kampusId: 1,
-      onMessage: (topic, payload) {
-        debugPrint('MQTT ONTVANG [$topic]: $payload');
-
-        // Hierdie system notification is doelbewus stil in Stap 3.
-        // Dit bewys dat MQTT ontvang is selfs nadat die app wegge-swipe is.
-        unawaited(
-          NoodgevalNotificationService.instance.showMqttTest(
-            topic: topic,
-            payload: payload,
-          ),
-        );
-
-        // As die Flutter UI nog sigbaar is, wys ons ook die bestaande rooi SnackBar.
-        final messenger = rootScaffoldMessengerKey.currentState;
-        messenger
-          ?..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              duration: const Duration(seconds: 8),
-              backgroundColor: Colors.red.shade800,
-              content: Text(
-                '🚨 MQTT TOETS ONTVANG\n$payload',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          );
+    final started = await _noodgevalServiceChannel.invokeMethod<bool>(
+      'start',
+      <String, dynamic>{
+        'host': _mqttHost,
+        'port': _mqttPort,
+        // STAP 3 toets doelbewus nog kampus 1.
+        // Volgende fase koppel ons dit aan die ingetekende gebruiker se Kampus_ID.
+        'kampusId': 1,
       },
     );
 
     debugPrint(
-      'MQTT + FOREGROUND SERVICE AKTIEF: '
-      '${NoodgevalMqttService.host}:${NoodgevalMqttService.port} '
-      '-> ${NoodgevalMqttService.instance.currentTopic}',
+      'NATIVE NOODGEVAL SERVICE: '
+      'started=$started host=$_mqttHost port=$_mqttPort kampus=1',
     );
   } catch (e) {
-    debugPrint('MQTT/BACKGROUND ERROR: $e');
+    debugPrint('NATIVE NOODGEVAL SERVICE ERROR: $e');
 
-    final messenger = rootScaffoldMessengerKey.currentState;
-    messenger?.showSnackBar(
+    rootScaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 8),
         backgroundColor: Colors.orange.shade800,
@@ -260,9 +215,10 @@ class _LoginPageState extends State<LoginPage> {
 
       await MoonApi.getMyProfile();
 
-      // MQTT is nie deel van login-sukses nie; dit begin in die agtergrond.
-      // As die plaaslike broker nie bereikbaar is nie, kan die gebruiker steeds inteken.
-      unawaited(_startMqttStep3Listener());
+      // Begin die native Android foreground service.
+      // MQTT loop dan buite die Flutter UI en bly aktief wanneer die app
+      // uit Recent Apps wegge-swipe word.
+      await _startNativeNoodgevalService();
 
       if (!mounted) return;
 

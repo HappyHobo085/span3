@@ -37,9 +37,11 @@
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <service
-            android:name="de.julianassmann.flutter_background.IsolateHolderService"
+            android:name=".NoodgevalForegroundService"
             android:exported="false"
-            android:foregroundServiceType="remoteMessaging" />
+            android:stopWithTask="false"
+            android:foregroundServiceType="remoteMessaging"
+            android:process=":noodgeval" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
