@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,67 @@ import 'opsigter.dart';
 import 'sekuriteitswag.dart';
 import 'admin.dart';
 import 'moon_api.dart';
+import 'mqtt_noodgeval_service.dart';
+
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
+Future<void> _startMqttStep2Listener() async {
+  try {
+    await NoodgevalMqttService.instance.connect(
+      // STAP 2 gebruik doelbewus kampus 1 vir die eerste end-to-end toets.
+      // In die volgende fase lees ons die werklike Kampus_ID uit die gebruikerprofiel.
+      kampusId: 1,
+      onMessage: (topic, payload) {
+        debugPrint('MQTT ONTVANG [$topic]: $payload');
+
+        final messenger = rootScaffoldMessengerKey.currentState;
+        messenger
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 8),
+              backgroundColor: Colors.red.shade800,
+              content: Text(
+                '🚨 MQTT TOETS ONTVANG\n$payload',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          );
+      },
+    );
+
+    debugPrint(
+      'MQTT GEKOPPEL: ${NoodgevalMqttService.host}:${NoodgevalMqttService.port} '
+      '-> ${NoodgevalMqttService.instance.currentTopic}',
+    );
+
+    rootScaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.green.shade700,
+        content: Text(
+          'MQTT gekoppel — luister na '
+          '${NoodgevalMqttService.instance.currentTopic}',
+        ),
+      ),
+    );
+  } catch (e) {
+    debugPrint('MQTT CONNECT ERROR: $e');
+    rootScaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        backgroundColor: Colors.orange.shade800,
+        content: Text(
+          'MQTT kon nie koppel nie: $e',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
 
 void main() {
   runApp(const MyApp());
@@ -63,6 +125,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       title: 'MOON — Kampus Bestuur',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -162,6 +225,10 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await MoonApi.getMyProfile();
+
+      // MQTT is nie deel van login-sukses nie; dit begin in die agtergrond.
+      // As die plaaslike broker nie bereikbaar is nie, kan die gebruiker steeds inteken.
+      unawaited(_startMqttStep2Listener());
 
       if (!mounted) return;
 
