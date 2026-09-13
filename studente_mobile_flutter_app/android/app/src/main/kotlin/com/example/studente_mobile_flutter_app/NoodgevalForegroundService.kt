@@ -8,7 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
-import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import android.os.VibrationEffect
@@ -42,7 +42,7 @@ class NoodgevalForegroundService : Service() {
         private const val PREF_KAMPUS_ID = "kampus_id"
 
         private const val SERVICE_CHANNEL_ID = "moon_noodgeval_service_native"
-        private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native"
+        private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native_v2"
         private const val SERVICE_NOTIFICATION_ID = 7001
         private const val ALERT_NOTIFICATION_ID = 8001
         private const val TAG = "MOON-NoodgevalService"
@@ -62,7 +62,6 @@ class NoodgevalForegroundService : Service() {
     @Volatile
     private var kampusId: Int = 1
 
-    private var alarmPlayer: MediaPlayer? = null
     private var activeNoodgevalId: String? = null
 
     override fun onCreate() {
@@ -288,7 +287,8 @@ class NoodgevalForegroundService : Service() {
     ) {
         activeNoodgevalId = noodgevalId
 
-        startAlarmSound()
+        // Klank word deur Android se alarm-notification channel beheer.
+        // Vibrasie word ook direk geloop sodat dit aanhou totdat die gebruiker erken.
         startVibration()
         showEmergencyNotification(
             noodgevalId = noodgevalId,
@@ -299,38 +299,6 @@ class NoodgevalForegroundService : Service() {
         updateForegroundNotification(
             "AKTIEWE NOODGEVAL • kennisname word vereis"
         )
-    }
-
-    private fun startAlarmSound() {
-        try {
-            if (alarmPlayer?.isPlaying == true) {
-                return
-            }
-
-            alarmPlayer?.release()
-            alarmPlayer = null
-
-            val alarmUri =
-                Settings.System.DEFAULT_ALARM_ALERT_URI
-                    ?: Settings.System.DEFAULT_RINGTONE_URI
-                    ?: Settings.System.DEFAULT_NOTIFICATION_URI
-
-            val player = MediaPlayer()
-            player.setDataSource(applicationContext, alarmUri)
-            player.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            player.isLooping = true
-            player.prepare()
-            player.start()
-
-            alarmPlayer = player
-        } catch (e: Exception) {
-            Log.e(TAG, "Kon nie alarmklank begin nie", e)
-        }
     }
 
     @Suppress("DEPRECATION")
@@ -355,8 +323,18 @@ class NoodgevalForegroundService : Service() {
             )
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val amplitudes = intArrayOf(
+                    0,
+                    255, 0,
+                    255, 0,
+                    255, 0
+                )
                 vibrator.vibrate(
-                    VibrationEffect.createWaveform(pattern, 0)
+                    VibrationEffect.createWaveform(
+                        pattern,
+                        amplitudes,
+                        0
+                    )
                 )
             } else {
                 vibrator.vibrate(pattern, 0)
@@ -369,18 +347,6 @@ class NoodgevalForegroundService : Service() {
     @Suppress("DEPRECATION")
     private fun stopAlarmAndVibration() {
         try {
-            alarmPlayer?.let { player ->
-                if (player.isPlaying) {
-                    player.stop()
-                }
-                player.release()
-            }
-        } catch (_: Exception) {
-        } finally {
-            alarmPlayer = null
-        }
-
-        try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val manager = getSystemService(VibratorManager::class.java)
                 manager.defaultVibrator
@@ -388,8 +354,13 @@ class NoodgevalForegroundService : Service() {
                 getSystemService(VIBRATOR_SERVICE) as Vibrator
             }
             vibrator.cancel()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Kon nie vibrasie stop nie", e)
         }
+
+        // FLAG_INSISTENT se alarmklank stop wanneer die notification gekanselleer word.
+        getSystemService(NotificationManager::class.java)
+            .cancel(ALERT_NOTIFICATION_ID)
     }
 
     private fun acknowledgeLocally(noodgevalId: String?) {
@@ -547,9 +518,16 @@ class NoodgevalForegroundService : Service() {
             builder.setContentIntent(contentPendingIntent)
         }
 
+        val emergencyNotification = builder.build().apply {
+            // Android herhaal die channel se alarmklank totdat hierdie
+            // notification gekanselleer word.
+            flags = flags or Notification.FLAG_INSISTENT
+            flags = flags or Notification.FLAG_NO_CLEAR
+        }
+
         manager.notify(
             ALERT_NOTIFICATION_ID,
-            builder.build()
+            emergencyNotification
         )
     }
 
@@ -557,10 +535,10 @@ class NoodgevalForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, ALERT_CHANNEL_ID)
+            Notification.Builder(this, SERVICE_CHANNEL_ID)
         } else {
             Notification.Builder(this)
-                .setPriority(Notification.PRIORITY_HIGH)
+                .setPriority(Notification.PRIORITY_DEFAULT)
         }
 
         builder
@@ -594,16 +572,35 @@ class NoodgevalForegroundService : Service() {
             enableVibration(false)
         }
 
-        // Die alarmklank/vibrasie word deur die native service self beheer.
-        // Die notification channel is stil sodat ons nie twee klanke gelyk kry nie.
+        // NUWE channel ID (_v2) is doelbewus belangrik:
+        // Android cache notification-channel klank/vibrasie instellings.
+        // Die vorige channel was stil geskep, en daardie instellings kan nie
+        // betroubaar programmaties verander word nadat die channel bestaan nie.
+        val alarmUri =
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val alarmAudioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         val alertChannel = NotificationChannel(
             ALERT_CHANNEL_ID,
-            "MOON Noodgeval Waarskuwings",
+            "MOON Noodgeval Alarm",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Aktiewe kampus-noodgevalle vanaf MOON."
-            setSound(null, null)
-            enableVibration(false)
+            description = "Harde MOON kampus-noodgevalle."
+            setSound(alarmUri, alarmAudioAttributes)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(
+                0,
+                900, 450,
+                900, 450,
+                1400, 700
+            )
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
 
         manager.createNotificationChannel(serviceChannel)
