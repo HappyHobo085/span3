@@ -17,7 +17,7 @@ from migrations import run_pre_migrations, run_migrations
 
 from routers import (
     auth_routes, gebruikers, kampus, koshuis, lokasie,
-    nfc, wagte, student, dashboard, admin, saamry, besoekers, events,
+    nfc, wagte, student, dashboard, admin, saamry, besoekers, events, noodgeval,
 )
 
 # Rename legacy misspelled event tables BEFORE SQLAlchemy checks/creates tables.
@@ -94,6 +94,7 @@ app.include_router(admin.router)
 app.include_router(saamry.router)
 app.include_router(besoekers.router)
 app.include_router(events.router)
+app.include_router(noodgeval.router)
 
 # --- Root ---
 

@@ -16,6 +16,20 @@ services:
     cap_drop:
       - ALL
 
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: moon_mqtt
+    restart: always
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./Mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   backend:
     build: ./Backend
     container_name: moon_backend
@@ -25,9 +39,14 @@ services:
       - "8000:8000"
     environment:
       - DB_HOST=db
+      - MQTT_HOST=mqtt
+      - MQTT_PORT=1883
+      - MQTT_TOPIC_PREFIX=moon/noodgeval
     depends_on:
       db:
         condition: service_healthy
+      mqtt:
+        condition: service_started
     read_only: true
     tmpfs:
       - /tmp

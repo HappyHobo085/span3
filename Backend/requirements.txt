@@ -9,3 +9,4 @@ pydantic[email]
 python-multipart
 itsdangerous
 APScheduler>=3.10,<4
+paho-mqtt>=2.1,<3

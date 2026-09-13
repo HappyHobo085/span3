@@ -815,3 +815,14 @@ class WagteEventGuestDeclineRequest(BaseModel):
     publiek_rsvp_id: int
     kampus_id: int
     metode: str = "QR"
+
+# --- NOODGEVAL / MQTT STAP 1 ---
+class NoodgevalMqttToetsRequest(BaseModel):
+    kampus_id: int = Field(..., gt=0)
+    titel: str = Field(default="MQTT TOETS", min_length=1, max_length=120)
+    boodskap: str = Field(
+        default="MOON MQTT toetsboodskap",
+        min_length=1,
+        max_length=500,
+    )
+
