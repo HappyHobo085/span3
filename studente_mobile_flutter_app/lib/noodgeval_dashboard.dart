@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'app_shared.dart';
 import 'moon_api.dart';
 
-/// Step 8: Opsigter se live noodkontrole-skerm.
+/// Step 9: Opsigter se live noodbeheer + noodkontrole-skerm.
 ///
 /// Belangrik:
 /// - Die WebSocket is slegs oop terwyl daar 'n AKTIEWE noodgeval is.
@@ -40,6 +40,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
   bool _loadingCampuses = true;
   bool _checkingEmergency = false;
   bool _socketConnected = false;
+  bool _emergencyActionBusy = false;
   bool _disposed = false;
   String? _error;
   String _query = '';
@@ -303,6 +304,261 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     _reconnectTimer = Timer(const Duration(seconds: 2), () {
       if (!_disposed && _activeEmergencyId != null) _connectSocket();
     });
+  }
+
+  Future<Map<String, String>?> _showActivateDialog() async {
+    final titleController = TextEditingController(text: 'KAMPUS NOODGEVAL');
+    final messageController = TextEditingController(
+      text: 'Noodgeval op ${_campus?.naam ?? 'die kampus'}. Neem asseblief kennis en volg die noodinstruksies.',
+    );
+
+    try {
+      return await showDialog<Map<String, String>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            title: Row(
+              children: [
+                const Icon(Icons.emergency_rounded, color: Colors.red),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Aktiveer noodgeval',
+                    style: GoogleFonts.inter(color: kText1, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Hierdie aksie stuur onmiddellik die MQTT-noodsein na ${_campus?.naam ?? 'die kampus'}.',
+                    style: GoogleFonts.inter(color: Colors.red.shade200, fontSize: 11, height: 1.4),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: titleController,
+                    maxLength: 150,
+                    style: GoogleFonts.inter(color: kText1),
+                    decoration: const InputDecoration(
+                      labelText: 'Titel',
+                      hintText: 'KAMPUS NOODGEVAL',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: messageController,
+                    minLines: 3,
+                    maxLines: 6,
+                    maxLength: 2000,
+                    style: GoogleFonts.inter(color: kText1),
+                    decoration: const InputDecoration(
+                      labelText: 'Boodskap',
+                      hintText: 'Wat moet gebruikers weet?',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('KANSELLEER'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+                onPressed: () {
+                  final title = titleController.text.trim();
+                  final message = messageController.text.trim();
+                  if (title.isEmpty || message.isEmpty) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      const SnackBar(content: Text('Titel en boodskap is verpligtend.')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, <String, String>{
+                    'titel': title,
+                    'boodskap': message,
+                  });
+                },
+                icon: const Icon(Icons.warning_amber_rounded),
+                label: const Text('STUUR NOODSEIN'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      titleController.dispose();
+      messageController.dispose();
+    }
+  }
+
+  Future<void> _activateEmergency() async {
+    final campusId = _campus?.kampusId;
+    if (campusId == null || _emergencyActionBusy) return;
+
+    final details = await _showActivateDialog();
+    if (details == null || !mounted) return;
+
+    setState(() {
+      _emergencyActionBusy = true;
+      _error = null;
+    });
+    _idlePollTimer?.cancel();
+
+    try {
+      final response = await http.post(
+        Uri.parse('${MoonApi.baseUrl}/noodgeval'),
+        headers: <String, String>{
+          ..._authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'kampus_id': campusId,
+          'tipe': 'NOODGEVAL',
+          'titel': details['titel'],
+          'boodskap': details['boodskap'],
+        }),
+      );
+      final decoded = _decodeApi(response, fallback: 'Noodgeval kon nie geaktiveer word nie.');
+      final dataRaw = decoded['data'];
+      final data = dataRaw is Map ? Map<String, dynamic>.from(dataRaw) : <String, dynamic>{};
+      final emergencyRaw = data['noodgeval'];
+      final emergency = emergencyRaw is Map
+          ? Map<String, dynamic>.from(emergencyRaw)
+          : <String, dynamic>{};
+      final id = _readInt(emergency, const ['Noodgeval_ID', 'noodgeval_id']);
+
+      if (!mounted) return;
+      setState(() {
+        _activeEmergencyId = id;
+        _snapshot = null;
+        _error = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Noodgeval geaktiveer — MQTT-noodsein is gestuur.'),
+        ),
+      );
+      await _checkActiveEmergency(force: true);
+    } catch (e) {
+      // Indien die DB-skep suksesvol was maar MQTT gefaal het, kan die API 503 gee.
+      // Kontroleer daarom die gesaghebbende DB-status voordat ons terugkeer idle toe.
+      await _checkActiveEmergency(force: true);
+      if (!mounted) return;
+      setState(() => _error = _cleanError(e));
+      _showError(_cleanError(e));
+    } finally {
+      if (mounted) setState(() => _emergencyActionBusy = false);
+    }
+  }
+
+  Future<bool> _confirmCloseEmergency() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            title: Text(
+              'Sluit noodgeval?',
+              style: GoogleFonts.inter(color: kText1, fontWeight: FontWeight.w900),
+            ),
+            content: Text(
+              'Hierdie aksie stuur die GESLUIT MQTT-boodskap. Die noodalarm op toestelle moet dan stop. Sluit slegs wanneer die noodgeval werklik verby is.',
+              style: GoogleFonts.inter(color: kText2, fontSize: 12, height: 1.45),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('KANSELLEER'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: const Text('JA, SLUIT NOOD'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _closeEmergency() async {
+    final emergencyId = _activeEmergencyId;
+    if (emergencyId == null || _emergencyActionBusy) return;
+    if (!await _confirmCloseEmergency() || !mounted) return;
+
+    setState(() {
+      _emergencyActionBusy = true;
+      _error = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('${MoonApi.baseUrl}/noodgeval/$emergencyId/sluit'),
+        headers: _authHeaders,
+      );
+      _decodeApi(response, fallback: 'Noodgeval kon nie gesluit word nie.');
+
+      if (!mounted) return;
+      setState(() {
+        _activeEmergencyId = null;
+        _snapshot = null;
+        _busyUsers.clear();
+        _error = null;
+      });
+      await _disconnectSocket();
+      _startIdlePolling();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Noodgeval gesluit — MQTT-stopsein is gestuur.'),
+        ),
+      );
+    } catch (e) {
+      // Sluit kan reeds in die DB gebeur het voordat 'n MQTT-fout terugkom.
+      await _checkActiveEmergency(force: true);
+      if (!mounted) return;
+      setState(() => _error = _cleanError(e));
+      _showError(_cleanError(e));
+    } finally {
+      if (mounted) setState(() => _emergencyActionBusy = false);
+    }
+  }
+
+  Future<void> _resendEmergency() async {
+    final emergencyId = _activeEmergencyId;
+    if (emergencyId == null || _emergencyActionBusy) return;
+
+    setState(() => _emergencyActionBusy = true);
+    try {
+      final response = await http.post(
+        Uri.parse('${MoonApi.baseUrl}/noodgeval/$emergencyId/herstuur'),
+        headers: _authHeaders,
+      );
+      _decodeApi(response, fallback: 'Noodsein kon nie herstuur word nie.');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Noodsein weer via MQTT gestuur.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_cleanError(e));
+    } finally {
+      if (mounted) setState(() => _emergencyActionBusy = false);
+    }
   }
 
   Future<void> _markPerson(int gebruikerId, String status) async {
@@ -755,13 +1011,38 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Die WebSocket is toe. MQTT bly die agtergrond-noodkanaal. Hierdie skerm kontroleer liggies vir ’n nuwe aktiewe noodgeval.',
+                'Geen live WebSocket is nodig totdat ’n nood begin nie. MQTT bly die agtergrond-noodkanaal.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(color: kText2, fontSize: 11, height: 1.45),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  onPressed: _emergencyActionBusy || _campus?.kampusId == null
+                      ? null
+                      : _activateEmergency,
+                  icon: _emergencyActionBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.emergency_rounded),
+                  label: const Text('AKTIVEER NOODGEVAL'),
+                ),
+              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
-                onPressed: _checkingEmergency ? null : () => _checkActiveEmergency(force: true),
+                onPressed: _checkingEmergency || _emergencyActionBusy
+                    ? null
+                    : () => _checkActiveEmergency(force: true),
                 icon: _checkingEmergency
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.refresh_rounded),
@@ -869,6 +1150,42 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _emergencyActionBusy ? null : _resendEmergency,
+                  icon: const Icon(Icons.campaign_rounded),
+                  label: const Text('HERSTUUR'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange.shade300,
+                    side: BorderSide(color: Colors.orange.withOpacity(0.55)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _emergencyActionBusy ? null : _closeEmergency,
+                  icon: _emergencyActionBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.stop_circle_outlined),
+                  label: const Text('SLUIT NOOD'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Row(
