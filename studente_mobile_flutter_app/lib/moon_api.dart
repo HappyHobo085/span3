@@ -802,7 +802,10 @@ class MoonApi {
   MoonApi._();
 
   /// Verander na jou backend IP
-  static String baseUrl = "https://humorous-endurance-production-ee64.up.railway.app";
+  static String baseUrl = const String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://humorous-endurance-production-ee64.up.railway.app',
+  );
 
   /// Publieke MOON webwerf vir Event-deel skakels.
   static const String publicSiteBaseUrl =
