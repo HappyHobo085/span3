@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, text
 from sqlalchemy.orm import Session
 
 import auth
@@ -202,8 +202,27 @@ def _build_snapshot(kampus_id: int) -> dict[str, Any]:
             )
             ack_by_user = {row.Gebruiker_ID: row for row in ack_rows}
 
+        # Manual opsigter roll-call decisions are separate from phone acknowledgement.
+        control_by_user: dict[int, dict[str, Any]] = {}
+        if emergency is not None:
+            control_rows = db.execute(
+                text("""
+                    SELECT
+                        nk.\"Gebruiker_ID\",
+                        nk.\"Gemerk_Deur_ID\",
+                        nk.\"NKK_Status\",
+                        nk.\"NKK_Gemerk_Op\"
+                    FROM noodgeval_kontrole nk
+                    WHERE nk.\"Noodgeval_ID\" = :noodgeval_id
+                """),
+                {"noodgeval_id": emergency.Noodgeval_ID},
+            ).mappings().all()
+            control_by_user = {int(row["Gebruiker_ID"]): dict(row) for row in control_rows}
+
         ontvang = 0
         kennis = 0
+        daar_count = 0
+        nie_daar_count = 0
         for person in people:
             ack = ack_by_user.get(person["gebruiker_id"])
             if emergency is None:
@@ -224,12 +243,52 @@ def _build_snapshot(kampus_id: int) -> dict[str, Any]:
                 else:
                     status = "ONTVANG"
 
+            control = control_by_user.get(person["gebruiker_id"])
+            if emergency is None:
+                control_status = "GEEN_AKTIEWE_NOODGEVAL"
+                control_marked_at = None
+                control_marked_by = None
+            elif control is None:
+                control_status = "WAG"
+                control_marked_at = None
+                control_marked_by = None
+            else:
+                control_status = str(control["NKK_Status"])
+                control_marked_at = _iso(control["NKK_Gemerk_Op"])
+                control_marked_by = control["Gemerk_Deur_ID"]
+                if control_status == "DAAR":
+                    daar_count += 1
+                elif control_status == "NIE_DAAR":
+                    nie_daar_count += 1
+
             person["noodgeval_status"] = status
             person["ontvang_op"] = ontvang_op
             person["kennis_geneem_op"] = kennis_op
+            person["kontrole_status"] = control_status
+            person["kontrole_gemerk_op"] = control_marked_at
+            person["kontrole_gemerk_deur_id"] = control_marked_by
 
-        # Name order is useful for the later mobile search/list screen.
+        # Name order is useful for mobile search/list screen.
         people.sort(key=lambda p: (p["van"].casefold(), p["naam"].casefold(), p["gebruiker_id"]))
+
+        # UI-ready sections:
+        # - DAAR disappears from the working list.
+        # - NIE_DAAR moves to the bottom list.
+        # - WAG stays in the main working list.
+        wag_vir_kontrole = (
+            [p for p in people if p["kontrole_status"] == "WAG"]
+            if emergency is not None
+            else []
+        )
+        nie_daar_nie = (
+            [p for p in people if p["kontrole_status"] == "NIE_DAAR"]
+            if emergency is not None
+            else []
+        )
+        nie_daar_nie.sort(
+            key=lambda p: p.get("kontrole_gemerk_op") or "",
+            reverse=True,
+        )
 
         active_payload = None
         if emergency is not None:
@@ -259,8 +318,15 @@ def _build_snapshot(kampus_id: int) -> dict[str, Any]:
                 "kennis_geneem": kennis,
                 "wag_op_ontvang": max(total - ontvang, 0) if emergency is not None else 0,
                 "wag_op_kennisname": max(ontvang - kennis, 0) if emergency is not None else 0,
+                "wag_vir_kontrole": len(wag_vir_kontrole) if emergency is not None else 0,
+                "daar": daar_count if emergency is not None else 0,
+                "nie_daar": nie_daar_count if emergency is not None else 0,
             },
+            # Full list remains available for auditing/search if needed.
             "mense_op_kampus": people,
+            # These are the two lists the Step 7 mobile screen should render.
+            "wag_vir_kontrole": wag_vir_kontrole,
+            "nie_daar_nie": nie_daar_nie,
         }
     finally:
         db.close()
