@@ -26,6 +26,10 @@ class MainActivity : FlutterActivity() {
                     val host = call.argument<String>("host") ?: "127.0.0.1"
                     val port = call.argument<Int>("port") ?: 1883
                     val kampusId = call.argument<Int>("kampusId") ?: 1
+                    val apiBaseUrl =
+                        call.argument<String>("apiBaseUrl")?.trim().orEmpty()
+                    val bearerToken =
+                        call.argument<String>("bearerToken")?.trim().orEmpty()
 
                     requestNotificationPermissionIfNeeded()
 
@@ -36,6 +40,14 @@ class MainActivity : FlutterActivity() {
                         putExtra(NoodgevalForegroundService.EXTRA_MQTT_HOST, host)
                         putExtra(NoodgevalForegroundService.EXTRA_MQTT_PORT, port)
                         putExtra(NoodgevalForegroundService.EXTRA_KAMPUS_ID, kampusId)
+                        putExtra(
+                            NoodgevalForegroundService.EXTRA_API_BASE_URL,
+                            apiBaseUrl
+                        )
+                        putExtra(
+                            NoodgevalForegroundService.EXTRA_BEARER_TOKEN,
+                            bearerToken
+                        )
                     }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

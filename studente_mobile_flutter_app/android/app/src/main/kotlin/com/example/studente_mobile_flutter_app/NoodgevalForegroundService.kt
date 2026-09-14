@@ -23,6 +23,8 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Executors
 import kotlin.math.abs
 
@@ -31,6 +33,8 @@ class NoodgevalForegroundService : Service() {
         const val EXTRA_MQTT_HOST = "mqtt_host"
         const val EXTRA_MQTT_PORT = "mqtt_port"
         const val EXTRA_KAMPUS_ID = "kampus_id"
+        const val EXTRA_API_BASE_URL = "api_base_url"
+        const val EXTRA_BEARER_TOKEN = "bearer_token"
         const val EXTRA_COMMAND = "command"
         const val EXTRA_NOODGEVAL_ID = "noodgeval_id"
 
@@ -40,6 +44,9 @@ class NoodgevalForegroundService : Service() {
         private const val PREF_HOST = "host"
         private const val PREF_PORT = "port"
         private const val PREF_KAMPUS_ID = "kampus_id"
+        private const val PREF_API_BASE_URL = "api_base_url"
+        private const val PREF_BEARER_TOKEN = "bearer_token"
+        private const val PREF_PENDING_ACK_ID = "pending_ack_id"
 
         private const val SERVICE_CHANNEL_ID = "moon_noodgeval_service_native"
         private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native_v2"
@@ -49,6 +56,7 @@ class NoodgevalForegroundService : Service() {
     }
 
     private val mqttExecutor = Executors.newSingleThreadExecutor()
+    private val apiExecutor = Executors.newSingleThreadExecutor()
 
     @Volatile
     private var mqttClient: MqttClient? = null
@@ -62,6 +70,12 @@ class NoodgevalForegroundService : Service() {
     @Volatile
     private var kampusId: Int = 1
 
+    @Volatile
+    private var apiBaseUrl: String = ""
+
+    @Volatile
+    private var bearerToken: String = ""
+
     private var activeNoodgevalId: String? = null
 
     override fun onCreate() {
@@ -71,15 +85,10 @@ class NoodgevalForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.getStringExtra(EXTRA_COMMAND) == COMMAND_ACK) {
-            val id = intent.getStringExtra(EXTRA_NOODGEVAL_ID)
-            acknowledgeLocally(id)
-            return START_STICKY
-        }
-
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
 
         mqttHost = intent?.getStringExtra(EXTRA_MQTT_HOST)
+            ?.takeIf { it.isNotBlank() }
             ?: prefs.getString(PREF_HOST, "127.0.0.1")
             ?: "127.0.0.1"
 
@@ -95,13 +104,34 @@ class NoodgevalForegroundService : Service() {
             prefs.getInt(PREF_KAMPUS_ID, 1)
         }
 
+        apiBaseUrl = intent?.getStringExtra(EXTRA_API_BASE_URL)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_API_BASE_URL, "")
+            ?: ""
+
+        bearerToken = intent?.getStringExtra(EXTRA_BEARER_TOKEN)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_BEARER_TOKEN, "")
+            ?: ""
+
         prefs.edit()
             .putString(PREF_HOST, mqttHost)
             .putInt(PREF_PORT, mqttPort)
             .putInt(PREF_KAMPUS_ID, kampusId)
+            .putString(PREF_API_BASE_URL, apiBaseUrl)
+            .putString(PREF_BEARER_TOKEN, bearerToken)
             .apply()
 
+        if (intent?.getStringExtra(EXTRA_COMMAND) == COMMAND_ACK) {
+            val id = intent.getStringExtra(EXTRA_NOODGEVAL_ID)
+            acknowledgeLocally(id)
+            return START_STICKY
+        }
+
         connectMqttAsync()
+        retryPendingAcknowledgementIfNeeded()
         return START_STICKY
     }
 
@@ -125,6 +155,7 @@ class NoodgevalForegroundService : Service() {
 
         mqttClient = null
         mqttExecutor.shutdownNow()
+        apiExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -287,6 +318,9 @@ class NoodgevalForegroundService : Service() {
     ) {
         activeNoodgevalId = noodgevalId
 
+        // Rapporteer outomaties dat hierdie toestel die noodgeval ontvang het.
+        reportReceivedAsync(noodgevalId)
+
         // Klank word deur Android se alarm-notification channel beheer.
         // Vibrasie word ook direk geloop sodat dit aanhou totdat die gebruiker erken.
         startVibration()
@@ -377,22 +411,180 @@ class NoodgevalForegroundService : Service() {
             return
         }
 
+        val idToAcknowledge = activeNoodgevalId ?: noodgevalId
+
+        // Die gebruiker se plaaslike alarm stop onmiddellik wanneer hy/sy
+        // "EK HET KENNIS GENEEM" druk. Die API-sinkronisering gebeur daarna.
         stopAlarmAndVibration()
 
         getSystemService(NotificationManager::class.java)
             .cancel(ALERT_NOTIFICATION_ID)
 
-        updateForegroundNotification(
-            "Kennis geneem • MQTT gekoppel • kampus $kampusId"
-        )
-
         Log.i(
             TAG,
-            "EK HET KENNIS GENEEM: ${activeNoodgevalId ?: noodgevalId ?: "onbekend"}"
+            "EK HET KENNIS GENEEM: ${idToAcknowledge ?: "onbekend"}"
         )
 
-        // In die volgende fase POST ons hierdie acknowledgement na FastAPI/PostgreSQL.
         activeNoodgevalId = null
+
+        if (idToAcknowledge.isNullOrBlank()) {
+            updateForegroundNotification(
+                "Kennis geneem plaaslik • geen noodgeval-ID beskikbaar nie"
+            )
+            return
+        }
+
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putString(PREF_PENDING_ACK_ID, idToAcknowledge)
+            .apply()
+
+        updateForegroundNotification(
+            "Kennis geneem • stoor bevestiging..."
+        )
+
+        reportAcknowledgementAsync(idToAcknowledge)
+    }
+
+    private fun reportReceivedAsync(noodgevalId: String) {
+        apiExecutor.execute {
+            postNoodgevalState(
+                noodgevalId = noodgevalId,
+                action = "ontvang",
+                retryDelaysMs = longArrayOf(0L, 1500L, 4000L),
+            )
+        }
+    }
+
+    private fun reportAcknowledgementAsync(noodgevalId: String) {
+        apiExecutor.execute {
+            val success = postNoodgevalState(
+                noodgevalId = noodgevalId,
+                action = "kennisname",
+                retryDelaysMs = longArrayOf(0L, 2000L, 5000L, 15000L),
+            )
+
+            if (success) {
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit()
+                    .remove(PREF_PENDING_ACK_ID)
+                    .apply()
+
+                updateForegroundNotification(
+                    "Kennis geneem en gestoor • MQTT gekoppel • kampus $kampusId"
+                )
+            } else {
+                updateForegroundNotification(
+                    "Kennis geneem plaaslik • sinkronisering wag"
+                )
+            }
+        }
+    }
+
+    private fun retryPendingAcknowledgementIfNeeded() {
+        val pendingId = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getString(PREF_PENDING_ACK_ID, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+
+        reportAcknowledgementAsync(pendingId)
+    }
+
+    private fun postNoodgevalState(
+        noodgevalId: String,
+        action: String,
+        retryDelaysMs: LongArray,
+    ): Boolean {
+        val numericId = noodgevalId.toLongOrNull()
+        if (numericId == null) {
+            Log.w(
+                TAG,
+                "Kan /$action nie rapporteer nie: ongeldige noodgeval-ID $noodgevalId"
+            )
+            return false
+        }
+
+        val base = apiBaseUrl.trim().trimEnd('/')
+        val token = bearerToken.trim()
+
+        if (base.isBlank() || token.isBlank()) {
+            Log.w(
+                TAG,
+                "Kan /$action nie rapporteer nie: API URL of JWT ontbreek."
+            )
+            return false
+        }
+
+        for (delayMs in retryDelaysMs) {
+            if (delayMs > 0) {
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+
+            var connection: HttpURLConnection? = null
+            try {
+                val url = URL("$base/noodgeval/$numericId/$action")
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                    useCaches = false
+                    doInput = true
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setFixedLengthStreamingMode(0)
+                    doOutput = true
+                }
+
+                connection.outputStream.use {
+                    // Leë POST body; FastAPI endpoint verwag geen request model nie.
+                }
+
+                val code = connection.responseCode
+                val body = try {
+                    val stream = if (code in 200..299) {
+                        connection.inputStream
+                    } else {
+                        connection.errorStream
+                    }
+                    stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                } catch (_: Exception) {
+                    ""
+                }
+
+                if (code in 200..299) {
+                    Log.i(
+                        TAG,
+                        "Noodgeval $noodgevalId /$action suksesvol gestoor."
+                    )
+                    return true
+                }
+
+                Log.w(
+                    TAG,
+                    "Noodgeval $noodgevalId /$action HTTP $code: ${body.take(300)}"
+                )
+
+                // 4xx is gewoonlik nie 'n tydelike netwerkfout nie.
+                if (code in 400..499) {
+                    return false
+                }
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "Noodgeval $noodgevalId /$action kon nie sinkroniseer nie.",
+                    e
+                )
+            } finally {
+                connection?.disconnect()
+            }
+        }
+
+        return false
     }
 
     private fun brokerUri(): String {

@@ -28,16 +28,20 @@ const int _mqttPort = int.fromEnvironment(
   defaultValue: 1883,
 );
 
-Future<void> _startNativeNoodgevalService() async {
+Future<void> _startNativeNoodgevalService({required String bearerToken}) async {
   try {
     final started = await _noodgevalServiceChannel.invokeMethod<bool>(
       'start',
       <String, dynamic>{
         'host': _mqttHost,
         'port': _mqttPort,
-        // STAP 3 toets doelbewus nog kampus 1.
-        // Volgende fase koppel ons dit aan die ingetekende gebruiker se Kampus_ID.
+        // Kampus 1 bly vir nou die plaaslike toetskampus.
+        // Ons koppel later die regte kampus per gebruiker.
         'kampusId': 1,
+        // Die native service moet self kan rapporteer wanneer Flutter
+        // uit Recent Apps wegge-swipe is.
+        'apiBaseUrl': MoonApi.baseUrl,
+        'bearerToken': bearerToken,
       },
     );
 
@@ -218,7 +222,7 @@ class _LoginPageState extends State<LoginPage> {
       // Begin die native Android foreground service.
       // MQTT loop dan buite die Flutter UI en bly aktief wanneer die app
       // uit Recent Apps wegge-swipe word.
-      await _startNativeNoodgevalService();
+      await _startNativeNoodgevalService(bearerToken: token);
 
       if (!mounted) return;
 
