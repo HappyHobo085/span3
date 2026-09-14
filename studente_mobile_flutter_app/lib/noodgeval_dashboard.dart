@@ -378,7 +378,14 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                   final message = messageController.text.trim();
                   if (title.isEmpty || message.isEmpty) {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      const SnackBar(content: Text('Titel en boodskap is verpligtend.')),
+                      const SnackBar(
+                        backgroundColor: Color(0xFFB91C1C),
+                        behavior: SnackBarBehavior.floating,
+                        content: Text(
+                          'Titel en boodskap is verpligtend.',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
                     );
                     return;
                   }
@@ -445,8 +452,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Noodgeval geaktiveer — MQTT-noodsein is gestuur.'),
+          backgroundColor: Color(0xFFB91C1C),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Noodgeval geaktiveer — MQTT-noodsein is gestuur.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
         ),
       );
       await _checkActiveEmergency(force: true);
@@ -523,8 +534,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('Noodgeval gesluit — MQTT-stopsein is gestuur.'),
+          backgroundColor: Color(0xFF15803D),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Noodgeval gesluit — MQTT-stopsein is gestuur.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
         ),
       );
     } catch (e) {
@@ -551,7 +566,14 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       _decodeApi(response, fallback: 'Noodsein kon nie herstuur word nie.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Noodsein weer via MQTT gestuur.')),
+        const SnackBar(
+          backgroundColor: Color(0xFF2563EB),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Noodsein weer via MQTT gestuur.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -631,7 +653,14 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
 
   void _showError(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(backgroundColor: Colors.red.shade700, content: Text(text)),
+      SnackBar(
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          text,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+      ),
     );
   }
 
