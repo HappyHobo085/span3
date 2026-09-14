@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:async';
 import 'app_shared.dart';
 import 'moon_api.dart';
 import 'profile_page.dart';
+import 'noodgeval_dashboard.dart';
 
 
 ThemeData _moonPickerTheme(BuildContext context) {
@@ -61,7 +61,7 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
       return;
     }
     if (index == 3) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const _NoodPage()));
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const NoodgevalDashboardPage()));
       return;
     }
     setState(() => _selectedIndex = index);
@@ -374,7 +374,7 @@ class _TuisTabState extends State<_TuisTab> {
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const _NoodPage(),
+                                  builder: (_) => const NoodgevalDashboardPage(),
                                 ),
                               ),
                             ),
@@ -1495,7 +1495,6 @@ class _EventsPage extends StatefulWidget {
 class _EventsPageState extends State<_EventsPage> {
   bool _loading = true;
   String? _error;
-  String _view = 'komende';
   List<MoonEventDto> _events = [];
 
   @override
@@ -1505,22 +1504,15 @@ class _EventsPageState extends State<_EventsPage> {
   }
 
   Future<void> _load() async {
-    if (mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final allEvents = await MoonApi.fetchEvents(view: _view);
+      final allEvents = await MoonApi.fetchEvents(view: 'komende');
       final events = widget.kampusId == null
-          ? [...allEvents]
-          : allEvents
-              .where((event) => event.kampusId == widget.kampusId)
-              .toList();
-      events.sort((a, b) => _view == 'vorige'
-          ? b.beginTyd.compareTo(a.beginTyd)
-          : a.beginTyd.compareTo(b.beginTyd));
+          ? allEvents
+          : allEvents.where((event) => event.kampusId == widget.kampusId).toList();
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -1535,17 +1527,8 @@ class _EventsPageState extends State<_EventsPage> {
     }
   }
 
-  void _setView(String view) {
-    if (_view == view) return;
-    setState(() => _view = view);
-    _load();
-  }
-
   String _date(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'
-    ];
+    const months = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
@@ -1563,19 +1546,14 @@ class _EventsPageState extends State<_EventsPage> {
   Future<void> _manage(MoonEventDto event) async {
     final changed = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => _OpsigterEventDetailPage(event: event),
-      ),
+      MaterialPageRoute(builder: (_) => _OpsigterEventDetailPage(event: event)),
     );
     if (changed == true) await _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isPrevious = _view == 'vorige';
     final totalRsvp = _events.fold<int>(0, (sum, e) => sum + e.rsvpAantal);
-    final scopeText = widget.kampusNaam == null ? '' : '${widget.kampusNaam} · ';
-
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -1583,26 +1561,10 @@ class _EventsPageState extends State<_EventsPage> {
           children: [
             AppScreenHeader(
               title: 'Events',
-              subtitle: '$scopeText${isPrevious ? 'vorige events & statistiek' : 'skep en bestuur kampus-events'}',
+              subtitle: widget.kampusNaam == null
+                  ? 'Skep en bestuur kampus-events'
+                  : '${widget.kampusNaam} · komende events',
               showBack: true,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                children: [
-                  _OpsigterEventFilterButton(
-                    label: 'Komende',
-                    active: !isPrevious,
-                    onTap: () => _setView('komende'),
-                  ),
-                  const SizedBox(width: 10),
-                  _OpsigterEventFilterButton(
-                    label: 'Vorige',
-                    active: isPrevious,
-                    onTap: () => _setView('vorige'),
-                  ),
-                ],
-              ),
             ),
             Expanded(
               child: RefreshIndicator(
@@ -1613,186 +1575,58 @@ class _EventsPageState extends State<_EventsPage> {
                   children: [
                     Row(
                       children: [
-                        Expanded(
-                          child: _OpsigterMetricCard(
-                            label: 'EVENTS',
-                            value: _loading ? '—' : '${_events.length}',
-                            subtitle: isPrevious ? 'Vorige' : 'Komende',
-                            icon: Icons.event_rounded,
-                          ),
-                        ),
+                        Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: _loading ? '—' : '${_events.length}', subtitle: 'Komende', icon: Icons.event_rounded)),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: _OpsigterMetricCard(
-                            label: 'RSVP',
-                            value: _loading ? '—' : '$totalRsvp',
-                            subtitle: 'Totaal',
-                            icon: Icons.how_to_reg_rounded,
-                          ),
-                        ),
+                        Expanded(child: _OpsigterMetricCard(label: 'RSVP', value: _loading ? '—' : '$totalRsvp', subtitle: 'Bevestig', icon: Icons.how_to_reg_rounded)),
                       ],
                     ),
-                    if (!isPrevious) ...[
-                      const SizedBox(height: 14),
-                      GradientActionButton(
-                        label: 'Skep Nuwe Event',
-                        onTap: _create,
-                        height: 52,
-                      ),
-                    ],
+                    const SizedBox(height: 14),
+                    GradientActionButton(label: 'Skep Nuwe Event', onTap: _create, height: 52),
                     const SizedBox(height: 16),
                     if (_error != null)
                       GlassCard(
                         padding: const EdgeInsets.all(14),
-                        child: Text(
-                          _error!,
-                          style: GoogleFonts.inter(color: Colors.red, fontSize: 12),
-                        ),
+                        child: Text(_error!, style: GoogleFonts.inter(color: Colors.red, fontSize: 12)),
                       )
                     else if (_loading)
-                      const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                      const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
                     else if (_events.isEmpty)
-                      _InfoGlassCard(
-                        title: isPrevious ? 'VORIGE EVENTS' : 'KOMENDE EVENTS',
-                        name: isPrevious
-                            ? 'Geen vorige events nie'
-                            : 'Geen komende events',
-                        detail: isPrevious
-                            ? 'Voltooide events sal hier verskyn.'
-                            : 'Druk “Skep Nuwe Event” om die eerste event te skep.',
-                        icon: Icons.event_busy_rounded,
-                      )
+                      const _InfoGlassCard(title: 'KOMENDE EVENTS', name: 'Geen komende events', detail: 'Druk “Skep Nuwe Event” om die eerste event te skep.', icon: Icons.event_busy_rounded)
                     else ...[
-                      _SectionTitle(isPrevious ? 'VORIGE EVENTS' : 'KOMENDE EVENTS'),
+                      const _SectionTitle('KOMENDE EVENTS'),
                       const SizedBox(height: 10),
-                      ..._events.map(
-                        (event) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: GlassCard(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      isPrevious
-                                          ? Icons.history_rounded
-                                          : Icons.event_rounded,
-                                      color: kAccent,
-                                      size: 28,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        event.naam,
-                                        style: GoogleFonts.inter(
-                                          color: kText1,
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  '${event.kampusNaam}${event.lokasieNaam == null ? '' : ' · ${event.lokasieNaam}'}',
-                                  style: GoogleFonts.inter(
-                                    color: kText2,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_date(event.beginTyd)} · ${_time(event.beginTyd)}–${_time(event.eindTyd)}',
-                                  style: GoogleFonts.inter(
-                                    color: kText1,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  '${event.rsvpAantal} / ${event.kapasiteit} RSVP${isPrevious ? '' : ' · ${event.plekkeOor} plekke oor'}',
-                                  style: GoogleFonts.inter(
-                                    color: event.vol ? Colors.orange : kTextMuted,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _manage(event),
-                                    icon: Icon(
-                                      isPrevious
-                                          ? Icons.analytics_outlined
-                                          : Icons.settings_rounded,
-                                    ),
-                                    label: Text(
-                                      isPrevious
-                                          ? 'FINALE STATISTIEK'
-                                          : 'BESTUUR EVENT',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                      ..._events.map((event) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GlassCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.event_rounded, color: kAccent, size: 28),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(event.naam, style: GoogleFonts.inter(color: kText1, fontSize: 17, fontWeight: FontWeight.w800))),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text('${event.kampusNaam}${event.lokasieNaam == null ? '' : ' · ${event.lokasieNaam}'}', style: GoogleFonts.inter(color: kText2, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              Text('${_date(event.beginTyd)} · ${_time(event.beginTyd)}–${_time(event.eindTyd)}', style: GoogleFonts.inter(color: kText1, fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 10),
+                              Text('${event.rsvpAantal} / ${event.kapasiteit} RSVP · ${event.plekkeOor} plekke oor', style: GoogleFonts.inter(color: event.vol ? Colors.orange : kTextMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 12),
+                              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _manage(event), icon: const Icon(Icons.settings_rounded), label: const Text('BESTUUR EVENT'))),
+                            ],
                           ),
                         ),
-                      ),
+                      )),
                     ],
                   ],
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OpsigterEventFilterButton extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _OpsigterEventFilterButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 11),
-          decoration: BoxDecoration(
-            color: active ? kAccent.withOpacity(0.14) : const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: active ? kAccent.withOpacity(0.65) : const Color(0xFF293548),
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: active ? kAccent : kTextMuted,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
         ),
       ),
     );
@@ -2060,41 +1894,12 @@ class _OpsigterEventDetailPage extends StatefulWidget {
   const _OpsigterEventDetailPage({required this.event});
 
   @override
-  State<_OpsigterEventDetailPage> createState() =>
-      _OpsigterEventDetailPageState();
+  State<_OpsigterEventDetailPage> createState() => _OpsigterEventDetailPageState();
 }
 
-class _OpsigterEventDetailPageState
-    extends State<_OpsigterEventDetailPage> {
+class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
   bool _changed = false;
   bool _sharing = false;
-  bool _attendanceLoading = true;
-  EventAttendanceDto? _attendance;
-  String? _attendanceError;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAttendance();
-  }
-
-  Future<void> _loadAttendance() async {
-    try {
-      final value = await MoonApi.fetchEventAttendance(widget.event.eventId);
-      if (!mounted) return;
-      setState(() {
-        _attendance = value;
-        _attendanceLoading = false;
-        _attendanceError = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _attendanceLoading = false;
-        _attendanceError = e.toString().replaceFirst('Exception: ', '');
-      });
-    }
-  }
 
   String _shareDateTime(DateTime value) {
     final d = value.day.toString().padLeft(2, '0');
@@ -2144,31 +1949,8 @@ class _OpsigterEventDetailPageState
     }
   }
 
-  Future<void> _openAttendance() async {
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _EventLiveAttendancePage(event: widget.event),
-      ),
-    );
-    await _loadAttendance();
-  }
-
-  Future<void> _openRsvps() async {
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _EventRsvpListPage(event: widget.event),
-      ),
-    );
-    await _loadAttendance();
-  }
-
   Future<void> _edit() async {
-    final changed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => _EventFormPage(event: widget.event)),
-    );
+    final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _EventFormPage(event: widget.event)));
     if (changed == true && mounted) {
       setState(() => _changed = true);
       Navigator.pop(context, true);
@@ -2180,26 +1962,11 @@ class _OpsigterEventDetailPageState
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF111827),
-        title: const Text(
-          'Kanselleer Event',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Text(
-          'Kanselleer ${widget.event.naam}?',
-          style: const TextStyle(color: Colors.white70),
-        ),
+        title: const Text('Kanselleer Event', style: TextStyle(color: Colors.white)),
+        content: Text('Kanselleer ${widget.event.naam}?', style: const TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Nee'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Ja, kanselleer',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nee')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ja, kanselleer', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -2210,572 +1977,64 @@ class _OpsigterEventDetailPageState
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(e.toString().replaceFirst('Exception: ', ''))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final e = _attendance?.event ?? widget.event;
-    final finalStats = _attendance?.finalStats ?? e.eindTyd.isBefore(DateTime.now());
-    final a = _attendance;
-
-    String metric(int? value, int fallback) =>
-        _attendanceLoading && a == null ? '—' : '${value ?? fallback}';
-
+    final e = widget.event;
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
-              title: e.naam,
-              subtitle: finalStats ? 'Finale Event-statistiek' : 'Event bestuur & live bywoning',
-              showBack: true,
-            ),
+            AppScreenHeader(title: e.naam, subtitle: 'Event bestuur', showBack: true),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadAttendance,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _OpsigterMetricCard(
-                              label: 'RSVP',
-                              value: metric(a?.rsvp, e.rsvpAantal),
-                              subtitle: 'Bevestig',
-                              icon: Icons.how_to_reg_rounded,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _OpsigterMetricCard(
-                              label: 'AANGEKOM',
-                              value: metric(a?.aangekom, 0),
-                              subtitle: 'Minstens een IN',
-                              icon: Icons.login_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _OpsigterMetricCard(
-                              label: 'BINNE',
-                              value: metric(a?.tansBinne, 0),
-                              subtitle: 'Tans in',
-                              icon: Icons.groups_rounded,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _OpsigterMetricCard(
-                              label: 'UIT',
-                              value: metric(a?.uit, 0),
-                              subtitle: 'Reeds uit',
-                              icon: Icons.logout_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _OpsigterMetricCard(
-                        label: finalStats ? 'NO-SHOW' : 'NOG NIE GEKOM',
-                        value: metric(
-                          finalStats ? a?.noShow : a?.nogNieGekom,
-                          e.rsvpAantal,
-                        ),
-                        subtitle: finalStats
-                            ? 'RSVP maar nie opgedaag nie'
-                            : 'RSVP wag nog',
-                        icon: finalStats
-                            ? Icons.person_off_outlined
-                            : Icons.schedule_rounded,
-                      ),
-                      if (_attendanceError != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _attendanceError!,
-                          style: GoogleFonts.inter(color: Colors.red, fontSize: 11),
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      GlassCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              e.kampusNaam,
-                              style: GoogleFonts.inter(
-                                color: kText1,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            if (e.lokasieNaam != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                e.lokasieNaam!,
-                                style: GoogleFonts.inter(color: kText2),
-                              ),
-                            ],
-                            const SizedBox(height: 6),
-                            Text(
-                              '${_shareDateTime(e.beginTyd)} – ${_shareDateTime(e.eindTyd)}',
-                              style: GoogleFonts.inter(
-                                color: kTextMuted,
-                                fontSize: 11,
-                              ),
-                            ),
-                            if ((e.beskrywing ?? '').isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                e.beskrywing!,
-                                style: GoogleFonts.inter(
-                                  color: kTextMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      GradientActionButton(
-                        label: finalStats
-                            ? 'FINALE BYWONING & STATISTIEK'
-                            : 'LIVE BYWONING',
-                        onTap: _openAttendance,
-                        height: 52,
-                      ),
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: _openRsvps,
-                        icon: const Icon(Icons.people_alt_outlined),
-                        label: const Text('RSVP-LYS'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(50),
-                        ),
-                      ),
-                      if (!finalStats) ...[
-                        const SizedBox(height: 10),
-                        Builder(
-                          builder: (shareContext) => OutlinedButton.icon(
-                            onPressed: _sharing
-                                ? null
-                                : () => _shareEvent(shareContext),
-                            icon: const Icon(Icons.share_rounded, color: kAccent),
-                            label: Text(
-                              _sharing ? 'Skep deel-skakel...' : 'DEEL EVENT',
-                              style: const TextStyle(
-                                color: kText1,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(52),
-                              side: BorderSide(color: kAccent.withOpacity(0.65)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _edit,
-                          icon: const Icon(Icons.edit_rounded),
-                          label: const Text('Wysig Event'),
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _cancel,
-                          icon: const Icon(
-                            Icons.cancel_rounded,
-                            color: Colors.red,
-                          ),
-                          label: const Text(
-                            'Kanselleer Event',
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EventLiveAttendancePage extends StatefulWidget {
-  final MoonEventDto event;
-  const _EventLiveAttendancePage({required this.event});
-
-  @override
-  State<_EventLiveAttendancePage> createState() =>
-      _EventLiveAttendancePageState();
-}
-
-class _EventLiveAttendancePageState
-    extends State<_EventLiveAttendancePage> {
-  EventAttendanceDto? _data;
-  bool _loading = true;
-  String? _error;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    if (widget.event.eindTyd.isAfter(DateTime.now())) {
-      _timer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) => _load(silent: true),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _load({bool silent = false}) async {
-    if (!silent && mounted && _data == null) {
-      setState(() => _loading = true);
-    }
-    try {
-      final data = await MoonApi.fetchEventAttendance(widget.event.eventId);
-      if (!mounted) return;
-      setState(() {
-        _data = data;
-        _loading = false;
-        _error = null;
-      });
-      if (data.finalStats) {
-        _timer?.cancel();
-        _timer = null;
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  String _time(DateTime? value) {
-    if (value == null) return '—';
-    return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-  }
-
-  Widget _attendeeCard(EventAttendanceItemDto item) {
-    final isIn = item.status == 'IN';
-    final isOut = item.status == 'UIT';
-    final statusColor = isIn
-        ? Colors.green
-        : isOut
-            ? kAccent
-            : kTextMuted;
-    final statusText = isIn
-        ? 'IN · ${_time(item.laasteAksie)}'
-        : isOut
-            ? 'UIT · ${_time(item.laasteAksie)}'
-            : 'NOG NIE AANGEKOM NIE';
-
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: statusColor.withOpacity(0.45)),
-            ),
-            child: Icon(
-              isIn
-                  ? Icons.login_rounded
-                  : isOut
-                      ? Icons.logout_rounded
-                      : Icons.schedule_rounded,
-              color: statusColor,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        item.volleNaam,
-                        style: GoogleFonts.inter(
-                          color: kText1,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
+                    Row(children: [
+                      Expanded(child: _OpsigterMetricCard(label: 'RSVP', value: '${e.rsvpAantal}', subtitle: 'Bevestig', icon: Icons.how_to_reg_rounded)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _OpsigterMetricCard(label: 'OOP', value: '${e.plekkeOor}', subtitle: 'Plekke oor', icon: Icons.event_seat_rounded)),
+                    ]),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(e.kampusNaam, style: GoogleFonts.inter(color: kText1, fontSize: 15, fontWeight: FontWeight.w800)),
+                        if (e.lokasieNaam != null) ...[const SizedBox(height: 4), Text(e.lokasieNaam!, style: GoogleFonts.inter(color: kText2))],
+                        if ((e.beskrywing ?? '').isNotEmpty) ...[const SizedBox(height: 10), Text(e.beskrywing!, style: GoogleFonts.inter(color: kTextMuted, fontSize: 12))],
+                      ]),
+                    ),
+                    const SizedBox(height: 14),
+                    Builder(
+                      builder: (shareContext) => OutlinedButton.icon(
+                        onPressed: _sharing ? null : () => _shareEvent(shareContext),
+                        icon: const Icon(Icons.share_rounded, color: kAccent),
+                        label: Text(
+                          _sharing ? 'Skep deel-skakel...' : 'DEEL EVENT',
+                          style: const TextStyle(color: kText1, fontWeight: FontWeight.w800),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          side: BorderSide(color: kAccent.withOpacity(0.65)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),
-                    if (item.ekstern)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: kAccent.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: kAccent.withOpacity(0.45),
-                          ),
-                        ),
-                        child: Text(
-                          'EKSTERN',
-                          style: GoogleFonts.inter(
-                            color: kAccent,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 10),
+                    GradientActionButton(label: 'Sien RSVP-Lys', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _EventRsvpListPage(event: e))), height: 50),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(onPressed: _edit, icon: const Icon(Icons.edit_rounded), label: const Text('Wysig Event')),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(onPressed: _cancel, icon: const Icon(Icons.cancel_rounded, color: Colors.red), label: const Text('Kanselleer Event', style: TextStyle(color: Colors.red))),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}',
-                  style: GoogleFonts.inter(
-                    color: kTextMuted,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  statusText,
-                  style: GoogleFonts.inter(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (item.aangekom && item.eersteIn != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    'Eerste IN: ${_time(item.eersteIn)}',
-                    style: GoogleFonts.inter(
-                      color: kTextMuted,
-                      fontSize: 9,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final data = _data;
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            AppScreenHeader(
-              title: data?.finalStats == true
-                  ? 'Finale Bywoning'
-                  : 'Live Bywoning',
-              subtitle: widget.event.naam,
-              showBack: true,
-            ),
-            Expanded(
-              child: _loading && data == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : RefreshIndicator(
-                      onRefresh: () => _load(),
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (_error != null) ...[
-                            Text(
-                              _error!,
-                              style: GoogleFonts.inter(
-                                color: Colors.red,
-                                fontSize: 11,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          if (data != null) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _OpsigterMetricCard(
-                                    label: 'RSVP',
-                                    value: '${data.rsvp}',
-                                    subtitle: '${data.appRsvp} app · ${data.eksterneRsvp} ekstern',
-                                    icon: Icons.how_to_reg_rounded,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _OpsigterMetricCard(
-                                    label: 'AANGEKOM',
-                                    value: '${data.aangekom}',
-                                    subtitle: 'Unieke persone',
-                                    icon: Icons.login_rounded,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _OpsigterMetricCard(
-                                    label: 'BINNE',
-                                    value: '${data.tansBinne}',
-                                    subtitle: 'Tans in',
-                                    icon: Icons.groups_rounded,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _OpsigterMetricCard(
-                                    label: 'UIT',
-                                    value: '${data.uit}',
-                                    subtitle: 'Reeds uit',
-                                    icon: Icons.logout_rounded,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            _OpsigterMetricCard(
-                              label: data.finalStats ? 'NO-SHOW' : 'NOG NIE',
-                              value: data.finalStats
-                                  ? '${data.noShow}'
-                                  : '${data.nogNieGekom}',
-                              subtitle: data.finalStats
-                                  ? 'RSVP maar nie opgedaag nie'
-                                  : 'Nog nie aangekom nie',
-                              icon: data.finalStats
-                                  ? Icons.person_off_outlined
-                                  : Icons.schedule_rounded,
-                            ),
-                            if (data.finalStats) ...[
-                              const SizedBox(height: 12),
-                              GlassCard(
-                                padding: const EdgeInsets.all(14),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'IN skanderings\n${data.inSkanderings}',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.inter(
-                                          color: kText1,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'UIT skanderings\n${data.uitSkanderings}',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.inter(
-                                          color: kText1,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 18),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    data.finalStats
-                                        ? 'FINALE BYWONING'
-                                        : 'LIVE BYWONING',
-                                    style: GoogleFonts.inter(
-                                      color: kTextMuted,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                ),
-                                if (!data.finalStats)
-                                  Text(
-                                    'Outo-herlaai: 10s',
-                                    style: GoogleFonts.inter(
-                                      color: kTextMuted,
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 9),
-                            if (data.attendees.isEmpty)
-                              GlassCard(
-                                padding: const EdgeInsets.all(20),
-                                child: Text(
-                                  'Nog geen RSVP’s vir hierdie event nie.',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              )
-                            else
-                              ...data.attendees.map(
-                                (item) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _attendeeCard(item),
-                                ),
-                              ),
-                          ],
-                        ],
-                      ),
-                    ),
+              ),
             ),
           ],
         ),
@@ -2795,7 +2054,6 @@ class _EventRsvpListPage extends StatefulWidget {
 class _EventRsvpListPageState extends State<_EventRsvpListPage> {
   bool _loading = true;
   String? _error;
-  int? _busyExternalId;
   List<EventRsvpItemDto> _items = [];
 
   @override
@@ -2808,170 +2066,61 @@ class _EventRsvpListPageState extends State<_EventRsvpListPage> {
     try {
       final items = await MoonApi.fetchEventRsvps(widget.event.eventId);
       if (!mounted) return;
-      setState(() {
-        _items = items;
-        _loading = false;
-        _error = null;
-      });
+      setState(() { _items = items; _loading = false; _error = null; });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _cancelExternal(EventRsvpItemDto item) async {
-    final id = item.publiekRsvpId;
-    if (id == null || _busyExternalId != null) return;
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF111827),
-        title: const Text(
-          'Kanselleer eksterne RSVP',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Text(
-          'Kanselleer ${item.volleNaam} se RSVP? Die persoon se Event QR sal onmiddellik ongeldig wees.',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Nee'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'JA, KANSELLEER',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (yes != true) return;
-
-    setState(() => _busyExternalId = id);
-    try {
-      await MoonApi.cancelExternalEventRsvp(
-        eventId: widget.event.eventId,
-        publiekRsvpId: id,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Eksterne RSVP gekanselleer; QR is nou ongeldig.')),
-      );
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busyExternalId = null);
+      setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
     }
   }
 
   Widget _rsvpCard(EventRsvpItemDto item) {
-    final busy = item.publiekRsvpId != null &&
-        _busyExternalId == item.publiekRsvpId;
     return GlassCard(
       padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                item.ekstern
-                    ? Icons.public_rounded
-                    : Icons.check_circle_rounded,
-                color: item.ekstern ? kAccent : Colors.green,
-                size: 26,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Icon(
+            item.ekstern ? Icons.public_rounded : Icons.check_circle_rounded,
+            color: item.ekstern ? kAccent : Colors.green,
+            size: 26,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.volleNaam,
-                            style: GoogleFonts.inter(
-                              color: kText1,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (item.ekstern)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: kAccent.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: kAccent.withOpacity(0.45),
-                              ),
-                            ),
-                            child: Text(
-                              'EKSTERN',
-                              style: GoogleFonts.inter(
-                                color: kAccent,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}',
-                      style: GoogleFonts.inter(
-                        color: kTextMuted,
-                        fontSize: 11,
+                    Expanded(
+                      child: Text(
+                        item.volleNaam,
+                        style: GoogleFonts.inter(color: kText1, fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                     ),
-                    if (item.ekstern &&
-                        (item.epos ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        item.epos!,
-                        style: GoogleFonts.inter(
-                          color: kText2,
-                          fontSize: 10,
+                    if (item.ekstern)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: kAccent.withOpacity(0.45)),
                         ),
+                        child: Text('EKSTERN', style: GoogleFonts.inter(color: kAccent, fontSize: 8, fontWeight: FontWeight.w900)),
                       ),
-                    ],
                   ],
                 ),
-              ),
-            ],
-          ),
-          if (item.ekstern && item.publiekRsvpId != null) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: busy ? null : () => _cancelExternal(item),
-              icon: const Icon(Icons.cancel_outlined, color: Colors.red),
-              label: Text(
-                busy ? 'KANSELLEER...' : 'KANSELLEER RSVP',
-                style: const TextStyle(color: Colors.red),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item.rol}${item.nommer.isEmpty ? '' : ' · ${item.nommer}'}',
+                  style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
+                ),
+                if (item.ekstern && (item.epos ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(item.epos!, style: GoogleFonts.inter(color: kText2, fontSize: 10)),
+                ],
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -2987,21 +2136,12 @@ class _EventRsvpListPageState extends State<_EventRsvpListPage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
-              title: 'RSVP-Lys',
-              subtitle: widget.event.naam,
-              showBack: true,
-            ),
+            AppScreenHeader(title: "RSVP-Lys", subtitle: widget.event.naam, showBack: true),
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        )
+                      ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
                       : RefreshIndicator(
                           onRefresh: _load,
                           child: ListView(
@@ -3010,72 +2150,23 @@ class _EventRsvpListPageState extends State<_EventRsvpListPage> {
                             children: [
                               if (_items.isEmpty) ...[
                                 const SizedBox(height: 80),
-                                const Icon(
-                                  Icons.event_busy_rounded,
-                                  color: kTextMuted,
-                                  size: 48,
-                                ),
+                                const Icon(Icons.event_busy_rounded, color: kTextMuted, size: 48),
                                 const SizedBox(height: 12),
-                                Text(
-                                  "Nog geen RSVP's nie",
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 13,
-                                  ),
-                                ),
+                                Text("Nog geen RSVP's nie", textAlign: TextAlign.center, style: GoogleFonts.inter(color: kTextMuted, fontSize: 13)),
                               ] else ...[
-                                Text(
-                                  "APP RSVP'S  ·  ${appItems.length}",
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
+                                Text("APP RSVP'S  ·  ${appItems.length}", style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
                                 const SizedBox(height: 9),
                                 if (appItems.isEmpty)
-                                  Text(
-                                    "Geen app RSVP's nie",
-                                    style: GoogleFonts.inter(
-                                      color: kTextMuted,
-                                      fontSize: 11,
-                                    ),
-                                  )
+                                  Text("Geen app RSVP's nie", style: GoogleFonts.inter(color: kTextMuted, fontSize: 11))
                                 else
-                                  ...appItems.map(
-                                    (item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: _rsvpCard(item),
-                                    ),
-                                  ),
+                                  ...appItems.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: _rsvpCard(item))),
                                 const SizedBox(height: 18),
-                                Text(
-                                  'EKSTERNE GASTE  ·  ${externalItems.length}',
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
+                                Text('EKSTERNE GASTE  ·  ${externalItems.length}', style: GoogleFonts.inter(color: kTextMuted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
                                 const SizedBox(height: 9),
                                 if (externalItems.isEmpty)
-                                  Text(
-                                    "Nog geen eksterne RSVP's via die deel-skakel nie",
-                                    style: GoogleFonts.inter(
-                                      color: kTextMuted,
-                                      fontSize: 11,
-                                    ),
-                                  )
+                                  Text("Nog geen eksterne RSVP's via die deel-skakel nie", style: GoogleFonts.inter(color: kTextMuted, fontSize: 11))
                                 else
-                                  ...externalItems.map(
-                                    (item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: _rsvpCard(item),
-                                    ),
-                                  ),
+                                  ...externalItems.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: _rsvpCard(item))),
                               ],
                             ],
                           ),
