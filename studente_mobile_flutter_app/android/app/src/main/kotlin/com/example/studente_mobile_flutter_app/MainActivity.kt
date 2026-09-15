@@ -25,6 +25,10 @@ class MainActivity : FlutterActivity() {
                 "start" -> {
                     val host = call.argument<String>("host") ?: "127.0.0.1"
                     val port = call.argument<Int>("port") ?: 1883
+                    val mqttUsername =
+                        call.argument<String>("mqttUsername")?.trim().orEmpty()
+                    val mqttPassword =
+                        call.argument<String>("mqttPassword").orEmpty()
                     val kampusId = call.argument<Int>("kampusId") ?: 1
                     val apiBaseUrl =
                         call.argument<String>("apiBaseUrl")?.trim().orEmpty()
@@ -39,6 +43,14 @@ class MainActivity : FlutterActivity() {
                     ).apply {
                         putExtra(NoodgevalForegroundService.EXTRA_MQTT_HOST, host)
                         putExtra(NoodgevalForegroundService.EXTRA_MQTT_PORT, port)
+                        putExtra(
+                            NoodgevalForegroundService.EXTRA_MQTT_USERNAME,
+                            mqttUsername
+                        )
+                        putExtra(
+                            NoodgevalForegroundService.EXTRA_MQTT_PASSWORD,
+                            mqttPassword
+                        )
                         putExtra(NoodgevalForegroundService.EXTRA_KAMPUS_ID, kampusId)
                         putExtra(
                             NoodgevalForegroundService.EXTRA_API_BASE_URL,
