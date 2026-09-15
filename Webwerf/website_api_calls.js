@@ -25,9 +25,15 @@
       return stored;
     }
 
-    // Konfigureer via localStorage('apiBaseUrl') of laat foute boodskap wys
-    console.warn('apiBaseUrl nie gestel nie — stel dit via localStorage');
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+    // Plaaslike ontwikkeling praat met die backend op poort 8000; enige ander
+    // gasheer (bv. die Railway-webwerf) gebruik die Railway-backend.
+    // Dieselfde logika as login.js — die twee MOET ooreenstem.
+    const host = window.location.hostname || 'localhost';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      const protocol = window.location.protocol || 'http:';
+      return `${protocol}//${host}:8000`;
+    }
+    return 'https://humorous-endurance-production-ee64.up.railway.app';
   }
 
   // Backend URL
