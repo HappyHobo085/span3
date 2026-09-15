@@ -765,16 +765,30 @@ async def importeer_klasse(
                     resultaat.modules_geskep += 1
                     geskep_module_kodes.add(module_kode)
 
-            klas = models.Klas(
-                Module_ID=module.Module_ID,
-                KLA_Lokaal=ry["lokaal"] or None,
-                KLA_Dag=ry["dag"] or None,
-                KLA_Begin_Tyd=ry["from"] or None,
-                KLA_Eind_Tyd=ry["to"] or None,
+            # Hergebruik 'n bestaande klas met dieselfde module, lokaal, dag
+            # en tye sodat her-invoer nie duplikate skep nie.
+            klas = (
+                db.query(models.Klas)
+                .filter(
+                    models.Klas.Module_ID == module.Module_ID,
+                    models.Klas.KLA_Lokaal == (ry["lokaal"] or None),
+                    models.Klas.KLA_Dag == (ry["dag"] or None),
+                    models.Klas.KLA_Begin_Tyd == (ry["from"] or None),
+                    models.Klas.KLA_Eind_Tyd == (ry["to"] or None),
+                )
+                .first()
             )
-            db.add(klas)
-            db.flush()
-            resultaat.klasse_geskep += 1
+            if not klas:
+                klas = models.Klas(
+                    Module_ID=module.Module_ID,
+                    KLA_Lokaal=ry["lokaal"] or None,
+                    KLA_Dag=ry["dag"] or None,
+                    KLA_Begin_Tyd=ry["from"] or None,
+                    KLA_Eind_Tyd=ry["to"] or None,
+                )
+                db.add(klas)
+                db.flush()
+                resultaat.klasse_geskep += 1
 
             # Koppel elke groep (komma-geskei) aan die klas.
             groepe = [g.strip() for g in ry["groep"].split(",") if g.strip()]

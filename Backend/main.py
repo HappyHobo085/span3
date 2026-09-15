@@ -19,6 +19,7 @@ from noodgeval_kontrole_migration import run_noodgeval_kontrole_migration
 from routers import (
     auth_routes, gebruikers, kampus, koshuis, lokasie,
     nfc, wagte, student, dashboard, admin, saamry, besoekers, events, noodgeval, noodgeval_live, noodgeval_kontrole,
+    klasse,
 )
 
 # Rename legacy misspelled event tables BEFORE SQLAlchemy checks/creates tables.
@@ -99,6 +100,7 @@ app.include_router(events.router)
 app.include_router(noodgeval.router)
 app.include_router(noodgeval_live.router)
 app.include_router(noodgeval_kontrole.router)
+app.include_router(klasse.router)
 
 # --- Root ---
 

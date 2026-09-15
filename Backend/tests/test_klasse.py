@@ -190,42 +190,36 @@ class TestStudentToewysingCSV:
 
 class TestCSVInvoerIdempotensie:
     def test_herinvoer_skep_nie_duplikate_nie(self, db):
-        # Simuleer twee invoere van dieselfde CSV deur dieselfde logika
-        # twee keer te laat loop (via die router se hulpfunksies).
+        # Simuleer twee invoere van dieselfde CSV deur die werklike
+        # importeer_klasse-logika twee keer te laat loop.
+        import asyncio
+        import io
+        from fastapi import UploadFile
+        from routers.klasse import importeer_klasse
+
         inhoud = (
             '"10:00,""9:00"",""Maandag"",""GH117 A (50)"",""ER 2"",""EBREK370"",""8:00"",""9:00"""'
         )
-        reëls = parse_lantiv_csv(inhoud)
 
         def voer_in():
-            module = db.query(models.Module).filter(models.Module.MOD_Kode == "EBREK370").first()
-            if not module:
-                module = models.Module(MOD_Kode="EBREK370")
-                db.add(module)
-                db.flush()
-            klas = models.Klas(
-                Module_ID=module.Module_ID,
-                KLA_Lokaal="GH117 A (50)",
-                KLA_Dag="Maandag",
-                KLA_Begin_Tyd="8:00",
-                KLA_Eind_Tyd="9:00",
-            )
-            db.add(klas)
-            db.flush()
-            groep = db.query(models.Groep).filter(models.Groep.GRO_Naam == "ER 2").first()
-            if not groep:
-                groep = models.Groep(GRO_Naam="ER 2")
-                db.add(groep)
-                db.flush()
-            db.add(models.Klas_Groep(Klas_ID=klas.Klas_ID, Groep_ID=groep.Groep_ID))
-            db.flush()
+            lêer = UploadFile(filename="rooster.csv", file=io.BytesIO(inhoud.encode("utf-8")))
+            result = asyncio.run(importeer_klasse(lêer, db=db, _=True))
+            assert result.sukses is True
+            return result.data
 
-        voer_in()
-        voer_in()
+        eerste = voer_in()
+        tweede = voer_in()
 
+        assert eerste["modules_geskep"] == 1
+        assert eerste["klasse_geskep"] == 1
+        assert eerste["groepe_geskep"] == 1
+        # Her-invoer moet niks nuuts skep nie.
+        assert tweede["modules_geskep"] == 0
+        assert tweede["klasse_geskep"] == 0
+        assert tweede["groepe_geskep"] == 0
         assert db.query(models.Module).filter(models.Module.MOD_Kode == "EBREK370").count() == 1
         assert db.query(models.Groep).filter(models.Groep.GRO_Naam == "ER 2").count() == 1
-        assert db.query(models.Klas).count() == 2  # elke invoer skep 'n nuwe klas-ry
+        assert db.query(models.Klas).count() == 1  # her-invoer hergebruik dieselfde klas-ry
 
 
 class TestRoosterHTTPAuth:
