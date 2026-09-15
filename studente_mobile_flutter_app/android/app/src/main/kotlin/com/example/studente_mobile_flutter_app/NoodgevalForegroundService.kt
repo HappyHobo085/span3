@@ -32,6 +32,8 @@ class NoodgevalForegroundService : Service() {
     companion object {
         const val EXTRA_MQTT_HOST = "mqtt_host"
         const val EXTRA_MQTT_PORT = "mqtt_port"
+        const val EXTRA_MQTT_USERNAME = "mqtt_username"
+        const val EXTRA_MQTT_PASSWORD = "mqtt_password"
         const val EXTRA_KAMPUS_ID = "kampus_id"
         const val EXTRA_API_BASE_URL = "api_base_url"
         const val EXTRA_BEARER_TOKEN = "bearer_token"
@@ -43,6 +45,8 @@ class NoodgevalForegroundService : Service() {
         private const val PREFS = "moon_noodgeval_service"
         private const val PREF_HOST = "host"
         private const val PREF_PORT = "port"
+        private const val PREF_MQTT_USERNAME = "mqtt_username"
+        private const val PREF_MQTT_PASSWORD = "mqtt_password"
         private const val PREF_KAMPUS_ID = "kampus_id"
         private const val PREF_API_BASE_URL = "api_base_url"
         private const val PREF_BEARER_TOKEN = "bearer_token"
@@ -67,6 +71,12 @@ class NoodgevalForegroundService : Service() {
 
     @Volatile
     private var mqttPort: Int = 1883
+
+    @Volatile
+    private var mqttUsername: String = "moon_mobile"
+
+    @Volatile
+    private var mqttPassword: String = ""
 
     @Volatile
     private var kampusId: Int = 1
@@ -102,6 +112,17 @@ class NoodgevalForegroundService : Service() {
             prefs.getInt(PREF_PORT, 1883)
         }
 
+        mqttUsername = intent?.getStringExtra(EXTRA_MQTT_USERNAME)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_MQTT_USERNAME, "moon_mobile")
+            ?: "moon_mobile"
+
+        mqttPassword = intent?.getStringExtra(EXTRA_MQTT_PASSWORD)
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_MQTT_PASSWORD, "")
+            ?: ""
+
         kampusId = if (intent?.hasExtra(EXTRA_KAMPUS_ID) == true) {
             intent.getIntExtra(EXTRA_KAMPUS_ID, 1)
         } else {
@@ -127,6 +148,8 @@ class NoodgevalForegroundService : Service() {
         prefs.edit()
             .putString(PREF_HOST, mqttHost)
             .putInt(PREF_PORT, mqttPort)
+            .putString(PREF_MQTT_USERNAME, mqttUsername)
+            .putString(PREF_MQTT_PASSWORD, mqttPassword)
             .putInt(PREF_KAMPUS_ID, kampusId)
             .putString(PREF_API_BASE_URL, apiBaseUrl)
             .putString(PREF_BEARER_TOKEN, bearerToken)
@@ -247,7 +270,17 @@ class NoodgevalForegroundService : Service() {
                     isCleanSession = false
                     connectionTimeout = 10
                     keepAliveInterval = 20
+
+                    if (mqttUsername.isNotBlank()) {
+                        setUserName(mqttUsername)
+                        setPassword(mqttPassword.toCharArray())
+                    }
                 }
+
+                Log.i(
+                    TAG,
+                    "MQTT verbind na ${brokerUri()} as gebruiker=${mqttUsername.ifBlank { "<geen>" }}"
+                )
 
                 mqttClient = client
                 client.connect(options)
@@ -747,10 +780,25 @@ class NoodgevalForegroundService : Service() {
     }
 
     private fun brokerUri(): String {
-        val cleanHost = mqttHost
-            .removePrefix("tcp://")
-            .removeSuffix("/")
-        return "tcp://$cleanHost:$mqttPort"
+        val rawHost = mqttHost.trim().removeSuffix("/")
+
+        // Laat 'n volledige URI toe vir toekomstige/dev gebruik.
+        if (rawHost.startsWith("tcp://", ignoreCase = true) ||
+            rawHost.startsWith("ssl://", ignoreCase = true) ||
+            rawHost.startsWith("ws://", ignoreCase = true) ||
+            rawHost.startsWith("wss://", ignoreCase = true)
+        ) {
+            return rawHost
+        }
+
+        // Railway Public Networking termineer TLS op 443 en stuur die
+        // WebSocket intern na Mosquitto se 9001 listener. Paho gebruik
+        // /mqtt as die standaard WebSocket-pad wanneer geen pad gegee is nie.
+        val isRailwayPublic = rawHost.endsWith(".up.railway.app", ignoreCase = true)
+        val scheme = if (isRailwayPublic || mqttPort == 443) "wss" else "tcp"
+        val effectivePort = if (isRailwayPublic) 443 else mqttPort
+
+        return "$scheme://$rawHost:$effectivePort"
     }
 
     private fun startAsForeground(text: String) {
