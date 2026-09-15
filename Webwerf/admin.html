@@ -12,7 +12,7 @@
   <title>MOON — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260903d">
+  <link rel="stylesheet" href="styles.css?v=20260915">
   <script src="theme.js?v=20260819"></script>
 </head>
 <body>
@@ -261,6 +261,13 @@
           <option value="">Kies koshuis...</option>
         </select>
       </div>
+      <!-- Slegs vir Opsigters: die kampus waarvoor hulle verantwoordelik is -->
+      <div class="field" id="opsigter-kampus-field" style="display:none">
+        <label for="new-user-kampus">Kampus</label>
+        <select class="glass-select" id="new-user-kampus">
+          <option value="">Kies kampus...</option>
+        </select>
+      </div>
       <div class="field">
         <label for="new-user-password">Wagwoord</label>
         <input class="glass-input" id="new-user-password" type="password" autocomplete="new-password" placeholder="Voer wagwoord in">
@@ -461,6 +468,6 @@
        gedeelde kode, en admin.js beheer hierdie spesifieke bladsy -->
   <script src="website_api_calls.js?v=20260915"></script>
   <script src="main.js?v=20260915"></script>
-  <script src="admin.js?v=20260902"></script>
+  <script src="admin.js?v=20260915"></script>
 </body>
 </html>

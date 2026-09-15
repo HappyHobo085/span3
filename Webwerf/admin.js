@@ -101,6 +101,8 @@
   const studentIsKoshuisField = document.getElementById('student-is-koshuis-field');
   const newUserKoshuis = document.getElementById('new-user-koshuis');
   const studentKoshuisField = document.getElementById('student-koshuis-field');
+  const newUserKampus = document.getElementById('new-user-kampus');
+  const opsigterKampusField = document.getElementById('opsigter-kampus-field');
   const newUserPassword = document.getElementById('new-user-password');
   const newUserRoles = document.getElementById('new-user-roles');
   const userModalTitle = document.getElementById('create-user-title');
@@ -633,6 +635,19 @@
         opt.textContent = k.KAM_Naam;
         newKoshuisKampus.appendChild(opt);
       });
+    }
+
+    // Vul die kampus-keuselys in die gebruiker-venster (slegs vir Opsigters).
+    if (newUserKampus) {
+      const huidige = newUserKampus.value;
+      newUserKampus.innerHTML = '<option value="">Kies kampus...</option>';
+      json.data.forEach(function (k) {
+        const opt = document.createElement('option');
+        opt.value = String(k.Kampus_ID);
+        opt.textContent = k.KAM_Naam;
+        newUserKampus.appendChild(opt);
+      });
+      newUserKampus.value = huidige;
     }
 
     // Onthou elke kampus se naam sodat ander lyste dit kan wys.
@@ -1199,6 +1214,8 @@
     if (studentNumberField) studentNumberField.style.display = 'none';
     if (studentIsKoshuisField) studentIsKoshuisField.style.display = 'none';
     if (studentKoshuisField) studentKoshuisField.style.display = 'none';
+    if (newUserKampus) newUserKampus.value = '';
+    if (opsigterKampusField) opsigterKampusField.style.display = 'none';
     if (userActiveRow) userActiveRow.style.display = 'none';
     if (newUserActive) newUserActive.checked = true;
 
@@ -1249,6 +1266,10 @@
     toggleStudentField();
     if (newUserStudentNr) newUserStudentNr.value = user.STU_Nommer || '';
     if (newUserKoshuis) newUserKoshuis.value = user.Koshuis_ID != null ? String(user.Koshuis_ID) : '';
+
+    // Opsigters: wys en vul die kampus-keuselys in.
+    toggleOpsigterField();
+    if (newUserKampus) newUserKampus.value = user.Kampus_ID != null ? String(user.Kampus_ID) : '';
 
     if (userModalTitle) userModalTitle.textContent = 'Wysig Gebruiker';
     if (createUserBtn) createUserBtn.textContent = 'Stoor Veranderinge';
@@ -1325,7 +1346,7 @@
       // 'n Leë Rol_IDs-lys is "truthy" — val net terug na die legacy Rol_ID
       // as daar werklik geen rolle in die nuwe stelsel nie.
       const gebruikerRolIds = Array.isArray(user.Rol_IDs) && user.Rol_IDs.length ? user.Rol_IDs : [user.Rol_ID];
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, gebruikerRolIds, isAktief);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, gebruikerRolIds, isAktief, user.Kampus_ID);
     });
   }
 
@@ -1347,7 +1368,26 @@
   /** Create a user row in the list. */
   // Hierdie funksie voeg een gebruiker-ry by die lys: naam, e-pos,
   // status, rol-etiket en 'n "Wysig"-knoppie.
-  function addUserRow(userId, naam, van, epos, rolIds, isAktief) {
+  /** Show (or remove) the "Kampus: X" line under an opsigter's roles. */
+  // Hierdie funksie wys onder 'n Opsigter se rolle aan watter kampus
+  // hy/sy gekoppel is, of haal die reël weg as daar geen kampus is nie.
+  function setUserRowKampus(row, kampusId) {
+    const rolesDiv = row.querySelector('.admin-user-roles');
+    if (!rolesDiv) return;
+    let kampusDiv = rolesDiv.querySelector('.admin-user-kampus');
+    if (kampusId == null || kampusId === '') {
+      if (kampusDiv) kampusDiv.remove();
+      return;
+    }
+    if (!kampusDiv) {
+      kampusDiv = document.createElement('div');
+      kampusDiv.className = 'admin-user-email admin-user-kampus';
+      rolesDiv.appendChild(kampusDiv);
+    }
+    kampusDiv.textContent = 'Kampus: ' + (kampusMap[String(kampusId)] || ('#' + kampusId));
+  }
+
+  function addUserRow(userId, naam, van, epos, rolIds, isAktief, kampusId) {
     if (!userList) return;
 
     var roleIdsArr = Array.isArray(rolIds) ? rolIds : (rolIds ? [rolIds] : []);
@@ -1405,6 +1445,7 @@
     row.appendChild(infoDiv);
     row.appendChild(rolesDiv);
     row.appendChild(actionsDiv);
+    setUserRowKampus(row, kampusId);
     userList.appendChild(row);
   }
 
@@ -1464,6 +1505,22 @@
     if (!wys && newUserKoshuis) newUserKoshuis.value = '';
   }
 
+  /** Is the Opsigter role ticked in the create/edit user modal? */
+  // Hierdie funksie kyk of die "Opsigter"-rol in die venster gemerk is.
+  function isOpsigterGekies() {
+    return !!(newUserRoles && newUserRoles.querySelector('input[data-rol-naam="Kampus_Opsigter"]:checked'));
+  }
+
+  /** Show the kampus dropdown only while the Opsigter role is ticked. */
+  // Hierdie funksie wys die kampus-keuselys net vir Opsigters, want
+  // 'n Opsigter moet aan 'n kampus gekoppel wees om dit te kan bestuur.
+  function toggleOpsigterField() {
+    if (!opsigterKampusField) return;
+    const wys = isOpsigterGekies();
+    opsigterKampusField.style.display = wys ? 'block' : 'none';
+    if (!wys && newUserKampus) newUserKampus.value = '';
+  }
+
   /** Submit new user to the backend. */
   // Hierdie funksie stoor die gebruiker-venster se inligting:
   // dit skep 'n nuwe gebruiker, of stuur wysigings aan na submitEditUser.
@@ -1477,11 +1534,13 @@
 
     // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
     const isStudent = newUserRoles ? newUserRoles.querySelector('input[data-rol-naam="Student"]:checked') !== null : false;
+    const isOpsigter = isOpsigterGekies();
+    const kampusId = newUserKampus && newUserKampus.value ? Number(newUserKampus.value) : null;
 
     // ===== EDIT MODE =====
     // As ons besig is om 'n bestaande gebruiker te wysig, gaan na submitEditUser.
     if (editingUserId !== null) {
-      await submitEditUser({ naam, van, epos, wagwoord, rolIds, studentNr, isStudent });
+      await submitEditUser({ naam, van, epos, wagwoord, rolIds, studentNr, isStudent, isOpsigter, kampusId });
       return;
     }
 
@@ -1535,6 +1594,16 @@ else {
   payload.GEB_ID_Nommer = Date.now().toString().slice(-13);
 }
 
+// 'n Opsigter MOET aan 'n kampus gekoppel wees, anders kan hy/sy geen
+// kampus-bladsye gebruik nie.
+if (isOpsigter) {
+  if (!kampusId) {
+    alert('Kies asseblief die kampus waarvoor die Opsigter verantwoordelik is.');
+    return;
+  }
+  payload.Kampus_ID = kampusId;
+}
+
 // Stuur die nuwe gebruiker se inligting na die bediener.
 const json = await window.MoonApi.createGebruiker(payload);
 
@@ -1544,7 +1613,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       closeUserModal(); // also resets the form back to create mode
 
       // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
-      addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief);
+      addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief, payload.Kampus_ID);
       capListHeight(userList, '.admin-user-row');
     } else {
       alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
@@ -1555,7 +1624,7 @@ const json = await window.MoonApi.createGebruiker(payload);
   // Hierdie funksie stuur die wysigings van 'n bestaande gebruiker
   // na die bediener en werk dan die ry in die lys by.
   async function submitEditUser(fields) {
-    const { naam, van, epos, wagwoord, rolIds, studentNr, isStudent } = fields;
+    const { naam, van, epos, wagwoord, rolIds, studentNr, isStudent, isOpsigter, kampusId } = fields;
 
     // Kyk dat al die verpligte velde ingevul is.
     if (!naam || !van || !epos || rolIds.length === 0) {
@@ -1593,6 +1662,18 @@ const json = await window.MoonApi.createGebruiker(payload);
       payload.Koshuis_ID = isKoshuis ? Number(newUserKoshuis.value) : null;
     }
 
+    // Opsigter: kampus is verpligtend. As die Opsigter-rol verwyder is,
+    // stuur null sodat die ou kampus-koppeling ook verwyder word.
+    if (isOpsigter) {
+      if (!kampusId) {
+        alert('Kies asseblief die kampus waarvoor die Opsigter verantwoordelik is.');
+        return;
+      }
+      payload.Kampus_ID = kampusId;
+    } else {
+      payload.Kampus_ID = null;
+    }
+
     // Stuur die wysigings na die bediener.
     const json = await window.MoonApi.updateGebruiker(editingUserId, payload);
 
@@ -1605,6 +1686,7 @@ const json = await window.MoonApi.createGebruiker(payload);
         epos: data.GEB_Epos || epos,
         rolIds: data.Rol_IDs || rolIds,
         isAktief: data.Is_Aktief ?? payload.Is_Aktief,
+        kampusId: isOpsigter ? (data.Kampus_ID ?? payload.Kampus_ID) : null,
     });
       closeUserModal(); // resets the form back to create mode
     } else {
@@ -1646,6 +1728,8 @@ const json = await window.MoonApi.createGebruiker(payload);
     if (oldBadge) {
         oldBadge.replaceWith(buildStatusBadge(info.isAktief !== false));
     }
+
+    setUserRowKampus(row, info.kampusId);
 
     row.dataset.rolIds = JSON.stringify(info.rolIds || []);
     row.dataset.search = `${info.naam} ${info.van} ${info.epos}`.toLowerCase();
@@ -1827,6 +1911,7 @@ const json = await window.MoonApi.createGebruiker(payload);
   // As die rol verander, wys of versteek die student-velde.
   if (newUserRoles) {
     newUserRoles.addEventListener('change', toggleStudentField);
+    newUserRoles.addEventListener('change', toggleOpsigterField);
   }
   // As die koshuis-blokkie gemerk word, wys of versteek die koshuis-keuselys.
   if (newUserIsKoshuis) {
@@ -2729,6 +2814,7 @@ async function refreshDashboard() {
   await loadCsvTableOptions();
 
   toggleStudentField();
+  toggleOpsigterField();
 
   await loadLokale();
   applyVenueFilter();
