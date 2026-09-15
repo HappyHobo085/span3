@@ -90,6 +90,9 @@ class NoodgevalForegroundService : Service() {
     @Volatile
     private var deviceToken: String = ""
 
+    @Volatile
+    private var subscribedTopic: String? = null
+
     private var activeNoodgevalId: String? = null
 
     override fun onCreate() {
@@ -296,10 +299,33 @@ class NoodgevalForegroundService : Service() {
 
     private fun subscribe(client: MqttClient) {
         try {
-            val topic = "moon/noodgeval/kampus/$kampusId"
-            if (client.isConnected) {
-                client.subscribe(topic, 1)
-                Log.i(TAG, "Subscribed: $topic")
+            if (!client.isConnected) return
+
+            val nuweTopic = if (kampusId > 0) {
+                "moon/noodgeval/kampus/$kampusId"
+            } else {
+                null
+            }
+
+            val ouTopic = subscribedTopic
+            if (ouTopic != null && ouTopic != nuweTopic) {
+                try {
+                    client.unsubscribe(ouTopic)
+                    Log.i(TAG, "Unsubscribed: $ouTopic")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Kon nie ou MQTT topic unsubscribe nie: $ouTopic", e)
+                }
+            }
+
+            if (nuweTopic != null) {
+                // Om weer op dieselfde topic te subscribe is veilig en maak ook
+                // seker dat 'n herverbinding die subscription herstel.
+                client.subscribe(nuweTopic, 1)
+                subscribedTopic = nuweTopic
+                Log.i(TAG, "Subscribed: $nuweTopic")
+            } else {
+                subscribedTopic = null
+                Log.i(TAG, "Geen aktiewe kampus nie; geen kampus MQTT topic subscribed nie.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "MQTT subscribe fout", e)
@@ -322,6 +348,20 @@ class NoodgevalForegroundService : Service() {
         }
 
         val status = json.optString("status", "").trim().uppercase()
+
+        // Verdedigende kampus-kontrole: selfs al sou 'n ou MQTT subscription
+        // nog kortliks bestaan, mag 'n nood vir 'n ander kampus nooit alarm maak nie.
+        if (status in setOf("AKTIEF", "ACTIVE", "GESLUIT", "CLOSED")) {
+            val payloadKampusId = json.optInt("kampus_id", -1)
+            if (kampusId <= 0 || payloadKampusId != kampusId) {
+                Log.w(
+                    TAG,
+                    "Ignoreer noodgeval vir verkeerde kampus: payload=$payloadKampusId huidig=$kampusId"
+                )
+                return
+            }
+        }
+
         val noodgevalId = json.opt("noodgeval_id")?.toString()
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?: "local-${System.currentTimeMillis()}"
