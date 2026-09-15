@@ -26,6 +26,8 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 class NoodgevalForegroundService : Service() {
@@ -57,11 +59,16 @@ class NoodgevalForegroundService : Service() {
         private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native_v2"
         private const val SERVICE_NOTIFICATION_ID = 7001
         private const val ALERT_NOTIFICATION_ID = 8001
+        private const val CAMPUS_REFRESH_SECONDS = 60L
         private const val TAG = "MOON-NoodgevalService"
     }
 
     private val mqttExecutor = Executors.newSingleThreadExecutor()
     private val apiExecutor = Executors.newSingleThreadExecutor()
+    private val campusRefreshExecutor = Executors.newSingleThreadScheduledExecutor()
+
+    @Volatile
+    private var campusRefreshFuture: ScheduledFuture<*>? = null
 
     @Volatile
     private var mqttClient: MqttClient? = null
@@ -173,6 +180,7 @@ class NoodgevalForegroundService : Service() {
 
         connectMqttAsync()
         retryPendingAcknowledgementIfNeeded()
+        startCampusRefreshLoopIfNeeded()
         return START_STICKY
     }
 
@@ -195,12 +203,210 @@ class NoodgevalForegroundService : Service() {
         }
 
         mqttClient = null
+        campusRefreshFuture?.cancel(true)
+        campusRefreshFuture = null
+        campusRefreshExecutor.shutdownNow()
         mqttExecutor.shutdownNow()
         apiExecutor.shutdownNow()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // STEP 12D:
+    // Die native foreground service herlees die gebruiker se huidige kampus periodiek.
+    // Dit werk onafhanklik van die Flutter UI, dus ook wanneer Flutter in die
+    // agtergrond is of uit Recent Apps verwyder is.
+    private fun startCampusRefreshLoopIfNeeded() {
+        if (apiBaseUrl.isBlank()) {
+            Log.w(TAG, "Kampus refresh nie begin nie: API URL ontbreek.")
+            return
+        }
+
+        synchronized(this) {
+            val existing = campusRefreshFuture
+            if (existing != null && !existing.isCancelled && !existing.isDone) {
+                return
+            }
+
+            campusRefreshFuture = campusRefreshExecutor.scheduleWithFixedDelay(
+                {
+                    try {
+                        refreshCampusFromBackend()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Kampus refresh het onverwags misluk.", e)
+                    }
+                },
+                5L,
+                CAMPUS_REFRESH_SECONDS,
+                TimeUnit.SECONDS,
+            )
+
+            Log.i(
+                TAG,
+                "STEP 12D kampus refresh aktief: elke $CAMPUS_REFRESH_SECONDS sekondes."
+            )
+        }
+    }
+
+    private data class CampusPresence(
+        val kampusId: Int,
+        val opKampus: Boolean,
+        val kampusNaam: String?,
+    )
+
+    private fun refreshCampusFromBackend() {
+        val base = apiBaseUrl.trim().trimEnd('/')
+        if (base.isBlank()) return
+
+        // 1) Voorkeur: langerlewende scoped device credential.
+        // Die endpoint is doelbewus apart van die gewone JWT endpoint sodat die
+        // foreground service kan aanhou werk nadat die Flutter-login JWT verval het.
+        val scoped = deviceToken.trim().ifBlank {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_DEVICE_TOKEN, "")
+                ?.trim()
+                .orEmpty()
+        }
+
+        if (scoped.isNotBlank()) {
+            val result = performGet(
+                "$base/noodgeval/device/my-campus",
+                "X-MOON-Device-Token",
+                scoped,
+            )
+
+            if (result.code in 200..299) {
+                val presence = parseCampusPresence(result.body)
+                if (presence != null) {
+                    applyCampusPresence(presence, "device auth")
+                    return
+                }
+                Log.w(TAG, "Device my-campus het 'n ongeldige antwoord teruggestuur.")
+            } else if (result.code != null) {
+                Log.w(
+                    TAG,
+                    "Device my-campus HTTP ${result.code}: ${result.body.take(300)}"
+                )
+            } else if (result.error != null) {
+                Log.w(TAG, "Device my-campus netwerkfout.", result.error)
+            }
+
+            // 401/403 = device credential nie bruikbaar nie.
+            // 404/405 = device my-campus endpoint is nog nie op hierdie backend uitrol nie.
+            // In al vier gevalle val ons tydelik terug na die gewone JWT endpoint.
+            if (result.code != null && result.code !in listOf(401, 403, 404, 405)) {
+                return
+            }
+        }
+
+        // 2) Tydelike/aanvangs-terugval: gewone login JWT.
+        val jwt = bearerToken.trim()
+        if (jwt.isBlank()) {
+            Log.w(TAG, "Kampus refresh kan nie autentiseer nie: geen device token of JWT.")
+            return
+        }
+
+        val result = performGet(
+            "$base/noodgeval/my-campus",
+            "Authorization",
+            "Bearer $jwt",
+        )
+
+        if (result.code in 200..299) {
+            val presence = parseCampusPresence(result.body)
+            if (presence != null) {
+                applyCampusPresence(presence, "JWT")
+            } else {
+                Log.w(TAG, "JWT my-campus het 'n ongeldige antwoord teruggestuur.")
+            }
+            return
+        }
+
+        if (result.code != null) {
+            Log.w(
+                TAG,
+                "JWT my-campus HTTP ${result.code}: ${result.body.take(300)}"
+            )
+        } else if (result.error != null) {
+            Log.w(TAG, "JWT my-campus netwerkfout.", result.error)
+        }
+    }
+
+    private fun parseCampusPresence(body: String): CampusPresence? {
+        return try {
+            val root = JSONObject(body)
+            val data = root.optJSONObject("data") ?: return null
+            val opKampus = data.optBoolean("op_kampus", false)
+
+            if (!opKampus) {
+                CampusPresence(
+                    kampusId = 0,
+                    opKampus = false,
+                    kampusNaam = null,
+                )
+            } else {
+                if (data.isNull("kampus_id")) return null
+                val id = data.optInt("kampus_id", -1)
+                if (id <= 0) return null
+
+                CampusPresence(
+                    kampusId = id,
+                    opKampus = true,
+                    kampusNaam = data.optString("kampus_naam", "")
+                        .trim()
+                        .ifBlank { null },
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Kon my-campus JSON nie lees nie.", e)
+            null
+        }
+    }
+
+    private fun applyCampusPresence(presence: CampusPresence, authSource: String) {
+        val oldKampusId = kampusId
+        val newKampusId = presence.kampusId
+
+        if (oldKampusId == newKampusId) {
+            return
+        }
+
+        kampusId = newKampusId
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_KAMPUS_ID, newKampusId)
+            .apply()
+
+        Log.i(
+            TAG,
+            "STEP 12D kampus verander via $authSource: " +
+                "$oldKampusId -> $newKampusId " +
+                "(${presence.kampusNaam ?: if (presence.opKampus) "onbekend" else "nie op kampus"})"
+        )
+
+        // MQTT-veranderinge bly op die bestaande enkel MQTT executor sodat
+        // unsubscribe/subscribe nie gelyktydig teen mekaar kan hardloop nie.
+        mqttExecutor.execute {
+            val client = mqttClient
+            if (client?.isConnected == true) {
+                subscribe(client)
+                updateForegroundNotification(
+                    if (newKampusId > 0) {
+                        "MQTT gekoppel • kampus $newKampusId"
+                    } else {
+                        "Nie tans op 'n kampus nie • wag vir nuwe kampus scan"
+                    }
+                )
+            } else {
+                Log.i(
+                    TAG,
+                    "Kampus het verander terwyl MQTT aflyn is; koppel weer met nuwe kampus."
+                )
+                connectMqttAsync()
+            }
+        }
+    }
 
     private fun connectMqttAsync() {
         mqttExecutor.execute {
@@ -668,6 +874,42 @@ class NoodgevalForegroundService : Service() {
         val body: String = "",
         val error: Exception? = null,
     )
+
+    private fun performGet(
+        urlString: String,
+        headerName: String,
+        headerValue: String,
+    ): ApiPostResult {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 10000
+                useCaches = false
+                doInput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty(headerName, headerValue)
+            }
+            val code = connection.responseCode
+            val body = try {
+                val stream = if (code in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+                stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            ApiPostResult(code = code, body = body)
+        } catch (e: Exception) {
+            ApiPostResult(code = null, error = e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
 
     private fun performEmptyPost(
         urlString: String,
