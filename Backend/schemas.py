@@ -704,16 +704,24 @@ class WagteStudentScanRequest(BaseModel):
 
 class WagteProfileScanRequest(BaseModel):
     scan_kode: str
+    # Nuwe Step 13-konteks. Opsioneel gehou sodat ou kliënte nie onmiddellik breek nie.
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
 
 class WagteProfileVerifyRequest(BaseModel):
     gebruiker_id: int
-    kampus_id: int
+    # kampus_id bly opsioneel vir backwards compatibility.
+    kampus_id: Optional[int] = None
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
     rigting: str
     metode: str
 
 class WagteProfileDeclineRequest(BaseModel):
     gebruiker_id: int
-    kampus_id: int
+    kampus_id: Optional[int] = None
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
     metode: str = "QR"
 
 # --- SAAMRY SCHEMAS ---

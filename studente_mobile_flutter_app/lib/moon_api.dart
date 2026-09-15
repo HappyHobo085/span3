@@ -95,6 +95,47 @@ class KoshuisDto {
 
 
 /// =========================
+/// Wag skandeerplek DTO
+/// =========================
+
+class SkandeerPlekDto {
+  final String tipe; // KAMPUS | KOSHUIS
+  final String naam;
+  final int lokasieId;
+  final int? kampusId;
+  final int? koshuisId;
+  final String? adres;
+
+  SkandeerPlekDto({
+    required this.tipe,
+    required this.naam,
+    required this.lokasieId,
+    required this.kampusId,
+    required this.koshuisId,
+    this.adres,
+  });
+
+  bool get isKampus => tipe.toUpperCase() == 'KAMPUS';
+  bool get isKoshuis => tipe.toUpperCase() == 'KOSHUIS';
+
+  factory SkandeerPlekDto.fromJson(Map<String, dynamic> json) {
+    return SkandeerPlekDto(
+      tipe: json['tipe']?.toString().toUpperCase() ?? 'KAMPUS',
+      naam: json['naam']?.toString() ?? '',
+      lokasieId: (json['lokasie_id'] as num).toInt(),
+      kampusId: json['kampus_id'] == null
+          ? null
+          : (json['kampus_id'] as num).toInt(),
+      koshuisId: json['koshuis_id'] == null
+          ? null
+          : (json['koshuis_id'] as num).toInt(),
+      adres: json['adres']?.toString(),
+    );
+  }
+}
+
+
+/// =========================
 
 /// Lokasie DTO
 
@@ -2136,6 +2177,46 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
   }
 
+  static Future<List<SkandeerPlekDto>> fetchWagteSkandeerPlekke() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/wagte/skandeerplekke'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception(
+        'Kon nie skandeerplekke laai nie (HTTP ${response.statusCode})',
+      );
+    }
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ??
+            decoded['detail'] ??
+            'Kon nie skandeerplekke laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw == null) return [];
+
+    return (raw as List)
+        .map(
+          (e) => SkandeerPlekDto.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+  }
+
+
   static Future<Map<String, dynamic>> wagteNommerCheck(String nommer) async {
 
     final uri = Uri.parse('$baseUrl/wagte/nommer/check').replace(
@@ -2187,174 +2268,127 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   }
 
   static Future<WagteProfileScanDto> wagteProfileScan(
-
-    String scanKode,
-
-  ) async {
-
+    String scanKode, {
+    int? lokasieId,
+    int? koshuisId,
+  }) async {
     final response = await http.post(
-
       Uri.parse('$baseUrl/wagte/profile/scan'),
-
       headers: {
-
         "Content-Type": "application/json",
-
         if (bearerToken != null)
-
           "Authorization": "Bearer $bearerToken",
-
       },
-
       body: jsonEncode({
-
         "scan_kode": scanKode,
-
+        if (lokasieId != null) "lokasie_id": lokasieId,
+        if (koshuisId != null) "koshuis_id": koshuisId,
       }),
-
     );
 
     final decoded = jsonDecode(response.body);
 
     if (response.statusCode != 200 || decoded["sukses"] != true) {
-
-      throw Exception(decoded["fout"] ?? decoded["detail"] ?? "Kon nie profiel kry nie");
-
+      throw Exception(
+        decoded["fout"] ?? decoded["detail"] ?? "Kon nie profiel kry nie",
+      );
     }
 
     final d = decoded["data"];
 
     return WagteProfileScanDto(
-
       gebruikerId: d["gebruiker_id"],
-
       naam: d["naam"],
-
       van: d["van"],
-
       idNommer: d["id_nommer"],
-
       fotoUrl: d["foto_url"],
-
       voorgesteldeRigting: d["voorgestelde_rigting"] ?? "IN",
-
     );
-
   }
 
   static Future<Map<String, dynamic>> wagteProfileVerify({
-
     required int gebruikerId,
-
-    required int kampusId,
-
+    int? kampusId,
+    int? lokasieId,
+    int? koshuisId,
     required String rigting,
-
     required String metode,
-
   }) async {
+    if (lokasieId == null && kampusId == null) {
+      throw ArgumentError('lokasieId of kampusId word vereis');
+    }
 
     final response = await http.post(
-
       Uri.parse('$baseUrl/wagte/profile/verify'),
-
       headers: {
-
         'Content-Type': 'application/json',
-
         'Accept': 'application/json',
-
         if (bearerToken != null && bearerToken!.trim().isNotEmpty)
-
           'Authorization': 'Bearer ${bearerToken!.trim()}',
-
       },
-
       body: jsonEncode({
-
         'gebruiker_id': gebruikerId,
-
-        'kampus_id': kampusId,
-
+        if (kampusId != null) 'kampus_id': kampusId,
+        if (lokasieId != null) 'lokasie_id': lokasieId,
+        if (koshuisId != null) 'koshuis_id': koshuisId,
         'rigting': rigting,
-
         'metode': metode,
-
       }),
-
     );
 
     final decoded = jsonDecode(response.body);
 
     if (response.statusCode != 200 || decoded['sukses'] != true) {
-
       throw Exception(
-
         decoded['fout'] ?? decoded['detail'] ?? 'Verify het misluk',
-
       );
-
     }
 
     return Map<String, dynamic>.from(decoded['data']);
-
   }
 
 
 
   static Future<Map<String, dynamic>> wagteProfileDecline({
+    required int gebruikerId,
+    int? kampusId,
+    int? lokasieId,
+    int? koshuisId,
+    required String metode,
+  }) async {
+    if (lokasieId == null && kampusId == null) {
+      throw ArgumentError('lokasieId of kampusId word vereis');
+    }
 
-  required int gebruikerId,
-
-  required int kampusId,
-
-  required String metode,
-
-}) async {
-
-  final response = await http.post(
-
-    Uri.parse('$baseUrl/wagte/profile/decline'),
-
-    headers: {
-
-      'Content-Type': 'application/json',
-
-      'Accept': 'application/json',
-
-      if (bearerToken != null && bearerToken!.trim().isNotEmpty)
-
-        'Authorization': 'Bearer ${bearerToken!.trim()}',
-
-    },
-
-    body: jsonEncode({
-
-      'gebruiker_id': gebruikerId,
-
-      'kampus_id': kampusId,
-
-      'metode': metode,
-
-    }),
-
-  );
-
-  final decoded = jsonDecode(response.body);
-
-  if (response.statusCode != 200 || decoded['sukses'] != true) {
-
-    throw Exception(
-
-      decoded['fout'] ?? decoded['detail'] ?? 'Toegang kon nie geweier word nie',
-
+    final response = await http.post(
+      Uri.parse('$baseUrl/wagte/profile/decline'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+      body: jsonEncode({
+        'gebruiker_id': gebruikerId,
+        if (kampusId != null) 'kampus_id': kampusId,
+        if (lokasieId != null) 'lokasie_id': lokasieId,
+        if (koshuisId != null) 'koshuis_id': koshuisId,
+        'metode': metode,
+      }),
     );
 
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['fout'] ??
+            decoded['detail'] ??
+            'Toegang kon nie geweier word nie',
+      );
+    }
+
+    return Map<String, dynamic>.from(decoded['data']);
   }
-
-  return Map<String, dynamic>.from(decoded['data']);
-
-}
 
 
 
