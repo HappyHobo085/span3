@@ -29,33 +29,54 @@ const MethodChannel _noodgevalServiceChannel =
     MethodChannel('moon/noodgeval_service');
 
 const String _mqttHost = String.fromEnvironment(
+
   'MQTT_HOST',
+
   defaultValue: 'wss://mqtt-production-bea8.up.railway.app/mqtt',
+
 );
 
 const int _mqttPort = int.fromEnvironment(
+
   'MQTT_PORT',
+
   defaultValue: 443,
+
 );
 
 const String _mqttUsername = String.fromEnvironment(
+
   'MQTT_USERNAME',
+
   defaultValue: 'moon_mobile',
+
 );
 
 const String _mqttPassword = String.fromEnvironment(
+
   'MQTT_PASSWORD',
+
   defaultValue: '',
+
 );
 
-Future<void> _startNativeNoodgevalService({required String bearerToken}) async {
+Future<void> _startNativeNoodgevalService({
+  required String bearerToken,
+  required int kampusId,
+}) async {
 
   try {
+
     if (_mqttUsername.isNotEmpty && _mqttPassword.isEmpty) {
+
       throw Exception(
+
         'MQTT_PASSWORD ontbreek. Begin die app met '
+
         '--dart-define=MQTT_PASSWORD=<jou mobile MQTT wagwoord>.',
+
       );
+
     }
 
     final started = await _noodgevalServiceChannel.invokeMethod<bool>(
@@ -71,12 +92,8 @@ Future<void> _startNativeNoodgevalService({required String bearerToken}) async {
         'mqttUsername': _mqttUsername,
 
         'mqttPassword': _mqttPassword,
-
-        // Kampus 1 bly vir nou die plaaslike toetskampus.
-
-        // Ons koppel later die regte kampus per gebruiker.
-
-        'kampusId': 1,
+        // 0 beteken die gebruiker is nie tans op 'n kampus ingeskandeer nie.
+        'kampusId': kampusId,
 
         // Die native service moet self kan rapporteer wanneer Flutter
 
@@ -95,7 +112,8 @@ Future<void> _startNativeNoodgevalService({required String bearerToken}) async {
       'NATIVE NOODGEVAL SERVICE: '
 
       'started=$started host=$_mqttHost port=$_mqttPort '
-      'user=$_mqttUsername kampus=1',
+
+      'user=$_mqttUsername kampus=$kampusId',
 
     );
 
@@ -389,7 +407,31 @@ class _LoginPageState extends State<LoginPage> {
 
       // uit Recent Apps wegge-swipe word.
 
-      await _startNativeNoodgevalService(bearerToken: token);
+      int emergencyKampusId = 0;
+      try {
+        final campusStatus = await MoonApi.fetchMyEmergencyCampus();
+        final rawKampusId = campusStatus['kampus_id'];
+
+        if (campusStatus['op_kampus'] == true && rawKampusId is num) {
+          emergencyKampusId = rawKampusId.toInt();
+        }
+
+        debugPrint(
+          'NOODGEVAL KAMPUS: '
+          'opKampus=${campusStatus['op_kampus']} '
+          'kampusId=$emergencyKampusId '
+          'naam=${campusStatus['kampus_naam']}',
+        );
+      } catch (e) {
+        // 'n Tydelike kampus-status fout mag nie 'n suksesvolle login blokkeer nie.
+        // Kampus 0 luister nie na enige regte kampus-noodgeval topic nie.
+        debugPrint('NOODGEVAL KAMPUS KON NIE BEPAAL WORD NIE: $e');
+      }
+
+      await _startNativeNoodgevalService(
+        bearerToken: token,
+        kampusId: emergencyKampusId,
+      );
 
       if (!mounted) return;
 

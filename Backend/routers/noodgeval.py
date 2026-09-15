@@ -338,6 +338,83 @@ def kennisname(
     )
 
 
+
+
+def _current_campus_presence(
+    db: Session,
+    user: models.Gebruikers,
+) -> dict:
+    """Bepaal die gebruiker se huidige kampus uit sy/haar jongste kampus-heklog.
+
+    Slegs lokasies met LOK_Tipe='Kampus' tel. Die jongste heklog word oor ALLE
+    kampusse bepaal, sodat 'n gebruiker nie gelyktydig op twee kampusse kan tel nie.
+    Log_ID is die finale tie-breaker indien twee logs dieselfde timestamp het.
+    """
+    latest = (
+        db.query(
+            models.ToegangsLogs,
+            models.Lokasie,
+            models.Kampus,
+        )
+        .join(
+            models.Lokasie,
+            models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
+        )
+        .join(
+            models.Kampus,
+            models.Kampus.Kampus_ID == models.Lokasie.Kampus_ID,
+        )
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == user.Gebruiker_ID,
+            func.lower(models.Lokasie.LOK_Tipe) == "kampus",
+        )
+        .order_by(
+            models.ToegangsLogs.TOE_Tydstempel.desc(),
+            models.ToegangsLogs.Log_ID.desc(),
+        )
+        .first()
+    )
+
+    if latest is None:
+        return {
+            "op_kampus": False,
+            "kampus_id": None,
+            "kampus_naam": None,
+            "laaste_rigting": None,
+            "laaste_tyd": None,
+            "laaste_log_id": None,
+        }
+
+    gate_log, lokasie, kampus = latest
+    is_in = str(gate_log.TOE_Rigting or "").strip().upper() == "IN"
+
+    return {
+        "op_kampus": is_in,
+        "kampus_id": kampus.Kampus_ID if is_in else None,
+        "kampus_naam": kampus.KAM_Naam if is_in else None,
+        "laaste_rigting": gate_log.TOE_Rigting,
+        "laaste_tyd": (
+            gate_log.TOE_Tydstempel.isoformat()
+            if gate_log.TOE_Tydstempel is not None
+            else None
+        ),
+        "laaste_log_id": gate_log.Log_ID,
+    }
+
+
+@router.get("/my-campus", response_model=schemas.APIResponse[dict])
+def my_emergency_campus(
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee die kampus waarop die ingelogde gebruiker tans fisies ingeskandeer is."""
+    return schemas.APIResponse(
+        sukses=True,
+        data=_current_campus_presence(db, current_user),
+        fout=None,
+    )
+
+
 @router.get("/aktief", response_model=schemas.APIResponse[list[schemas.NoodgevalRead]])
 def aktiewe_noodgevalle(
     kampus_id: int | None = Query(default=None, gt=0),
