@@ -46,6 +46,7 @@ class NoodgevalForegroundService : Service() {
         private const val PREF_KAMPUS_ID = "kampus_id"
         private const val PREF_API_BASE_URL = "api_base_url"
         private const val PREF_BEARER_TOKEN = "bearer_token"
+        private const val PREF_DEVICE_TOKEN = "device_token"
         private const val PREF_PENDING_ACK_ID = "pending_ack_id"
 
         private const val SERVICE_CHANNEL_ID = "moon_noodgeval_service_native"
@@ -75,6 +76,9 @@ class NoodgevalForegroundService : Service() {
 
     @Volatile
     private var bearerToken: String = ""
+
+    @Volatile
+    private var deviceToken: String = ""
 
     private var activeNoodgevalId: String? = null
 
@@ -116,6 +120,10 @@ class NoodgevalForegroundService : Service() {
             ?: prefs.getString(PREF_BEARER_TOKEN, "")
             ?: ""
 
+        deviceToken = prefs.getString(PREF_DEVICE_TOKEN, "")
+            ?.trim()
+            .orEmpty()
+
         prefs.edit()
             .putString(PREF_HOST, mqttHost)
             .putInt(PREF_PORT, mqttPort)
@@ -128,6 +136,13 @@ class NoodgevalForegroundService : Service() {
             val id = intent.getStringExtra(EXTRA_NOODGEVAL_ID)
             acknowledgeLocally(id)
             return START_STICKY
+        }
+
+        // Elke suksesvolle Flutter-login gee vir die service 'n vars gewone JWT.
+        // Gebruik dit om 'n LANGERLEWENDE, BEPERKTE device token te registreer.
+        // Daardie token mag slegs nood-ONTVANG/KENNISNAME rapporteer.
+        if (bearerToken.isNotBlank()) {
+            registerDeviceCredentialAsync()
         }
 
         connectMqttAsync()
@@ -490,58 +505,44 @@ class NoodgevalForegroundService : Service() {
         reportAcknowledgementAsync(pendingId)
     }
 
-    private fun postNoodgevalState(
-        noodgevalId: String,
-        action: String,
-        retryDelaysMs: LongArray,
-    ): Boolean {
-        val numericId = noodgevalId.toLongOrNull()
-        if (numericId == null) {
-            Log.w(
-                TAG,
-                "Kan /$action nie rapporteer nie: ongeldige noodgeval-ID $noodgevalId"
-            )
-            return false
-        }
-
-        val base = apiBaseUrl.trim().trimEnd('/')
-        val token = bearerToken.trim()
-
-        if (base.isBlank() || token.isBlank()) {
-            Log.w(
-                TAG,
-                "Kan /$action nie rapporteer nie: API URL of JWT ontbreek."
-            )
-            return false
-        }
-
-        for (delayMs in retryDelaysMs) {
-            if (delayMs > 0) {
-                try {
-                    Thread.sleep(delayMs)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    return false
-                }
+    private fun registerDeviceCredentialAsync() {
+        apiExecutor.execute {
+            val base = apiBaseUrl.trim().trimEnd('/')
+            val jwt = bearerToken.trim()
+            if (base.isBlank() || jwt.isBlank()) {
+                return@execute
             }
 
             var connection: HttpURLConnection? = null
             try {
-                val url = URL("$base/noodgeval/$numericId/$action")
+                val androidId = Settings.Secure.getString(
+                    contentResolver,
+                    Settings.Secure.ANDROID_ID
+                ) ?: "unknown-device"
+
+                val payload = JSONObject().apply {
+                    put("device_id", androidId)
+                    put(
+                        "device_name",
+                        "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+                    )
+                }.toString()
+
+                val url = URL("$base/noodgeval/device/register")
                 connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 10000
                     readTimeout = 10000
                     useCaches = false
                     doInput = true
-                    setRequestProperty("Accept", "application/json")
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setFixedLengthStreamingMode(0)
                     doOutput = true
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Authorization", "Bearer $jwt")
                 }
 
-                connection.outputStream.use {
-                    // Leë POST body; FastAPI endpoint verwag geen request model nie.
+                connection.outputStream.use { output ->
+                    output.write(payload.toByteArray(Charsets.UTF_8))
                 }
 
                 val code = connection.responseCode
@@ -557,30 +558,188 @@ class NoodgevalForegroundService : Service() {
                 }
 
                 if (code in 200..299) {
+                    val json = JSONObject(body)
+                    val token = json.optJSONObject("data")
+                        ?.optString("device_token", "")
+                        ?.trim()
+                        .orEmpty()
+
+                    if (token.isNotBlank()) {
+                        deviceToken = token
+                        getSharedPreferences(PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(PREF_DEVICE_TOKEN, token)
+                            .apply()
+
+                        Log.i(TAG, "Scoped device auth geregistreer.")
+                        retryPendingAcknowledgementIfNeeded()
+                    } else {
+                        Log.w(TAG, "Device register het geen token teruggestuur nie.")
+                    }
+                } else {
+                    Log.w(
+                        TAG,
+                        "Device register HTTP $code: ${body.take(300)}"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Kon nie scoped device auth registreer nie.", e)
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    private data class ApiPostResult(
+        val code: Int?,
+        val body: String = "",
+        val error: Exception? = null,
+    )
+
+    private fun performEmptyPost(
+        urlString: String,
+        headerName: String,
+        headerValue: String,
+    ): ApiPostResult {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10000
+                readTimeout = 10000
+                useCaches = false
+                doInput = true
+                doOutput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty(headerName, headerValue)
+                setFixedLengthStreamingMode(0)
+            }
+            connection.outputStream.use { }
+            val code = connection.responseCode
+            val body = try {
+                val stream = if (code in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+                stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            ApiPostResult(code = code, body = body)
+        } catch (e: Exception) {
+            ApiPostResult(code = null, error = e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun postNoodgevalState(
+        noodgevalId: String,
+        action: String,
+        retryDelaysMs: LongArray,
+    ): Boolean {
+        val numericId = noodgevalId.toLongOrNull()
+        if (numericId == null) {
+            Log.w(
+                TAG,
+                "Kan /$action nie rapporteer nie: ongeldige noodgeval-ID $noodgevalId"
+            )
+            return false
+        }
+
+        val base = apiBaseUrl.trim().trimEnd('/')
+        if (base.isBlank()) {
+            Log.w(TAG, "Kan /$action nie rapporteer nie: API URL ontbreek.")
+            return false
+        }
+
+        for (delayMs in retryDelaysMs) {
+            if (delayMs > 0) {
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+
+            // 1) Voorkeur: scoped, langerlewende device token.
+            val scoped = deviceToken.trim().ifBlank {
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .getString(PREF_DEVICE_TOKEN, "")
+                    ?.trim()
+                    .orEmpty()
+            }
+
+            if (scoped.isNotBlank()) {
+                val result = performEmptyPost(
+                    "$base/noodgeval/device/$numericId/$action",
+                    "X-MOON-Device-Token",
+                    scoped,
+                )
+
+                if (result.code in 200..299) {
                     Log.i(
                         TAG,
-                        "Noodgeval $noodgevalId /$action suksesvol gestoor."
+                        "Noodgeval $noodgevalId /$action via device auth gestoor."
                     )
                     return true
                 }
 
-                Log.w(
-                    TAG,
-                    "Noodgeval $noodgevalId /$action HTTP $code: ${body.take(300)}"
+                if (result.code != null) {
+                    Log.w(
+                        TAG,
+                        "Device auth /$action HTTP ${result.code}: ${result.body.take(300)}"
+                    )
+                } else if (result.error != null) {
+                    Log.w(TAG, "Device auth /$action netwerkfout.", result.error)
+                }
+
+                // By 'n geldige HTTP antwoord anders as auth-fout, moenie dieselfde
+                // aksie met 'n ander credential dupliseer nie.
+                if (result.code != null && result.code !in listOf(401, 403)) {
+                    if (result.code in 400..499) return false
+                    continue
+                }
+            }
+
+            // 2) Terugval tydens/na login: gewone JWT endpoint. Dit laat Step 10
+            // veilig uitrol selfs voordat die device registration klaar is.
+            val jwt = bearerToken.trim()
+            if (jwt.isNotBlank()) {
+                val result = performEmptyPost(
+                    "$base/noodgeval/$numericId/$action",
+                    "Authorization",
+                    "Bearer $jwt",
                 )
 
-                // 4xx is gewoonlik nie 'n tydelike netwerkfout nie.
-                if (code in 400..499) {
-                    return false
+                if (result.code in 200..299) {
+                    Log.i(
+                        TAG,
+                        "Noodgeval $noodgevalId /$action via JWT gestoor."
+                    )
+                    return true
                 }
-            } catch (e: Exception) {
+
+                if (result.code != null) {
+                    Log.w(
+                        TAG,
+                        "JWT /$action HTTP ${result.code}: ${result.body.take(300)}"
+                    )
+                    if (result.code in 400..499) {
+                        return false
+                    }
+                } else if (result.error != null) {
+                    Log.w(TAG, "JWT /$action netwerkfout.", result.error)
+                }
+            } else if (scoped.isBlank()) {
                 Log.w(
                     TAG,
-                    "Noodgeval $noodgevalId /$action kon nie sinkroniseer nie.",
-                    e
+                    "Kan /$action nie rapporteer nie: geen device token of JWT beskikbaar nie."
                 )
-            } finally {
-                connection?.disconnect()
+                return false
             }
         }
 
