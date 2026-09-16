@@ -2947,31 +2947,27 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
               setState(() => _status = 'Kontroleer jou rooster...');
             }
 
-            // Fail-closed: bevestig eers dat hierdie tag aan die student se
-            // huidige roosterklas gekoppel is. Geen toepaslike klas = geen log.
-            final rooster = await MoonApi.fetchMyStudentRooster();
-            final nou = DateTime.now();
-            final klas = _vindAktieweKlasVirUid(rooster, uid, nou);
+            // Fail-closed: laat die BACKEND die fisiese tag na Lokasie_ID oplos
+            // en dit teen die student se huidige roosterklas + SA-bedienertyd toets.
+            // Dit vermy vals "verkeerde lokaal" foute weens UID-formatering of
+            // die foon se plaaslike tyd. Geen geldige klas = geen ToegangsLog.
+            final validasie = await MoonApi.valideerStudentKlasNfc(nfcUid: uid);
 
-            if (klas == null) {
-              final fout = _roosterFout(rooster, uid, nou);
-              await NfcManager.instance.stopSession(errorMessage: fout);
-              if (!mounted) return;
-              setState(() {
-                _busy = false;
-                _status = fout;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: Colors.red,
-                  content: Text(fout, style: const TextStyle(color: Colors.white)),
-                ),
-              );
-              return;
+            final klasRaw = validasie['Klas'];
+            if (klasRaw is! Map) {
+              throw Exception('Die bediener kon nie die huidige klas bepaal nie.');
+            }
+            final klas = StudentRoosterKlasDto.fromJson(
+              Map<String, dynamic>.from(klasRaw),
+            );
+
+            final kanoniekeUid = validasie['NFC_UID']?.toString().trim();
+            if (kanoniekeUid == null || kanoniekeUid.isEmpty) {
+              throw Exception('Die lokaal se NFC-kode ontbreek in die databasis.');
             }
 
             final result = await MoonApi.studentScanKlas(
-              nfcUid: uid,
+              nfcUid: kanoniekeUid,
               rigting: 'IN',
             );
 
@@ -2981,7 +2977,15 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
             final lokaal = result['LOK_Naam']?.toString().trim();
             final vertoonLokaal = lokaal != null && lokaal.isNotEmpty
                 ? lokaal
-                : klas.vertoonLokaal;
+                : (validasie['LOK_Naam']?.toString().trim().isNotEmpty == true
+                    ? validasie['LOK_Naam'].toString().trim()
+                    : klas.vertoonLokaal);
+
+            DateTime nou = DateTime.now();
+            final bedienerTyd = validasie['Bediener_Tyd']?.toString();
+            if (bedienerTyd != null && bedienerTyd.isNotEmpty) {
+              nou = DateTime.tryParse(bedienerTyd)?.toLocal() ?? nou;
+            }
             final h = nou.hour.toString().padLeft(2, '0');
             final m = nou.minute.toString().padLeft(2, '0');
 

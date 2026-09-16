@@ -1800,6 +1800,37 @@ class MoonApi {
         .toList();
   }
 
+  static Future<Map<String, dynamic>> valideerStudentKlasNfc({
+    required String nfcUid,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/rooster/studente/klas-nfc/valideer'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${bearerToken!}',
+      },
+      body: jsonEncode({
+        'nfc_uid': nfcUid,
+      }),
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Kon nie die klas-NFC teen jou rooster valideer nie',
+      );
+    }
+
+    final data = decoded['data'];
+    if (data is! Map) {
+      throw Exception('Ongeldige klas-NFC validasie antwoord');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<Map<String, dynamic>> studentScanKlas({
 
     required String nfcUid,

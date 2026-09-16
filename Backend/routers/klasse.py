@@ -8,6 +8,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -128,6 +129,42 @@ def _aktiewe_lokasie_nfc_uid(lokasie: models.Lokasie | None) -> str | None:
     for tag in (getattr(lokasie, "nfc_tags", None) or []):
         if tag.NFC_Is_Aktief and str(tag.NFC_Tipe or "").strip().casefold() == "lokasie":
             return tag.NFC_UID
+    return None
+
+
+def _normaliseer_nfc_uid(value: str | None) -> str:
+    """Vergelyk NFC-kodes robuust: hoofletters en skeidingstekens maak nie saak nie."""
+    return re.sub(r"[^A-Z0-9]", "", str(value or "").strip().upper())
+
+
+def _vind_aktiewe_nfc_tag(db: Session, uid: str) -> models.NFC_Tags | None:
+    """Vind eers presies; val terug na 'n genormaliseerde vergelyking."""
+    rou = str(uid or "").strip()
+    if not rou:
+        return None
+
+    tag = (
+        db.query(models.NFC_Tags)
+        .filter(
+            models.NFC_Tags.NFC_UID == rou,
+            models.NFC_Tags.NFC_Is_Aktief == True,
+        )
+        .first()
+    )
+    if tag is not None:
+        return tag
+
+    gesoek = _normaliseer_nfc_uid(rou)
+    if not gesoek:
+        return None
+
+    for kandidaat in (
+        db.query(models.NFC_Tags)
+        .filter(models.NFC_Tags.NFC_Is_Aktief == True)
+        .all()
+    ):
+        if _normaliseer_nfc_uid(kandidaat.NFC_UID) == gesoek:
+            return kandidaat
     return None
 
 
@@ -994,6 +1031,97 @@ def ken_personeel_klas_toe(
         db.add(models.Personeel_Klas(Gebruiker_ID=gebruiker_id, Klas_ID=data.Klas_ID))
         db.commit()
     return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Klas_ID": data.Klas_ID})
+
+
+class StudentKlasNfcValideerRequest(BaseModel):
+    nfc_uid: str
+
+
+@router.post("/studente/klas-nfc/valideer")
+def valideer_student_klas_nfc(
+    data: StudentKlasNfcValideerRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Valideer 'n fisiese klaskamer-tag teen die student se huidige roosterklas.
+
+    Die backend, nie die foon nie, besluit op grond van SA-tyd en Lokasie_ID.
+    Geen ToegangsLogs word hier geskryf nie; dit is net die fail-closed pre-check.
+    """
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    if not student:
+        raise HTTPException(status_code=403, detail="Net studente kan klas-NFC valideer")
+
+    tag = _vind_aktiewe_nfc_tag(db, data.nfc_uid)
+    if not tag or not tag.Lokasie_ID:
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(models.Lokasie.Lokasie_ID == tag.Lokasie_ID)
+        .first()
+    )
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    nou = datetime.now(_SA_TZ)
+    vandag = nou.date()
+    rooster = resolver_student_rooster(db, current_user.Gebruiker_ID)
+
+    huidige_klasse: list[models.Klas] = []
+    for item in rooster:
+        klas_id = item.get("Klas_ID")
+        if not klas_id:
+            continue
+        klas = (
+            db.query(models.Klas)
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+            .filter(models.Klas.Klas_ID == klas_id)
+            .first()
+        )
+        if klas is None or not _klas_dag_match(klas, vandag):
+            continue
+        begin_local, eind_local, _, _ = _klas_scan_venster(klas, vandag)
+        if begin_local <= nou < eind_local:
+            huidige_klasse.append(klas)
+
+    if not huidige_klasse:
+        raise HTTPException(
+            status_code=409,
+            detail="Jy het nie tans 'n geskeduleerde klas om in te skandeer nie",
+        )
+
+    vir_lokaal = [
+        klas for klas in huidige_klasse
+        if getattr(klas, "Lokasie_ID", None) == tag.Lokasie_ID
+    ]
+    if not vir_lokaal:
+        verwag = ", ".join(
+            sorted({
+                (klas.lokasie.LOK_Naam if getattr(klas, "lokasie", None) else klas.KLA_Lokaal)
+                for klas in huidige_klasse
+            })
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"Verkeerde lokaal. Jou huidige klas is in: {verwag}",
+        )
+
+    klas = vir_lokaal[0]
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "NFC_UID": tag.NFC_UID,
+            "Lokasie_ID": tag.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Klas": _klas_na_dict(klas),
+            "Bediener_Tyd": nou.isoformat(),
+        },
+    )
 
 
 # --- ROOSTER-LEES (eie + admin) ---
