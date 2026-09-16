@@ -144,8 +144,22 @@
       id: s.Gebruiker_ID,
       naam: s.GEB_Naam || '',
       van: s.GEB_Van || '',
-      nommer: s.STU_Nommer || ('#' + s.Gebruiker_ID)
+      nommer: s.STU_Nommer || ('#' + s.Gebruiker_ID),
+      laasteSkandering: s.Laaste_Skandering || null
     };
+  }
+
+  // Hierdie funksie formateer 'n student se laaste inskandering, bv.
+  // "Bitterbessie · 09:14" (plaaslike tyd), of 'n verstek-boodskap.
+  function formatSkandering(sk) {
+    if (!sk || !sk.tyd) return 'Geen skandering vandag';
+    var d = new Date(sk.tyd);
+    var tyd = '';
+    if (!isNaN(d.getTime())) {
+      tyd = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' +
+            (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+    }
+    return [sk.lokaal, tyd].filter(Boolean).join(' · ') || 'Geen skandering vandag';
   }
 
   // Sorteer klasse op dag, dan begintyd, dan modulekode sodat die keuselys
@@ -790,7 +804,7 @@
     }
 
     studente.forEach(function (s) {
-      var card = createStudentCard(s, s.nommer);
+      var card = createStudentCard(s, s.nommer + ' · ' + formatSkandering(s.laasteSkandering));
       card.classList.add('user-card--klikbaar');
       card.dataset.id = String(s.id);
       card.setAttribute('role', 'button');
