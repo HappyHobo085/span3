@@ -2341,6 +2341,34 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
   }
 
+
+
+  static Future<Map<String, dynamic>> fetchMyKoshuisStatus() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/rooster/studente/my-koshuis-status'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Kon nie jou koshuisstatus laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw is! Map) {
+      throw Exception('Ongeldige koshuisstatus antwoord');
+    }
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<List<SkandeerPlekDto>> fetchWagteSkandeerPlekke() async {
     final response = await http.get(
       Uri.parse('$baseUrl/wagte/skandeerplekke'),

@@ -119,7 +119,9 @@ class _TuisTabState extends State<_TuisTab> {
   bool _loading = true;
   Map<String, dynamic>? _dashboard;
   Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _koshuisStatus;
   String? _error;
+  String? _koshuisError;
 
   @override
   void initState() {
@@ -128,43 +130,100 @@ class _TuisTabState extends State<_TuisTab> {
   }
 
   Future<void> _loadDashboard() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _koshuisError = null;
+      });
+    }
+
     try {
       final profile = MoonApi.myProfile ?? await MoonApi.getMyProfile();
       final dashboard = await MoonApi.fetchDashboard();
+
+      Map<String, dynamic> koshuisStatus = <String, dynamic>{
+        'is_koshuis_student': false,
+      };
+      String? koshuisError;
+
+      try {
+        koshuisStatus = await MoonApi.fetchMyKoshuisStatus();
+      } catch (e) {
+        koshuisError = e.toString().replaceFirst('Exception: ', '');
+      }
 
       if (!mounted) return;
 
       setState(() {
         _profile = profile;
         _dashboard = dashboard;
+        _koshuisStatus = koshuisStatus;
+        _koshuisError = koshuisError;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString();
+        _error = e.toString().replaceFirst('Exception: ', '');
         _loading = false;
       });
     }
   }
 
+  DateTime? _saDateTime(dynamic value) {
+    if (value == null) return null;
+    try {
+      return DateTime.parse(value.toString()).add(const Duration(hours: 2));
+    } catch (_) {
+      return null;
+    }
+  }
+
   String _formatTime(dynamic value) {
-  if (value == null) return 'Geen scan';
-
-  try {
-    final dt = DateTime.parse(value.toString()).add(
-      const Duration(hours: 2),
-    );
-
+    final dt = _saDateTime(value);
+    if (dt == null) return 'Geen scan';
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
-
     return '$h:$m';
-  } catch (_) {
-    return value.toString();
   }
-}
+
+  String _formatDateTime(dynamic value) {
+    final dt = _saDateTime(value);
+    if (dt == null) return 'Geen scan';
+    const months = <String>[
+      'Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des',
+    ];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} · $h:$m';
+  }
+
+  void _openStatusDetail({
+    required String title,
+    required String locationName,
+    required String statusText,
+    required bool? isIn,
+    required Map<String, dynamic>? lastScan,
+    required IconData icon,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _StudentStatusDetailPage(
+          title: title,
+          locationName: locationName,
+          statusText: statusText,
+          isIn: isIn,
+          lastScan: lastScan,
+          icon: icon,
+          formatDateTime: _formatDateTime,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -174,20 +233,54 @@ class _TuisTabState extends State<_TuisTab> {
 
     if (_error != null) {
       return Center(
-        child: Text(
-          _error!,
-          style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
+          ),
         ),
       );
     }
 
     final naam = _profile?['naam']?.toString() ?? 'Student';
     final kampusStatus = _dashboard?['kampus_status']?.toString() ?? 'ONBEKEND';
+    final Map<String, dynamic>? laasteKampus = _dashboard?['laaste_kampus'] is Map
+        ? Map<String, dynamic>.from(_dashboard!['laaste_kampus'] as Map)
+        : null;
+    final Map<String, dynamic>? laasteKlas = _dashboard?['laaste_klas'] is Map
+        ? Map<String, dynamic>.from(_dashboard!['laaste_klas'] as Map)
+        : null;
 
-    final opKampus = kampusStatus == 'OP_KAMPUS';
+    final bool? opKampus = kampusStatus == 'OP_KAMPUS'
+        ? true
+        : kampusStatus == 'NIE_OP_KAMPUS'
+            ? false
+            : null;
+    final kampusStatusText = opKampus == true
+        ? 'OP KAMPUS'
+        : opKampus == false
+            ? 'NIE OP KAMPUS'
+            : 'NOG NIE GESCAN';
+    final kampusNaam = laasteKampus?['lokasie']?.toString() ?? 'Kampus';
 
-    final laasteKampus = _dashboard?['laaste_kampus'];
-    final laasteKlas = _dashboard?['laaste_klas'];
+    final isKoshuisStudent = _koshuisStatus?['is_koshuis_student'] == true;
+    final koshuisNaam = _koshuisStatus?['koshuis_naam']?.toString() ?? 'Koshuis';
+    final koshuisRawStatus = _koshuisStatus?['status']?.toString() ?? 'ONBEKEND';
+    final Map<String, dynamic>? laasteKoshuis = _koshuisStatus?['laaste_scan'] is Map
+        ? Map<String, dynamic>.from(_koshuisStatus!['laaste_scan'] as Map)
+        : null;
+    final bool? inKoshuis = koshuisRawStatus == 'IN'
+        ? true
+        : koshuisRawStatus == 'UIT'
+            ? false
+            : null;
+    final koshuisStatusText = inKoshuis == true
+        ? 'IN KOSHUIS'
+        : inKoshuis == false
+            ? 'UIT KOSHUIS'
+            : 'NOG NIE GESCAN';
 
     return RefreshIndicator(
       onRefresh: _loadDashboard,
@@ -217,56 +310,103 @@ class _TuisTabState extends State<_TuisTab> {
               ),
             ),
 
-            const SizedBox(height: 14),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: opKampus
-                    ? Colors.green.withOpacity(0.16)
-                    : Colors.red.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: opKampus ? Colors.green : Colors.red,
-                  width: 1.5,
-                ),
+            const SizedBox(height: 18),
+            Text(
+              'MY STATUS',
+              style: GoogleFonts.inter(
+                color: kTextMuted,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
               ),
-              child: Column(
-                children: [
-                  Icon(
-                    opKampus ? Icons.check_circle : Icons.cancel,
-                    color: opKampus ? Colors.green : Colors.red,
-                    size: 46,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    opKampus ? 'OP KAMPUS' : 'NIE OP KAMPUS',
-                    style: GoogleFonts.inter(
-                      color: opKampus ? Colors.green : Colors.red,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
+            ),
+            const SizedBox(height: 10),
+
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoColumns = isKoshuisStudent && constraints.maxWidth >= 430;
+                final width = twoColumns
+                    ? (constraints.maxWidth - 12) / 2
+                    : constraints.maxWidth;
+
+                final cards = <Widget>[
+                  SizedBox(
+                    width: width,
+                    child: _StudentPresenceCard(
+                      title: 'KAMPUS',
+                      locationName: kampusNaam,
+                      statusText: kampusStatusText,
+                      isIn: opKampus,
+                      icon: Icons.location_on_rounded,
+                      lastScanText: laasteKampus == null
+                          ? 'Nog geen kampus IN/UIT scan nie'
+                          : '${laasteKampus['rigting']} · ${_formatDateTime(laasteKampus['tyd'])}',
+                      onTap: () => _openStatusDetail(
+                        title: 'Kampusstatus',
+                        locationName: kampusNaam,
+                        statusText: kampusStatusText,
+                        isIn: opKampus,
+                        lastScan: laasteKampus,
+                        icon: Icons.location_on_rounded,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ];
+
+                if (isKoshuisStudent) {
+                  cards.add(
+                    SizedBox(
+                      width: width,
+                      child: _StudentPresenceCard(
+                        title: 'KOSHUIS',
+                        locationName: koshuisNaam,
+                        statusText: koshuisStatusText,
+                        isIn: inKoshuis,
+                        icon: Icons.bed_rounded,
+                        lastScanText: laasteKoshuis == null
+                            ? 'Nog geen koshuis IN/UIT scan nie'
+                            : '${laasteKoshuis['rigting']} · ${_formatDateTime(laasteKoshuis['tyd'])}',
+                        onTap: () => _openStatusDetail(
+                          title: 'Koshuisstatus',
+                          locationName: koshuisNaam,
+                          statusText: koshuisStatusText,
+                          isIn: inKoshuis,
+                          lastScan: laasteKoshuis,
+                          icon: Icons.bed_rounded,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: cards,
+                );
+              },
             ),
+
+            if (_koshuisError != null) ...[
+              const SizedBox(height: 10),
+              GlassCard(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Koshuisstatus kon nie laai nie: $_koshuisError',
+                        style: GoogleFonts.inter(color: kText2, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 14),
-
-            _DashboardInfoCard(
-              title: 'LAASTE KAMPUS SCAN',
-              icon: Icons.location_on_outlined,
-              mainText: laasteKampus == null
-                  ? 'Geen kampus scan'
-                  : laasteKampus['lokasie']?.toString() ?? 'Onbekend',
-              subText: laasteKampus == null
-                  ? 'Nog geen IN/UIT scan nie'
-                  : '${laasteKampus['rigting']} · ${_formatTime(laasteKampus['tyd'])}',
-            ),
-
-            const SizedBox(height: 12),
-
             _DashboardInfoCard(
               title: 'LAASTE KLAS SCAN',
               icon: Icons.school_outlined,
@@ -275,11 +415,10 @@ class _TuisTabState extends State<_TuisTab> {
                   : laasteKlas['lokasie']?.toString() ?? 'Onbekend',
               subText: laasteKlas == null
                   ? 'Nog geen klas NFC scan nie'
-                  : '${_formatTime(laasteKlas['tyd'])}',
+                  : '${laasteKlas['rigting'] ?? ''} · ${_formatTime(laasteKlas['tyd'])}',
             ),
 
             const SizedBox(height: 18),
-
             Text(
               'VINNIGE AKSIES',
               style: GoogleFonts.inter(
@@ -363,6 +502,269 @@ class _TuisTabState extends State<_TuisTab> {
     );
   }
 }
+
+class _StudentPresenceCard extends StatelessWidget {
+  final String title;
+  final String locationName;
+  final String statusText;
+  final bool? isIn;
+  final IconData icon;
+  final String lastScanText;
+  final VoidCallback onTap;
+
+  const _StudentPresenceCard({
+    required this.title,
+    required this.locationName,
+    required this.statusText,
+    required this.isIn,
+    required this.icon,
+    required this.lastScanText,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = isIn == true
+        ? Colors.green
+        : isIn == false
+            ? Colors.red
+            : Colors.orange;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: statusColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: statusColor.withOpacity(0.65), width: 1.2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: statusColor, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: kTextMuted, size: 20),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                statusText,
+                style: GoogleFonts.inter(
+                  color: statusColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                locationName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: kText1,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                lastScanText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(color: kText2, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StudentStatusDetailPage extends StatelessWidget {
+  final String title;
+  final String locationName;
+  final String statusText;
+  final bool? isIn;
+  final Map<String, dynamic>? lastScan;
+  final IconData icon;
+  final String Function(dynamic) formatDateTime;
+
+  const _StudentStatusDetailPage({
+    required this.title,
+    required this.locationName,
+    required this.statusText,
+    required this.isIn,
+    required this.lastScan,
+    required this.icon,
+    required this.formatDateTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = isIn == true
+        ? Colors.green
+        : isIn == false
+            ? Colors.red
+            : Colors.orange;
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(title: title, subtitle: locationName, showBack: true),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: statusColor.withOpacity(0.7)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(icon, color: statusColor, size: 44),
+                          const SizedBox(height: 10),
+                          Text(
+                            statusText,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: statusColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            locationName,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              color: kText1,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: lastScan == null
+                          ? Row(
+                              children: [
+                                const Icon(Icons.history_rounded, color: kTextMuted),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Nog geen IN/UIT skandering beskikbaar nie.',
+                                    style: GoogleFonts.inter(color: kText2, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _StudentStatusDetailRow(
+                                  label: 'Laaste rigting',
+                                  value: lastScan!['rigting']?.toString() ?? '—',
+                                ),
+                                _StudentStatusDetailRow(
+                                  label: 'Tyd',
+                                  value: formatDateTime(lastScan!['tyd']),
+                                ),
+                                _StudentStatusDetailRow(
+                                  label: 'Metode',
+                                  value: lastScan!['metode']?.toString() ?? '—',
+                                ),
+                                _StudentStatusDetailRow(
+                                  label: 'Lokasie',
+                                  value: lastScan!['lokasie']?.toString() ?? locationName,
+                                  isLast: true,
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StudentStatusDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isLast;
+
+  const _StudentStatusDetailRow({
+    required this.label,
+    required this.value,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                color: kText1,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _StudentQuickAction extends StatelessWidget {
   final IconData icon;

@@ -1033,6 +1033,123 @@ def ken_personeel_klas_toe(
     return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Klas_ID": data.Klas_ID})
 
 
+@router.get("/studente/my-koshuis-status")
+def kry_my_koshuis_status(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee slegs die aangemelde student se eie koshuis-IN/UIT status.
+
+    Nie-koshuisstudente kry ``is_koshuis_student = False`` en die Flutter UI
+    wys dan glad nie 'n Koshuis-kaart nie.  Vir 'n koshuisstudent word die
+    jongste IN/UIT log NET by sy/haar toegewysde koshuis se Lokasie_ID gelees,
+    sodat kampus- of klaskamerskanderings nooit die koshuisstatus kan verander nie.
+    """
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    if not student:
+        raise HTTPException(status_code=403, detail="Net studente het 'n koshuisstatus")
+
+    if not bool(student.STU_Is_Koshuis) or not student.Koshuis_ID:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": False,
+                "koshuis_id": None,
+                "koshuis_naam": None,
+                "status": None,
+                "laaste_scan": None,
+            },
+        )
+
+    koshuis = (
+        db.query(models.Koshuis)
+        .filter(models.Koshuis.Koshuis_ID == student.Koshuis_ID)
+        .first()
+    )
+    if not koshuis:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": True,
+                "koshuis_id": student.Koshuis_ID,
+                "koshuis_naam": "Onbekende koshuis",
+                "status": "ONBEKEND",
+                "lokasie_gekoppel": False,
+                "laaste_scan": None,
+            },
+        )
+
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(
+            models.Lokasie.Kampus_ID == koshuis.Kampus_ID,
+            func.lower(models.Lokasie.LOK_Tipe) == "koshuis",
+            models.Lokasie.LOK_Naam == koshuis.KOS_Naam,
+        )
+        .first()
+    )
+
+    if not lokasie:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": True,
+                "koshuis_id": koshuis.Koshuis_ID,
+                "koshuis_naam": koshuis.KOS_Naam,
+                "status": "ONBEKEND",
+                "lokasie_gekoppel": False,
+                "laaste_scan": None,
+            },
+        )
+
+    laaste_log = (
+        db.query(models.ToegangsLogs)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
+            models.ToegangsLogs.Lokasie_ID == lokasie.Lokasie_ID,
+            models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+        )
+        .order_by(
+            models.ToegangsLogs.TOE_Tydstempel.desc(),
+            models.ToegangsLogs.Log_ID.desc(),
+        )
+        .first()
+    )
+
+    laaste_scan = None
+    status = "NOG_NIE_GESCAN"
+    if laaste_log:
+        status = laaste_log.TOE_Rigting
+        laaste_scan = {
+            "log_id": laaste_log.Log_ID,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "lokasie": lokasie.LOK_Naam,
+            "rigting": laaste_log.TOE_Rigting,
+            "metode": laaste_log.TOE_Metode,
+            "tyd": (
+                laaste_log.TOE_Tydstempel.isoformat()
+                if laaste_log.TOE_Tydstempel
+                else None
+            ),
+        }
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "is_koshuis_student": True,
+            "koshuis_id": koshuis.Koshuis_ID,
+            "koshuis_naam": koshuis.KOS_Naam,
+            "status": status,
+            "lokasie_gekoppel": True,
+            "laaste_scan": laaste_scan,
+        },
+    )
+
+
 class StudentKlasNfcValideerRequest(BaseModel):
     nfc_uid: str
 
