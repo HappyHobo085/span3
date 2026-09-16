@@ -77,6 +77,14 @@
   var selectedStudent = null;  // student wat in die klasregister gekies is
   var selectedDate = new Date(vandag);
 
+  // ----- LIVE klasbywoning -----
+  // Wanneer die personeel vandag se klas oop het, haal ons elke 3 sekondes
+  // die jongste NFC-bywoning uit die databasis. Historiese datums word nie
+  // gepoll nie, sodat ons nie onnodige versoeke na die backend stuur nie.
+  var LIVE_REFRESH_MS = 3000;
+  var liveRefreshTimer = null;
+  var liveRefreshBusy = false;
+
   // Oor hoeveel klasdae die gekose student se bywoning bereken word.
   var STUDENT_STAT_DAE = 10;
   var displayYear = vandag.getFullYear();
@@ -356,6 +364,40 @@
     return Promise.all(dae.map(function (d) {
       return laaiBywoning(klas, d, false).catch(function () { return null; });
     }));
+  }
+
+  function isVandag(datum) {
+    return sameDay(datum, new Date());
+  }
+
+  // Haal stilweg die jongste bywoning vir die oop klas.
+  // Geen foutboodskap word oor die UI geskryf as een poll tydelik misluk nie;
+  // die volgende poll probeer weer en die gebruiker se huidige lys bly sigbaar.
+  function liveRefreshBywoning() {
+    if (document.hidden || liveRefreshBusy || !currentKlas || !isVandag(selectedDate)) {
+      return;
+    }
+
+    liveRefreshBusy = true;
+    var klasToeGestuur = currentKlas;
+    var datumToeGestuur = new Date(selectedDate);
+
+    laaiBywoning(klasToeGestuur, datumToeGestuur, true).then(function () {
+      // Ignoreer 'n laat antwoord as die gebruiker intussen klas/datum verander het.
+      if (currentKlas !== klasToeGestuur || !sameDay(selectedDate, datumToeGestuur)) return;
+      renderDashboard();
+      renderRoster();
+      renderStudentStats();
+    }).catch(function (err) {
+      console.warn('LIVE klasbywoning kon nie herlaai nie:', err);
+    }).finally(function () {
+      liveRefreshBusy = false;
+    });
+  }
+
+  function beginLiveRefresh() {
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+    liveRefreshTimer = setInterval(liveRefreshBywoning, LIVE_REFRESH_MS);
   }
 
   // ----- Kaartjies (selfde markup as kampus.js user cards) -----
@@ -1054,11 +1096,17 @@
   // ----- Bootstrap -----
   // Sodra die bladsy klaar gelaai het, teken ons die leë raamwerk, laai dan
   // die klasse van die bediener en kies die eerste een.
+  window.addEventListener('beforeunload', function () {
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+  });
+
   document.addEventListener('DOMContentLoaded', function () {
     renderKalender();
     renderDashboard();
     populateModuleSelect('Laai klasse...');
     renderLeegBoodskap(rosterList, 'Laai klasse...');
+
+    beginLiveRefresh();
 
     laaiKlasse().then(function (lys) {
       klasse = lys;
