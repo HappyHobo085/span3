@@ -583,41 +583,73 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     }
   }
 
-  Future<void> _markPerson(int gebruikerId, String status) async {
-    final emergencyId = _activeEmergencyId;
-    if (emergencyId == null || _busyUsers.contains(gebruikerId)) return;
+  int? _personBusyKey(Map<String, dynamic> person) {
+    final gebruikerId = _readInt(person, const ['gebruiker_id']);
+    if (gebruikerId != null) return gebruikerId;
+    final publiekRsvpId = _readInt(person, const ['publiek_rsvp_id']);
+    if (publiekRsvpId != null) return -publiekRsvpId;
+    return null;
+  }
 
-    setState(() => _busyUsers.add(gebruikerId));
+  Future<void> _markPerson(Map<String, dynamic> person, String status) async {
+    final emergencyId = _activeEmergencyId;
+    final gebruikerId = _readInt(person, const ['gebruiker_id']);
+    final publiekRsvpId = _readInt(person, const ['publiek_rsvp_id']);
+    final busyKey = _personBusyKey(person);
+    if (emergencyId == null || busyKey == null || _busyUsers.contains(busyKey)) return;
+
+    setState(() => _busyUsers.add(busyKey));
     final action = status == 'DAAR' ? 'daar' : 'nie-daar';
 
     try {
+      final String path;
+      if (publiekRsvpId != null) {
+        path = '/noodgeval/$emergencyId/event-gas/$publiekRsvpId/kontrole/$action';
+      } else if (gebruikerId != null) {
+        path = '/noodgeval/$emergencyId/kontrole/$gebruikerId/$action';
+      } else {
+        throw Exception('Persoon het geen geldige noodkontrole-ID nie.');
+      }
+
       final response = await http.post(
-        Uri.parse('${MoonApi.baseUrl}/noodgeval/$emergencyId/kontrole/$gebruikerId/$action'),
+        Uri.parse('${MoonApi.baseUrl}$path'),
         headers: _authHeaders,
       );
       _decodeApi(response, fallback: 'Persoon kon nie gemerk word nie.');
       // WebSocket stuur binne ongeveer 1 sekonde die gesaghebbende nuwe lys.
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busyUsers.remove(gebruikerId));
+      setState(() => _busyUsers.remove(busyKey));
       _showError(_cleanError(e));
     }
   }
 
-  Future<void> _restorePerson(int gebruikerId) async {
+  Future<void> _restorePerson(Map<String, dynamic> person) async {
     final emergencyId = _activeEmergencyId;
-    if (emergencyId == null || _busyUsers.contains(gebruikerId)) return;
+    final gebruikerId = _readInt(person, const ['gebruiker_id']);
+    final publiekRsvpId = _readInt(person, const ['publiek_rsvp_id']);
+    final busyKey = _personBusyKey(person);
+    if (emergencyId == null || busyKey == null || _busyUsers.contains(busyKey)) return;
 
-    setState(() => _busyUsers.add(gebruikerId));
+    setState(() => _busyUsers.add(busyKey));
     try {
+      final String path;
+      if (publiekRsvpId != null) {
+        path = '/noodgeval/$emergencyId/event-gas/$publiekRsvpId/kontrole/herstel';
+      } else if (gebruikerId != null) {
+        path = '/noodgeval/$emergencyId/kontrole/$gebruikerId/herstel';
+      } else {
+        throw Exception('Persoon het geen geldige noodkontrole-ID nie.');
+      }
+
       final response = await http.post(
-        Uri.parse('${MoonApi.baseUrl}/noodgeval/$emergencyId/kontrole/$gebruikerId/herstel'),
+        Uri.parse('${MoonApi.baseUrl}$path'),
         headers: _authHeaders,
       );
       _decodeApi(response, fallback: 'Persoon kon nie herstel word nie.');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busyUsers.remove(gebruikerId));
+      setState(() => _busyUsers.remove(busyKey));
       _showError(_cleanError(e));
     }
   }
@@ -686,6 +718,8 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       person['van']?.toString() ?? '',
       person['nommer']?.toString() ?? '',
       person['tipe']?.toString() ?? '',
+      person['event_name']?.toString() ?? '',
+      person['event_gas_tipe']?.toString() ?? '',
     ].join(' ').toLowerCase();
     return haystack.contains(_query);
   }
@@ -750,7 +784,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: const Color(0xFF1E293B),
-          border: Border.all(color: kAccent.withOpacity(0.35)),
+          border: Border.all(color: kAccent.withValues(alpha: 0.35)),
         ),
         clipBehavior: Clip.antiAlias,
         child: url == null
@@ -778,6 +812,10 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     String label;
     Color color;
     switch (status) {
+      case 'GEEN_TOESTEL':
+        label = 'Event-gas · geen app';
+        color = Colors.purpleAccent;
+        break;
       case 'KENNIS_GENEEM':
         label = 'Kennis geneem';
         color = Colors.green;
@@ -793,9 +831,9 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.45)),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Text(
         label,
@@ -805,11 +843,13 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
   }
 
   Widget _personCard(Map<String, dynamic> person) {
-    final id = _readInt(person, const ['gebruiker_id']) ?? -1;
-    final busy = _busyUsers.contains(id);
+    final busyKey = _personBusyKey(person);
+    final busy = busyKey != null && _busyUsers.contains(busyKey);
     final name = person['volle_naam']?.toString() ?? 'Onbekende persoon';
     final type = person['tipe']?.toString() ?? 'Gebruiker';
     final number = person['nommer']?.toString().trim() ?? '';
+    final eventName = person['event_name']?.toString().trim() ?? '';
+    final isEventGuest = person['event_gas'] == true;
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
@@ -839,6 +879,17 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                       number.isEmpty ? type : '$type · $number',
                       style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
                     ),
+                    if (isEventGuest && eventName.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'EVENT · $eventName',
+                        style: GoogleFonts.inter(
+                          color: Colors.purpleAccent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 7),
                     _statusChip(person),
                   ],
@@ -853,7 +904,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                 child: SizedBox(
                   height: 46,
                   child: ElevatedButton.icon(
-                    onPressed: busy || id < 0 ? null : () => _markPerson(id, 'DAAR'),
+                    onPressed: busy || busyKey == null ? null : () => _markPerson(person, 'DAAR'),
                     icon: busy
                         ? const SizedBox(
                             width: 16,
@@ -865,7 +916,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green.shade700,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.green.withOpacity(0.25),
+                      disabledBackgroundColor: Colors.green.withValues(alpha: 0.25),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                     ),
                   ),
@@ -876,12 +927,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                 child: SizedBox(
                   height: 46,
                   child: OutlinedButton.icon(
-                    onPressed: busy || id < 0 ? null : () => _markPerson(id, 'NIE_DAAR'),
+                    onPressed: busy || busyKey == null ? null : () => _markPerson(person, 'NIE_DAAR'),
                     icon: const Icon(Icons.close_rounded, size: 19),
                     label: const Text('NIE DAAR NIE'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red.shade300,
-                      side: BorderSide(color: Colors.red.withOpacity(0.55)),
+                      side: BorderSide(color: Colors.red.withValues(alpha: 0.55)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                       textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
                     ),
@@ -896,11 +947,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
   }
 
   Widget _notThereCard(Map<String, dynamic> person) {
-    final id = _readInt(person, const ['gebruiker_id']) ?? -1;
-    final busy = _busyUsers.contains(id);
+    final busyKey = _personBusyKey(person);
+    final busy = busyKey != null && _busyUsers.contains(busyKey);
     final name = person['volle_naam']?.toString() ?? 'Onbekende persoon';
     final type = person['tipe']?.toString() ?? 'Gebruiker';
     final number = person['nommer']?.toString().trim() ?? '';
+    final eventName = person['event_name']?.toString().trim() ?? '';
 
     return Opacity(
       opacity: 0.78,
@@ -920,6 +972,17 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                     number.isEmpty ? type : '$type · $number',
                     style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
                   ),
+                  if (eventName.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      'EVENT · $eventName',
+                      style: GoogleFonts.inter(
+                        color: Colors.purpleAccent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     'NIE DAAR NIE',
@@ -934,7 +997,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
             ),
             const SizedBox(width: 8),
             TextButton.icon(
-              onPressed: busy || id < 0 ? null : () => _restorePerson(id),
+              onPressed: busy || busyKey == null ? null : () => _restorePerson(person),
               icon: busy
                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.undo_rounded, size: 17),
@@ -955,9 +1018,9 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: color.withOpacity(0.32)),
+          border: Border.all(color: color.withValues(alpha: 0.32)),
         ),
         child: Column(
           children: [
@@ -1025,9 +1088,9 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 34),
           decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.10),
+            color: Colors.green.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.green.withOpacity(0.35)),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
           ),
           child: Column(
             children: [
@@ -1130,7 +1193,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                       decoration: BoxDecoration(
-                        color: (_socketConnected ? Colors.green : Colors.orange).withOpacity(0.13),
+                        color: (_socketConnected ? Colors.green : Colors.orange).withValues(alpha: 0.13),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Row(
@@ -1190,7 +1253,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                   label: const Text('HERSTUUR'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.orange.shade300,
-                    side: BorderSide(color: Colors.orange.withOpacity(0.55)),
+                    side: BorderSide(color: Colors.orange.withValues(alpha: 0.55)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -1241,6 +1304,15 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
               ),
             ],
           ),
+          const SizedBox(height: 5),
+          Text(
+            'Event-gaste: ${_stats['event_gaste'] ?? 0}  ·  Intern: ${_stats['event_gaste_intern'] ?? 0}  ·  Ekstern: ${_stats['event_gaste_ekstern'] ?? 0}',
+            style: GoogleFonts.inter(
+              color: Colors.purpleAccent,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 15),
           TextField(
             controller: _searchController,
@@ -1259,11 +1331,11 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
               fillColor: const Color(0x12FFFFFF),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),

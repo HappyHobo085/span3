@@ -882,3 +882,40 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 017 "
             f"(Besoeker OTP IN/UIT) het misluk: {_migrasie_fout}"
         )
+
+
+
+    # Migrasie 018: Noodgeval roll-call vir eksterne Event-gaste
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval_event_gas_kontrole (
+                    "Kontrole_ID" SERIAL PRIMARY KEY,
+                    "Noodgeval_ID" INTEGER NOT NULL
+                        REFERENCES noodgeval("Noodgeval_ID") ON DELETE CASCADE,
+                    "Publiek_RSVP_ID" INTEGER NOT NULL
+                        REFERENCES funksie_publiek_rsvp("Publiek_RSVP_ID") ON DELETE CASCADE,
+                    "Gemerk_Deur_ID" INTEGER NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "NKK_Status" VARCHAR(20) NOT NULL,
+                    "NKK_Gemerk_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_noodgeval_event_gas_kontrole
+                        UNIQUE ("Noodgeval_ID", "Publiek_RSVP_ID"),
+                    CONSTRAINT ck_noodgeval_event_gas_kontrole_status
+                        CHECK ("NKK_Status" IN ('DAAR', 'NIE_DAAR'))
+                )
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_event_gas_kontrole_nood_status
+                ON noodgeval_event_gas_kontrole ("Noodgeval_ID", "NKK_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_event_gas_kontrole_rsvp
+                ON noodgeval_event_gas_kontrole ("Publiek_RSVP_ID")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 018 "
+            f"(Noodgeval eksterne Event-gaste) het misluk: {_migrasie_fout}"
+        )
