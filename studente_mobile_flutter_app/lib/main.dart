@@ -127,8 +127,6 @@ Future<void> _startNativeNoodgevalService({
 
         duration: const Duration(seconds: 8),
 
-        backgroundColor: Colors.orange.shade800,
-
         content: Text(
 
           'Noodgevaldiens kon nie begin nie: $e',
@@ -257,6 +255,30 @@ class MyApp extends StatelessWidget {
 
           ThemeData.dark().textTheme,
 
+        ),
+
+        // Globale MOON SnackBar-styl: geld vir Student, Personeel,
+        // Opsigter, Sekuriteitswag en Admin.  Bestaande SnackBars
+        // erf hierdie floating vorm en helder teks outomaties.
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xE6111827),
+          elevation: 14,
+          actionTextColor: kAccent2,
+          disabledActionTextColor: kTextMuted,
+          contentTextStyle: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.35,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(
+              color: Color(0x4D7B61FF),
+              width: 1,
+            ),
+          ),
         ),
 
       ),
