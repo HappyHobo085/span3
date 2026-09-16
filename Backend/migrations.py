@@ -919,3 +919,55 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 018 "
             f"(Noodgeval eksterne Event-gaste) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 019: Koppel rooster-klas aan fisiese Klaskamer/NFC-lokasie
+    # 018 is doelbewus oorgeslaan hier omdat dit deur die Nood/Event-gaste stap
+    # gebruik kan word. Hierdie migrasie is idempotent en nie-destruktief.
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                ALTER TABLE klas
+                ADD COLUMN IF NOT EXISTS "Lokasie_ID" INT NULL
+            '''))
+            _conn.execute(text('''
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'fk_klas_lokasie'
+                          AND conrelid = 'klas'::regclass
+                    ) THEN
+                        ALTER TABLE klas
+                        ADD CONSTRAINT fk_klas_lokasie
+                        FOREIGN KEY ("Lokasie_ID")
+                        REFERENCES lokasie("Lokasie_ID")
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_klas_lokasie_id
+                ON klas ("Lokasie_ID")
+            '''))
+            # Veilige eerste backfill: presiese lokaalnaam-match op Klaskamer.
+            _conn.execute(text('''
+                UPDATE klas k
+                SET "Lokasie_ID" = l."Lokasie_ID"
+                FROM lokasie l
+                WHERE k."Lokasie_ID" IS NULL
+                  AND lower(trim(k."KLA_Lokaal")) = lower(trim(l."LOK_Naam"))
+                  AND lower(trim(l."LOK_Tipe")) = 'klaskamer'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM lokasie l2
+                      WHERE lower(trim(l2."LOK_Naam")) = lower(trim(k."KLA_Lokaal"))
+                        AND lower(trim(l2."LOK_Tipe")) = 'klaskamer'
+                        AND l2."Lokasie_ID" <> l."Lokasie_ID"
+                  )
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 019 "
+            f"(Rooster-klas -> Klaskamer/NFC-lokasie) het misluk: {_migrasie_fout}"
+        )
+

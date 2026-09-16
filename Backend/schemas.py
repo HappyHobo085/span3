@@ -326,6 +326,7 @@ class KlasBase(BaseModel):
     KLA_Dag: str
     KLA_Begin_Tyd: str
     KLA_Eind_Tyd: str
+    Lokasie_ID: Optional[int] = None
 
 class KlasCreate(KlasBase):
     pass
@@ -335,6 +336,9 @@ class Klas(KlasBase):
 
     class Config:
         from_attributes = True
+
+class KlasLokasieAssign(BaseModel):
+    Lokasie_ID: int = Field(..., gt=0)
 
 class KlasGroepAssign(BaseModel):
     Groep_ID: int
