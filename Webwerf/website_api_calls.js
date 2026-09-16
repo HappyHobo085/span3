@@ -11,7 +11,7 @@
  *   - createKlas()
  *   - rooster-helpers: getCurrentUserId(), fetchModules(), fetchGroepe(),
  *     fetchRoosterKlasse(), fetchPersoneelRooster(), fetchStudentRooster(),
- *     fetchKlasStudente(), create-/assign-toewysings, importKlasseCsv()
+ *     fetchKlasStudente(), fetchKlasBywoning(), rooster-lokaal mapping, create-/assign-toewysings, importKlasseCsv()
  */
 
 (function () {
@@ -938,8 +938,24 @@
      * Klasregister: [{ Gebruiker_ID, GEB_Naam, GEB_Van, STU_Nommer }].
      * Personeel net vir klasse op hul eie rooster; Admin vir enige klas.
      */
-    fetchKlasStudente: async function (klasId) {
-      const r = await apiRequest('/rooster/klasse/' + encodeURIComponent(klasId) + '/studente', {
+    fetchKlasStudente: async function (klasId, datum) {
+      let path = '/rooster/klasse/' + encodeURIComponent(klasId) + '/studente';
+      if (datum) path += '?datum=' + encodeURIComponent(datum);
+      const r = await apiRequest(path, {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/klasse/{klasId}/bywoning?datum=YYYY-MM-DD
+     * Regte NFC-bywoning vir die spesifieke roosterklas en datum.
+     * Die backend filter op die klas se Lokasie_ID + NFC + geskeduleerde tydvenster.
+     */
+    fetchKlasBywoning: async function (klasId, datum) {
+      let path = '/rooster/klasse/' + encodeURIComponent(klasId) + '/bywoning';
+      if (datum) path += '?datum=' + encodeURIComponent(datum);
+      const r = await apiRequest(path, {
         method: 'GET',
       });
       return r.body;
