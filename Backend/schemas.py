@@ -275,6 +275,10 @@ class Lokasie(LokasieBase):
     class Config:
         from_attributes = True
 
+class LokasieNFCTagUpdate(BaseModel):
+    """Body vir PUT /lokasies/{id}/nfc-tag: die nuwe fisiese tag-UID."""
+    NFC_UID: str
+
 # --- Klas Skep (Lokasie + NFC in een stap) ---
 class KlasSkep(BaseModel):
     """Data om 'n nuwe klas (lokasie + NFC vir die saal) in een stap te skep."""

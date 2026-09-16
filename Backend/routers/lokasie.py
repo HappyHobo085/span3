@@ -378,6 +378,52 @@ def skep_klas_met_nfc(
         raise HTTPException(status_code=500, detail=f"Kon nie klas skep nie: {str(e)}")
 
 
+@router.put("/lokasies/{lokasie_id}/nfc-tag", response_model=schemas.APIResponse[schemas.NFCTag])
+def stel_lokasie_nfc_tag(
+    lokasie_id: int,
+    tag_in: schemas.LokasieNFCTagUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """Hernoem die lokaal se aktiewe Lokasie-tag na 'n fisiese UID (bv. "L4").
+
+    Doelbewus nie die generiese POST /nfc-tags-upsert nie: dié sou stilweg
+    'n ander lokaal se tag kon skuif. Hier valideer ons eers uniekheid.
+    """
+    nuwe_uid = (tag_in.NFC_UID or "").strip()
+    if not nuwe_uid:
+        raise HTTPException(status_code=400, detail="NFC_UID mag nie leeg wees nie")
+
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokasie nie gevind nie")
+
+    aktiewe = [t for t in (lokasie.nfc_tags or []) if t.NFC_Is_Aktief]
+    tag = aktiewe[0] if aktiewe else None
+
+    bestaande = db.query(models.NFC_Tags).filter(models.NFC_Tags.NFC_UID == nuwe_uid).first()
+    if bestaande and (tag is None or bestaande.NFC_Tags_ID != tag.NFC_Tags_ID):
+        raise HTTPException(
+            status_code=409,
+            detail=f"NFC-UID '{nuwe_uid}' is reeds aan 'n ander tag gekoppel",
+        )
+
+    if tag is None:
+        tag = models.NFC_Tags(
+            NFC_UID=nuwe_uid,
+            Lokasie_ID=lokasie_id,
+            NFC_Tipe="Lokasie",
+            NFC_Is_Aktief=True,
+        )
+        db.add(tag)
+    else:
+        tag.NFC_UID = nuwe_uid
+    db.commit()
+    db.refresh(tag)
+    return schemas.APIResponse(sukses=True, data=tag)
+
+
 @router.post("/nfc-tags", response_model=schemas.APIResponse[schemas.NFCTag])
 def koppel_nfc_tag_aan_lokasie(
     tag_in: schemas.NFCTagCreate,
