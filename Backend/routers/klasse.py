@@ -2,6 +2,7 @@
 
 import csv
 import io
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy import func
@@ -245,6 +246,36 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     return resultaat
 
 
+def _laaste_skanderings_vandag(db: Session, gebruiker_ids: set[int]) -> dict[int, dict]:
+    """Jongste 'IN'-skandering van vandag (UTC-dag) per gebruiker.
+
+    Een groepsquery; die frontend formateer die ISO-UTC-tydstempel na
+    plaaslike tyd sodat personeel nie UTC sien nie.
+    """
+    if not gebruiker_ids:
+        return {}
+    vandag_begin = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    rye = (
+        db.query(models.ToegangsLogs, models.Lokasie.LOK_Naam)
+        .outerjoin(models.Lokasie, models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID.in_(gebruiker_ids),
+            models.ToegangsLogs.TOE_Rigting == "IN",
+            models.ToegangsLogs.TOE_Tydstempel >= vandag_begin,
+        )
+        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+        .all()
+    )
+    resultaat: dict[int, dict] = {}
+    for log, lok_naam in rye:
+        if log.Gebruiker_ID not in resultaat:
+            resultaat[log.Gebruiker_ID] = {
+                "lokaal": lok_naam,
+                "tyd": log.TOE_Tydstempel.isoformat() + "Z",
+            }
+    return resultaat
+
+
 def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
     """Studente wat 'n spesifieke klas moet bywoon (gededupeer uit 3 bronne).
 
@@ -299,12 +330,14 @@ def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
         .order_by(models.Gebruikers.GEB_Van, models.Gebruikers.GEB_Naam)
         .all()
     )
+    skanderings = _laaste_skanderings_vandag(db, gebruiker_ids)
     return [
         {
             "Gebruiker_ID": gebruiker.Gebruiker_ID,
             "GEB_Naam": gebruiker.GEB_Naam,
             "GEB_Van": gebruiker.GEB_Van,
             "STU_Nommer": student.STU_Nommer if student else None,
+            "Laaste_Skandering": skanderings.get(gebruiker.Gebruiker_ID),
         }
         for gebruiker, student in rye
     ]

@@ -545,3 +545,87 @@ class TestRoosterHTTPAuth:
         assert resp.json()["data"]["groep_koppelings"] == 0
         assert resp.json()["data"]["module_koppelings"] == 0
         assert http_db.query(models.Student_Groep).count() == 3
+
+
+class TestLaasteSkandering:
+    """resolver_klas_studente se Laaste_Skandering-veld (jongste IN-log vandag)."""
+
+    def _maak_student(self, db, n):
+        rol = db.query(models.Rolle).filter(models.Rolle.ROL_Naam == "Student").first()
+        if not rol:
+            rol = models.Rolle(ROL_Naam="Student")
+            db.add(rol)
+            db.flush()
+        gebruiker = models.Gebruikers(
+            GEB_Naam="Toets",
+            GEB_Van=f"Student{n}",
+            GEB_ID_Nommer=f"900101000010{n}",
+            GEB_Epos=f"skandering{n}@voorbeeld.co.za",
+            GEB_Wagwoord="hashed",
+            Rol_ID=rol.Rol_ID,
+        )
+        db.add(gebruiker)
+        db.flush()
+        return gebruiker
+
+    def _maak_lokaal(self, db, naam):
+        kampus = db.query(models.Kampus).first()
+        if not kampus:
+            kampus = models.Kampus(KAM_Naam="Hoofkampus")
+            db.add(kampus)
+            db.flush()
+        lokaal = models.Lokasie(LOK_Naam=naam, LOK_Tipe="Klaskamer", Kampus_ID=kampus.Kampus_ID)
+        db.add(lokaal)
+        db.flush()
+        return lokaal
+
+    def _log(self, db, gebruiker, lokaal, rigting, tydstempel):
+        db.add(models.ToegangsLogs(
+            Gebruiker_ID=gebruiker.Gebruiker_ID,
+            Lokasie_ID=lokaal.Lokasie_ID,
+            TOE_Rigting=rigting,
+            TOE_Metode="NFC",
+            TOE_Tydstempel=tydstempel,
+        ))
+        db.flush()
+
+    def _register(self, db, klas):
+        return {s["Gebruiker_ID"]: s for s in resolver_klas_studente(db, klas.Klas_ID)}
+
+    def test_jongste_in_log_vandag_word_teruggegee(self, db):
+        from datetime import datetime, timedelta
+        module = skep_module(db, "SKND100")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 1)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        vroeg = self._maak_lokaal(db, "Ou Lokaal")
+        laat = self._maak_lokaal(db, "Bitterbessie")
+        nou = datetime.utcnow()
+        self._log(db, student, vroeg, "IN", nou - timedelta(minutes=90))
+        self._log(db, student, laat, "IN", nou - timedelta(minutes=5))
+
+        info = self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"]
+        assert info is not None
+        assert info["lokaal"] == "Bitterbessie"
+        assert info["tyd"].endswith("Z")
+
+    def test_geen_logs_gee_none(self, db):
+        module = skep_module(db, "SKND200")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 2)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+
+        assert self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"] is None
+
+    def test_gister_en_uit_logs_tel_nie(self, db):
+        from datetime import datetime, timedelta
+        module = skep_module(db, "SKND300")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 3)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        lokaal = self._maak_lokaal(db, "Gister Lokaal")
+        nou = datetime.utcnow()
+        self._log(db, student, lokaal, "IN", nou - timedelta(days=1, hours=1))
+        self._log(db, student, lokaal, "UIT", nou - timedelta(minutes=10))
+
+        assert self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"] is None
