@@ -347,9 +347,8 @@ def opsigter_kampus_besoekers(
     )
 
     data = []
-    for item in besoekers:
-        # Gebruik eager-loaded gasheer relationship (geen ekstra query nodig nie)
-        gasheer = item.gasheer
+    # Elke ry is 'n Row van (BesoekerUitnodiging, Gebruikers) — pak uit
+    for item, gasheer in besoekers:
         gasheer_naam = ""
         if gasheer:
             gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
