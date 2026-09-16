@@ -1,7 +1,13 @@
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Die toetse oefen die werklike auth-paaie uit. 'n Plaaslike .env met
+# DISABLE_AUTH=1 (span-toetsing/Docker) mag nie die toetsgedrag verander nie —
+# load_dotenv() oorskryf nie reeds-gestelde omgewingsveranderlikes nie.
+os.environ["DISABLE_AUTH"] = "0"
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

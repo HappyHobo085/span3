@@ -101,7 +101,7 @@ class TestAuthHelpers:
             asyncio.run(auth.verifieer_kampus_toegang(request=request, kampus_id=999, current_user=user, db=db))
 
         request.state.roles = []
-        monkeypatch.setattr(auth, "get_user_role_names", lambda db, user: [])
+        monkeypatch.setattr(auth, "_haal_rol_names_uit_loaded", lambda user: [])
         with pytest.raises(HTTPException, match="geen geldige rol"):
             auth.RoleChecker(["Student"])(request=request, current_user=user, db=db)
         opsigter = maak_gebruiker("Kampus_Opsigter")
@@ -291,6 +291,8 @@ class TestGebruikerServiceHelpers:
         student = models.Student(Gebruiker_ID=gebruiker.Gebruiker_ID, STU_Nommer="STU0001", STU_Is_Koshuis=True, Koshuis_ID=1)
         db.add(student)
         db.flush()
+        # Die student-relasie is dalk reeds eager-geladen as None — verfris
+        db.expire_all()
 
         payload = gebruiker_to_dict(gebruiker)
         assert payload["STU_Nommer"] == "STU0001"
@@ -316,8 +318,10 @@ class TestAutoUitcheckHelpers:
         db.flush()
 
         assert _kry_uitcheck_tydstip(db) == "22:00"
-        assert _is_koshuis_student(db, gebruiker.Gebruiker_ID) is False
-        assert _is_koshuis_student(db, user2.Gebruiker_ID) is True
+        koshuis_ids = _is_koshuis_student(db, [gebruiker.Gebruiker_ID, user2.Gebruiker_ID])
+        assert gebruiker.Gebruiker_ID not in koshuis_ids
+        assert user2.Gebruiker_ID in koshuis_ids
+        assert _is_koshuis_student(db, []) == set()
 
         sessions = _vind_oop_sessies(db)
         assert len(sessions) == 2
@@ -768,21 +772,30 @@ class TestRouterAndAdminEndpoints:
 
     def test_main_builds_app_without_running_database_startup(self, monkeypatch):
         import migrations
+        import noodgeval_kontrole_migration
+        import noodgeval_device_migration
 
         monkeypatch.setattr(migrations, "run_pre_migrations", lambda engine: None)
         monkeypatch.setattr(migrations, "run_migrations", lambda engine: None)
+        monkeypatch.setattr(noodgeval_kontrole_migration, "run_noodgeval_kontrole_migration", lambda engine: None)
+        monkeypatch.setattr(noodgeval_device_migration, "run_noodgeval_device_migration", lambda engine: None)
         monkeypatch.setattr(models.Base.metadata, "create_all", lambda bind: None)
 
         main_module = importlib.import_module("main")
         main_module = importlib.reload(main_module)
         assert main_module.app.title == "MOON Admin API"
-        assert any(route.path == "/" for route in main_module.app.routes)
+        # Nuwer FastAPI sluit routers lui in as _IncludedRouter sonder .path
+        assert any(getattr(route, "path", None) == "/" for route in main_module.app.routes)
 
     def test_main_exception_handlers_and_root(self, monkeypatch):
         import migrations
+        import noodgeval_kontrole_migration
+        import noodgeval_device_migration
 
         monkeypatch.setattr(migrations, "run_pre_migrations", lambda engine: None)
         monkeypatch.setattr(migrations, "run_migrations", lambda engine: None)
+        monkeypatch.setattr(noodgeval_kontrole_migration, "run_noodgeval_kontrole_migration", lambda engine: None)
+        monkeypatch.setattr(noodgeval_device_migration, "run_noodgeval_device_migration", lambda engine: None)
         monkeypatch.setattr(models.Base.metadata, "create_all", lambda bind: None)
         main_module = importlib.reload(importlib.import_module("main"))
         request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b"", "state": {}})
@@ -1319,6 +1332,9 @@ class TestAdditionalBackendRouteCoverage:
             models.Student(Gebruiker_ID=user_c.Gebruiker_ID, STU_Nommer="ERR-C"),
         ])
         db.flush()
+        # _make_user se query het al die gebruikers se student-relasie reeds
+        # as None eager-geladen — verfris sodat die nuwe Students sigbaar is
+        db.expire_all()
 
         assert saamry.get_saamry_status(db=db, current_user=user_a).sukses is True
         with pytest.raises(HTTPException, match="jouself"):
@@ -1373,6 +1389,9 @@ class TestAdditionalBackendRouteCoverage:
         db.add(models.Student(Gebruiker_ID=user_b.Gebruiker_ID, STU_Nommer="STU101", STU_Is_Koshuis=False))
         db.add(models.Personeel(Gebruiker_ID=user_c.Gebruiker_ID, PER_Nommer="PER100", PER_Departement="IT"))
         db.flush()
+        # _make_user se query het al die gebruikers se student-relasie reeds
+        # as None eager-geladen — verfris sodat die nuwe subrekords sigbaar is
+        db.expire_all()
 
         assert saamry._require_saamry_user(db, user_a) is None
         assert saamry._friendship_status(None, user_a.Gebruiker_ID) == "GEEN"
@@ -1440,7 +1459,7 @@ class TestAdditionalBackendRouteCoverage:
         assert created_payload["sukses"] is True
         event_id = created_payload["data"]["event_id"]
 
-        listed = events.list_events(view="komende", limit=10, db=db, current_user=admin)
+        listed = events.list_events(view="komende", skip=0, limit=10, db=db, current_user=admin)
         assert self._response_payload(listed)["sukses"] is True
 
         updated = events.update_event(
