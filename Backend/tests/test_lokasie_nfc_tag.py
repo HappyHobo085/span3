@@ -170,3 +170,56 @@ class TestLokasieNFCTag:
             headers=headers_vir(student),
         )
         assert resp.status_code == 403
+
+
+def _skep_payload(kampus_id, uid):
+    return {
+        "LOK_Naam": "Bitterbessie",
+        "LOK_Tipe": "Klaskamer",
+        "Kampus_ID": kampus_id,
+        "NFC_UID": uid,
+        "NFC_Tipe": "Lokasie",
+    }
+
+
+class TestSkepKlasMetUid:
+    """POST /klasse: gebruik die verskafte UID; genereer as dit leeg/TEMP is."""
+
+    def test_verskafte_uid_word_gebruik(self, http_db):
+        admin = maak_gebruiker(http_db, "Administrateur", 7)
+        kampus = maak_kampus(http_db)
+        client = bou_client(http_db)
+
+        resp = client.post(
+            "/klasse",
+            json=_skep_payload(kampus.Kampus_ID, "L4"),
+            headers=headers_vir(admin),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["data"]["nfc_tag"]["NFC_UID"] == "L4"
+
+    def test_temp_uid_word_gegenereer(self, http_db):
+        admin = maak_gebruiker(http_db, "Administrateur", 8)
+        kampus = maak_kampus(http_db)
+        client = bou_client(http_db)
+
+        resp = client.post(
+            "/klasse",
+            json=_skep_payload(kampus.Kampus_ID, "TEMP"),
+            headers=headers_vir(admin),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["data"]["nfc_tag"]["NFC_UID"] != "TEMP"
+
+    def test_gebruikte_uid_gee_409(self, http_db):
+        admin = maak_gebruiker(http_db, "Administrateur", 9)
+        kampus = maak_kampus(http_db)
+        maak_lokaal(http_db, "Ander Lokaal", "L4")
+        client = bou_client(http_db)
+
+        resp = client.post(
+            "/klasse",
+            json=_skep_payload(kampus.Kampus_ID, "L4"),
+            headers=headers_vir(admin),
+        )
+        assert resp.status_code == 409

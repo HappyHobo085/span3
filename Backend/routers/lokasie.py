@@ -353,7 +353,19 @@ def skep_klas_met_nfc(
         db.add(db_lokasie)
         db.flush()
 
-        generated_uid = genereer_unieke_nfc_uid(db)
+        gevraagde_uid = (klas_in.NFC_UID or "").strip()
+        if gevraagde_uid and gevraagde_uid.upper() != "TEMP":
+            bestaande = db.query(models.NFC_Tags).filter(
+                models.NFC_Tags.NFC_UID == gevraagde_uid
+            ).first()
+            if bestaande:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"NFC-UID '{gevraagde_uid}' is reeds aan 'n ander tag gekoppel",
+                )
+            generated_uid = gevraagde_uid
+        else:
+            generated_uid = genereer_unieke_nfc_uid(db)
 
         db_tag = models.NFC_Tags(
             NFC_UID=generated_uid,
