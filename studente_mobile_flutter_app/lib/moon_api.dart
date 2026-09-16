@@ -817,6 +817,8 @@ class BesoekerUitnodigingDto {
 
   final String status;
 
+  final String? voorgesteldeRigting;
+
   final DateTime geskepOp;
 
   final DateTime vervalOp;
@@ -848,6 +850,8 @@ class BesoekerUitnodigingDto {
     required this.otp,
 
     required this.status,
+
+    this.voorgesteldeRigting,
 
     required this.geskepOp,
 
@@ -901,6 +905,8 @@ class BesoekerUitnodigingDto {
 
       status: json['status']?.toString() ?? 'HANGEND',
 
+      voorgesteldeRigting: json['voorgestelde_rigting']?.toString(),
+
       geskepOp: DateTime.parse(json['geskep_op'].toString()).toLocal(),
 
       vervalOp: DateTime.parse(json['verval_op'].toString()).toLocal(),
@@ -936,6 +942,10 @@ class BesoekerUitnodigingDto {
       status == 'VERVAL' ||
 
       (status == 'HANGEND' && !DateTime.now().isBefore(vervalOp));
+
+  bool get isIn => status == 'TOEGELAAT';
+
+  bool get isUit => status == 'UIT';
 
 }
 
@@ -3259,6 +3269,39 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     );
 
   }
+
+  static Future<BesoekerUitnodigingDto> exitVisitor({
+
+    required int uitnodigingId,
+
+    required int kampusId,
+
+  }) async {
+
+    final response = await http.post(
+
+      Uri.parse(
+
+        '$baseUrl/besoekers/uitnodigings/$uitnodigingId/uit',
+
+      ),
+
+      headers: _besoekerHeaders(jsonBody: true),
+
+      body: jsonEncode({'kampus_id': kampusId}),
+
+    );
+
+    final data = _decodeBesoekerResponse(response);
+
+    return BesoekerUitnodigingDto.fromJson(
+
+      Map<String, dynamic>.from(data as Map),
+
+    );
+
+  }
+
 
   static Future<BesoekerUitnodigingDto> denyVisitorEntry({
 

@@ -229,7 +229,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                           Expanded(
                             child: GlassTapPanel(
                               label: 'BESOEKERS',
-                              subtitle: 'OTP verifieer',
+                              subtitle: 'OTP IN • UIT',
                               icon: '👤',
                               borderColor: const Color(0x3300C2FF),
                               onTap: () {
@@ -2647,10 +2647,10 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     if (invite == null || _decisionLoading) return;
 
     final confirmed = await _confirmDecision(
-      title: 'Laat Toegang Toe',
+      title: 'Skandeer Besoeker IN',
       message:
-          'Laat ${invite.volleNaam} toegang toe by ${widget.kampusNaam}?',
-      action: 'Laat Toe',
+          'Skandeer ${invite.volleNaam} IN by ${widget.kampusNaam}?',
+      action: 'SKANDEER IN',
       actionColor: Colors.green,
     );
     if (!confirmed) return;
@@ -2658,7 +2658,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     setState(() => _decisionLoading = true);
 
     try {
-      final updated = await MoonApi.allowVisitorEntry(
+      await MoonApi.allowVisitorEntry(
         uitnodigingId: invite.uitnodigingId,
         kampusId: widget.kampusId,
       );
@@ -2667,13 +2667,68 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
 
       setState(() {
         _decisionLoading = false;
-        _invite = updated;
+        _invite = null;
+        _error = null;
+        _otpController.clear();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
-          content: Text('Besoekertoegang toegestaan'),
+          content: Text(
+            'Besoeker IN geskandeer. Gebruik dieselfde OTP om later UIT te skandeer.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _decisionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exitVisitor() async {
+    final invite = _invite;
+    if (invite == null || _decisionLoading) return;
+
+    final confirmed = await _confirmDecision(
+      title: 'Skandeer Besoeker UIT',
+      message:
+          'Skandeer ${invite.volleNaam} UIT by ${widget.kampusNaam}? Daarna kan hierdie OTP nie weer gebruik word nie.',
+      action: 'SKANDEER UIT',
+      actionColor: Colors.orangeAccent,
+    );
+    if (!confirmed) return;
+
+    setState(() => _decisionLoading = true);
+
+    try {
+      await MoonApi.exitVisitor(
+        uitnodigingId: invite.uitnodigingId,
+        kampusId: widget.kampusId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _decisionLoading = false;
+        _invite = null;
+        _error = null;
+        _otpController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text(
+            'Besoeker UIT geskandeer. Hierdie OTP is nou klaar gebruik.',
+          ),
         ),
       );
     } catch (e) {
@@ -2748,6 +2803,8 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     switch (status) {
       case 'TOEGELAAT':
         return Colors.green;
+      case 'UIT':
+        return Colors.orangeAccent;
       case 'GEWEIER':
         return Colors.red;
       case 'VERVAL':
@@ -2762,6 +2819,8 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
   Widget build(BuildContext context) {
     final invite = _invite;
     final pending = invite?.status == 'HANGEND';
+    final checkedIn = invite?.status == 'TOEGELAAT';
+    final checkedOut = invite?.status == 'UIT';
 
     return Scaffold(
       backgroundColor: kBg,
@@ -2863,17 +2922,23 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             Icon(
                               pending
                                   ? Icons.verified_user_outlined
-                                  : invite.status == 'TOEGELAAT'
-                                      ? Icons.check_circle_rounded
-                                      : Icons.cancel_rounded,
+                                  : checkedIn
+                                      ? Icons.login_rounded
+                                      : checkedOut
+                                          ? Icons.logout_rounded
+                                          : Icons.cancel_rounded,
                               color: _statusColor(invite.status),
                               size: 58,
                             ),
                             const SizedBox(height: 12),
                             Text(
                               pending
-                                  ? 'GELDIGE BESOEKER'
-                                  : invite.status,
+                                  ? 'GELDIGE OTP — SKANDEER IN'
+                                  : checkedIn
+                                      ? 'BESOEKER IS IN — SKANDEER UIT'
+                                      : checkedOut
+                                          ? 'BESOEKER UIT'
+                                          : invite.status,
                               style: GoogleFonts.inter(
                                 color: _statusColor(invite.status),
                                 fontSize: 13,
@@ -2944,7 +3009,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                     child: GradientActionButton(
                                       label: _decisionLoading
                                           ? 'BESIG...'
-                                          : 'LAAT TOE',
+                                          : 'SKANDEER IN',
                                       onTap: _decisionLoading
                                           ? () {}
                                           : _allowEntry,
@@ -2964,6 +3029,19 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                     ),
                                   ),
                                 ],
+                              )
+                            else if (checkedIn)
+                              SizedBox(
+                                width: double.infinity,
+                                child: GradientActionButton(
+                                  label: _decisionLoading
+                                      ? 'BESIG...'
+                                      : 'SKANDEER UIT',
+                                  onTap: _decisionLoading
+                                      ? () {}
+                                      : _exitVisitor,
+                                  height: 48,
+                                ),
                               )
                             else
                               OutlineActionButton(

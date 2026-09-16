@@ -492,8 +492,9 @@ class BesoekerUitnodiging(Base):
     BES_Selfoon_Nr   = Column(String(20), nullable=False)
     BES_Rede         = Column(String(250), nullable=False, default='Besoek')
     BES_OTP          = Column(String(6), nullable=False)
-    # Dieselfde as BES_OTP terwyl die uitnodiging aktief is.
-    # Word NULL wanneer dit gebruik, geweier, gekanselleer of verval het.
+    # Dieselfde as BES_OTP terwyl die OTP nog gebruik mag word.
+    # Bly aktief ná die IN-scan sodat dieselfde OTP vir UIT gebruik kan word.
+    # Word eers NULL ná UIT, WEIER, KANSELLEER of VERVAL.
     # PostgreSQL laat verskeie NULL-waardes in 'n UNIQUE kolom toe, sodat
     # ses-syfer OTP's later veilig hergebruik kan word.
     BES_Aktief_Sleutel = Column(String(6), nullable=True, unique=True)
@@ -511,7 +512,7 @@ class BesoekerUitnodiging(Base):
     __table_args__ = (
         CheckConstraint(
             '"BES_Status" IN (\'HANGEND\', \'TOEGELAAT\', \'GEWEIER\', '
-            '\'GEKANSELLEER\', \'VERVAL\')',
+            '\'GEKANSELLEER\', \'VERVAL\', \'UIT\')',
             name='ck_besoeker_uitnodiging_status',
         ),
     )

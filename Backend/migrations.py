@@ -187,7 +187,7 @@ def run_migrations(engine):
                     CONSTRAINT ck_besoeker_uitnodiging_status
                         CHECK ("BES_Status" IN (
                             'HANGEND', 'TOEGELAAT', 'GEWEIER',
-                            'GEKANSELLEER', 'VERVAL'
+                            'GEKANSELLEER', 'VERVAL', 'UIT'
                         ))
                 )
             """))
@@ -859,4 +859,26 @@ def run_migrations(engine):
         print(
             "Waarskuwing: migrasie 016 "
             f"(Noodgeval persistence) het misluk: {_migrasie_fout}"
+        )
+
+
+    # Migrasie 017: Besoeker OTP kan een keer IN en daarna een keer UIT skandeer
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                ALTER TABLE besoeker_uitnodiging
+                DROP CONSTRAINT IF EXISTS ck_besoeker_uitnodiging_status
+            """))
+            _conn.execute(text("""
+                ALTER TABLE besoeker_uitnodiging
+                ADD CONSTRAINT ck_besoeker_uitnodiging_status
+                CHECK ("BES_Status" IN (
+                    'HANGEND', 'TOEGELAAT', 'GEWEIER',
+                    'GEKANSELLEER', 'VERVAL', 'UIT'
+                ))
+            """))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 017 "
+            f"(Besoeker OTP IN/UIT) het misluk: {_migrasie_fout}"
         )
