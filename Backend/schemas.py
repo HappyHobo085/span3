@@ -51,6 +51,12 @@ class UserBase(BaseModel):
     Is_Aktief: bool = True
 
 class UserCreate(UserBase):
+    # Die admin-blad stuur Rol_IDs (multi-rol) sonder Rol_ID, en die roete
+    # genereer self 'n GEB_ID_Nommer as geen verskaf word nie — albei geërfde
+    # velde moet dus hier opsioneel wees. Die roete vereis steeds ten minste
+    # een rol (Rol_IDs óf Rol_ID).
+    Rol_ID: Optional[int] = None
+    GEB_ID_Nommer: Optional[str] = None
     Rol_IDs: Optional[List[int]] = None
     GEB_Wagwoord: str = Field(..., min_length=8)
     STU_Nommer: Optional[str] = None

@@ -1515,7 +1515,7 @@ class TestAdditionalBackendRouteCoverage:
             GEB_Van="Student",
             GEB_ID_Nommer="9001010000999",
             GEB_Epos="new-student@example.com",
-            GEB_Wagwoord="secret123",
+            GEB_Wagwoord="Secret123!",
             Rol_ID=role.Rol_ID,
             STU_Nommer="STU0099",
         )
@@ -1531,7 +1531,7 @@ class TestAdditionalBackendRouteCoverage:
 
         updated = gebruikers.opdateer_gebruiker(
             user_id,
-            schemas.UserUpdate(GEB_Naam="Updated", GEB_Wagwoord="new-secret"),
+            schemas.UserUpdate(GEB_Naam="Updated", GEB_Wagwoord="New-secret1"),
             db=db,
             current_user=admin,
             is_admin=True,
@@ -1568,7 +1568,7 @@ class TestAdditionalBackendRouteCoverage:
         created = gebruikers.skep_gebruiker(
             schemas.UserCreate(
                 GEB_Naam="Generated", GEB_Van="Id", GEB_ID_Nommer="9001010000997",
-                GEB_Epos="generated@example.com", GEB_Wagwoord="secret123", Rol_ID=student_role.Rol_ID,
+                GEB_Epos="generated@example.com", GEB_Wagwoord="Secret123!", Rol_ID=student_role.Rol_ID,
                 STU_Nommer="STU0097",
             ), db=db, current_user=admin, is_admin=True,
         )

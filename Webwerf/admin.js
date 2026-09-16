@@ -1616,7 +1616,7 @@ const json = await window.MoonApi.createGebruiker(payload);
       addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief, payload.Kampus_ID);
       capListHeight(userList, '.admin-user-row');
     } else {
-      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
+      alert(foutBoodskap(json, 'Kon nie gebruiker skep nie.'));
     }
   }
 
@@ -1690,7 +1690,7 @@ const json = await window.MoonApi.createGebruiker(payload);
     });
       closeUserModal(); // resets the form back to create mode
     } else {
-      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker opdateer nie.');
+      alert(foutBoodskap(json, 'Kon nie gebruiker opdateer nie.'));
     }
   }
 
@@ -2051,8 +2051,21 @@ async function refreshDashboard() {
   }
 
   // Hierdie funksie gee die foutboodskap uit 'n bediener-antwoord.
+  // FastAPI se validasiefoute (422) kom as 'n lys objekte in `detail` —
+  // anders wys die alert net "[object Object]".
   function foutBoodskap(json, verstek) {
+    if (json && typeof json.fout === 'string') return json.fout;
     if (json && typeof json.detail === 'string') return json.detail;
+    if (json && Array.isArray(json.detail)) {
+      const boodskappe = json.detail
+        .map(function (d) {
+          if (!d || !d.msg) return '';
+          const veld = Array.isArray(d.loc) && d.loc.length > 1 ? d.loc[d.loc.length - 1] + ': ' : '';
+          return veld + d.msg.replace(/^Value error, /, '');
+        })
+        .filter(Boolean);
+      if (boodskappe.length) return boodskappe.join('\n');
+    }
     if (json && typeof json.boodskap === 'string') return json.boodskap;
     return verstek;
   }
