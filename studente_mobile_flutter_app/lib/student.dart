@@ -2785,108 +2785,257 @@ class RightEmptyPage extends StatefulWidget {
 
 class _RightEmptyPageState extends State<RightEmptyPage> {
   bool _busy = false;
+  bool _scanSukses = false;
   String _status = 'Druk om klas te skandeer';
+  String? _laasteModule;
+  String? _laasteLokaal;
+  String? _laasteTyd;
+
+  static const Map<String, int> _dagNommer = {
+    'maandag': DateTime.monday,
+    'monday': DateTime.monday,
+    'dinsdag': DateTime.tuesday,
+    'tuesday': DateTime.tuesday,
+    'woensdag': DateTime.wednesday,
+    'wednesday': DateTime.wednesday,
+    'donderdag': DateTime.thursday,
+    'thursday': DateTime.thursday,
+    'vrydag': DateTime.friday,
+    'friday': DateTime.friday,
+    'saterdag': DateTime.saturday,
+    'saturday': DateTime.saturday,
+    'sondag': DateTime.sunday,
+    'sunday': DateTime.sunday,
+  };
+
+  String _normaliseerUid(String value) => value.trim().toUpperCase();
+
+  int? _tydNaMinute(String value) {
+    final teks = value.trim().replaceAll('.', ':');
+    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(teks);
+    if (match == null) return null;
+    final uur = int.tryParse(match.group(1)!);
+    final minuut = int.tryParse(match.group(2)!);
+    if (uur == null || minuut == null || uur > 23 || minuut > 59) return null;
+    return (uur * 60) + minuut;
+  }
+
+  bool _dagPas(StudentRoosterKlasDto klas, DateTime nou) {
+    final dag = _dagNommer[klas.dag.trim().toLowerCase()];
+    return dag == null || dag == nou.weekday;
+  }
+
+  bool _tydPas(StudentRoosterKlasDto klas, DateTime nou) {
+    final begin = _tydNaMinute(klas.beginTyd);
+    final einde = _tydNaMinute(klas.eindTyd);
+    if (begin == null || einde == null) return false;
+
+    final nouMinute = (nou.hour * 60) + nou.minute;
+    if (einde > begin) {
+      return nouMinute >= begin && nouMinute < einde;
+    }
+
+    // Ondersteun 'n klas wat oor middernag loop.
+    return nouMinute >= begin || nouMinute < einde;
+  }
+
+  StudentRoosterKlasDto? _vindAktieweKlasVirUid(
+    List<StudentRoosterKlasDto> rooster,
+    String uid,
+    DateTime nou,
+  ) {
+    final gesoek = _normaliseerUid(uid);
+    for (final klas in rooster) {
+      if (!_dagPas(klas, nou) || !_tydPas(klas, nou)) continue;
+      final klasUid = _normaliseerUid(klas.nfcUid ?? '');
+      if (klasUid.isNotEmpty && klasUid == gesoek) return klas;
+    }
+    return null;
+  }
+
+  String _roosterFout(
+    List<StudentRoosterKlasDto> rooster,
+    String uid,
+    DateTime nou,
+  ) {
+    final gesoek = _normaliseerUid(uid);
+    final aktief = rooster.where((klas) => _dagPas(klas, nou) && _tydPas(klas, nou)).toList();
+
+    if (aktief.isEmpty) {
+      return 'Jy het nie tans ’n geskeduleerde klas om in te skandeer nie.';
+    }
+
+    final selfdeTag = rooster.where((klas) {
+      final klasUid = _normaliseerUid(klas.nfcUid ?? '');
+      return klasUid.isNotEmpty && klasUid == gesoek;
+    }).toList();
+
+    if (selfdeTag.isNotEmpty) {
+      return 'Hierdie lokaal is op jou rooster, maar nie vir die huidige klas-tyd nie.';
+    }
+
+    final klasNaam = aktief.first.vertoonNaam;
+    final lokaal = aktief.first.vertoonLokaal;
+    return 'Verkeerde lokaal. Jou huidige klas is $klasNaam in $lokaal.';
+  }
+
+  Future<String> _leesNdefUid(NfcTag tag) async {
+    final ndef = Ndef.from(tag);
+    if (ndef == null) return '';
+
+    final message = await ndef.read();
+    for (final record in message.records) {
+      if (record.typeNameFormat != NdefTypeNameFormat.nfcWellknown ||
+          String.fromCharCodes(record.type) != 'T') {
+        continue;
+      }
+
+      final payload = record.payload;
+      if (payload.isEmpty) continue;
+
+      final languageCodeLength = payload.first & 0x3F;
+      final textStart = 1 + languageCodeLength;
+      if (textStart >= payload.length) continue;
+
+      final value = utf8.decode(payload.sublist(textStart)).trim();
+      if (value.isNotEmpty) return _normaliseerUid(value);
+    }
+    return '';
+  }
 
   Future<void> _scanKlas() async {
+    if (_busy) return;
+
     setState(() {
       _busy = true;
+      _scanSukses = false;
+      _laasteModule = null;
+      _laasteLokaal = null;
+      _laasteTyd = null;
       _status = 'Hou NFC tag teen toestel...';
     });
 
     try {
+      final beskikbaar = await NfcManager.instance.isAvailable();
+      if (!beskikbaar) {
+        throw Exception('NFC is nie beskikbaar of aangeskakel op hierdie toestel nie.');
+      }
+
+      bool reedsHanteer = false;
       await NfcManager.instance.startSession(
         onDiscovered: (tag) async {
+          if (reedsHanteer) return;
+          reedsHanteer = true;
+
           try {
-            String uid = '';
-
-            final ndef = Ndef.from(tag);
-
-            if (ndef != null) {
-              final message = await ndef.read();
-
-              for (final record in message.records) {
-                if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown &&
-                    String.fromCharCodes(record.type) == 'T') {
-                  final payload = record.payload;
-
-                  if (payload.isNotEmpty) {
-                    final languageCodeLength = payload.first & 0x3F;
-                    uid = utf8.decode(
-                      payload.sublist(1 + languageCodeLength),
-                    ).trim().toUpperCase();
-                  }
-                }
-              }
-            }
-
-            debugPrint('NDEF UID GELEES = $uid');
+            final uid = await _leesNdefUid(tag);
+            debugPrint('KLAS NFC UID GELEES = [$uid]');
 
             if (uid.isEmpty) {
               await NfcManager.instance.stopSession(
-                errorMessage: 'Geen UID gevind nie',
+                errorMessage: 'Geen MOON NFC-kode op hierdie tag gevind nie',
+              );
+              if (!mounted) return;
+              setState(() {
+                _busy = false;
+                _status = 'Geen MOON NFC-kode op hierdie tag gevind nie';
+              });
+              return;
+            }
+
+            if (mounted) {
+              setState(() => _status = 'Kontroleer jou rooster...');
+            }
+
+            // Fail-closed: bevestig eers dat hierdie tag aan die student se
+            // huidige roosterklas gekoppel is. Geen toepaslike klas = geen log.
+            final rooster = await MoonApi.fetchMyStudentRooster();
+            final nou = DateTime.now();
+            final klas = _vindAktieweKlasVirUid(rooster, uid, nou);
+
+            if (klas == null) {
+              final fout = _roosterFout(rooster, uid, nou);
+              await NfcManager.instance.stopSession(errorMessage: fout);
+              if (!mounted) return;
+              setState(() {
+                _busy = false;
+                _status = fout;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: Colors.red,
+                  content: Text(fout, style: const TextStyle(color: Colors.white)),
+                ),
               );
               return;
             }
-            debugPrint('UID WAT NA RUGSTEUN GESTUUR WORD = [$uid]');
+
             final result = await MoonApi.studentScanKlas(
               nfcUid: uid,
               rigting: 'IN',
             );
 
             await NfcManager.instance.stopSession();
-
             if (!mounted) return;
+
+            final lokaal = result['LOK_Naam']?.toString().trim();
+            final vertoonLokaal = lokaal != null && lokaal.isNotEmpty
+                ? lokaal
+                : klas.vertoonLokaal;
+            final h = nou.hour.toString().padLeft(2, '0');
+            final m = nou.minute.toString().padLeft(2, '0');
 
             setState(() {
               _busy = false;
-              _status =
-                  'Welkom by ${result["LOK_Naam"]}';
+              _scanSukses = true;
+              _laasteModule = klas.vertoonNaam;
+              _laasteLokaal = vertoonLokaal;
+              _laasteTyd = '$h:$m';
+              _status = 'Ingeskandeer vir ${klas.vertoonNaam}';
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 backgroundColor: Colors.green,
                 content: Text(
-                  '${result["LOK_Naam"]} aangeteken',
+                  '${klas.vertoonNaam} · $vertoonLokaal aangeteken',
                   style: const TextStyle(color: Colors.white),
                 ),
               ),
             );
           } catch (e) {
-            await NfcManager.instance.stopSession();
+            try {
+              await NfcManager.instance.stopSession();
+            } catch (_) {}
 
             if (!mounted) return;
-
+            final fout = e.toString().replaceFirst('Exception: ', '');
             setState(() {
               _busy = false;
-              _status = 'Fout';
+              _status = fout;
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 backgroundColor: Colors.red,
-                content: Text(
-                  '$e',
-                  style: const TextStyle(color: Colors.white),
-                ),
+                content: Text(fout, style: const TextStyle(color: Colors.white)),
               ),
             );
           }
         },
       );
     } catch (e) {
+      if (!mounted) return;
+      final fout = e.toString().replaceFirst('Exception: ', '');
       setState(() {
         _busy = false;
-        _status = 'Fout';
+        _status = fout;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.red,
-          content: Text(
-            '$e',
-            style: const TextStyle(color: Colors.white),
-          ),
+          content: Text(fout, style: const TextStyle(color: Colors.white)),
         ),
       );
     }
@@ -2899,9 +3048,9 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(
+            const AppScreenHeader(
               title: 'Klas Skandering',
-              subtitle: 'Student',
+              subtitle: 'Student · NFC & Rooster',
               showBack: true,
             ),
             Expanded(
@@ -2916,39 +3065,65 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
                   ),
                   child: GlassCard(
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.nfc,
-                            color: kAccent,
-                            size: 64,
-                          ),
-                          const SizedBox(height: 16),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _scanSukses ? Icons.check_circle_rounded : Icons.nfc,
+                              color: _scanSukses ? Colors.green : kAccent,
+                              size: 64,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
                               _status,
                               textAlign: TextAlign.center,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                color: kText1,
-                                fontSize: 14,
+                                color: _scanSukses ? Colors.green : kText1,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _busy ? null : _scanKlas,
-                            child: Text(
-                              _busy
-                                  ? 'Besig...'
-                                  : 'Skandeer Klas',
+                            if (_scanSukses) ...[
+                              const SizedBox(height: 18),
+                              GlassCard(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  children: [
+                                    _KlasScanInfoRow(label: 'Klas', value: _laasteModule ?? '--'),
+                                    const SizedBox(height: 8),
+                                    _KlasScanInfoRow(label: 'Lokaal', value: _laasteLokaal ?? '--'),
+                                    const SizedBox(height: 8),
+                                    _KlasScanInfoRow(label: 'Tyd', value: _laasteTyd ?? '--'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                              onPressed: _busy ? null : _scanKlas,
+                              icon: _busy
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.nfc_rounded),
+                              label: Text(_busy ? 'Besig...' : 'Skandeer Klas'),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'Die NFC-tag moet by die lokaal van jou huidige roosterklas geregistreer wees.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                color: kTextMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -2958,6 +3133,43 @@ class _RightEmptyPageState extends State<RightEmptyPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _KlasScanInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _KlasScanInfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 62,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              color: kTextMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.inter(
+              color: kText1,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
