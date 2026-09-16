@@ -24,7 +24,7 @@
  *   - main.js (login gate + Personeel gate; laai website_api_calls.js → MoonApi;
  *     verskaf hasRole())
  *   - styles.css (.kalender* klasse)
- *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
+ *   - HTML ids: module-select, dag-select, dash-datum, dash-in-count, dash-out-count,
  *     dash-total-count, dash-percent-count,
  *     module-student-list, module-student-titel, module-student-caption,
  *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list,
@@ -45,7 +45,8 @@
   // ----- Cached DOM nodes (null-safe checks before use) -----
   // Kry al die dele van die bladsy (keuselys, lyste, knoppies, ens.)
   // een keer, sodat ons hulle later maklik kan gebruik.
-  var klasSelect = document.getElementById('klas-select');
+  var moduleSelect = document.getElementById('module-select');
+  var dagSelect = document.getElementById('dag-select');
   var dashDatum = document.getElementById('dash-datum');
   var dashInCount = document.getElementById('dash-in-count');
   var dashOutCount = document.getElementById('dash-out-count');
@@ -117,6 +118,11 @@
     if (wanneer) label += ' — ' + wanneer;
     if (k.KLA_Lokaal) label += ' · ' + k.KLA_Lokaal;
 
+    // Etiket vir die dag-keuselys, bv. "Maandag 8:00–9:00 · GH117 A (50)"
+    var dagLabel = wanneer;
+    if (k.KLA_Lokaal) dagLabel = wanneer ? wanneer + ' · ' + k.KLA_Lokaal : k.KLA_Lokaal;
+    if (!dagLabel) dagLabel = 'Tyd onbekend';
+
     return {
       id: String(k.Klas_ID),
       klasId: k.Klas_ID,
@@ -127,7 +133,8 @@
       begin: k.KLA_Begin_Tyd || '',
       eind: k.KLA_Eind_Tyd || '',
       lokaal: k.KLA_Lokaal || '',
-      label: label
+      label: label,
+      dagLabel: dagLabel
     };
   }
 
@@ -819,33 +826,79 @@
     });
   }
 
-  // ----- Klas dropdown -----
-  // Hierdie funksie vul die "Kies Klas" keuselys met al die gelaaide klasse
-  // (of 'n enkele gedeaktiveerde boodskap as daar niks is nie).
-  function populateKlasSelect(boodskap) {
-    if (!klasSelect) return;
-    klasSelect.innerHTML = '';
+  // ----- Module- en dag-dropdowns -----
+  // Unieke modulekodes uit die gelaaide klasse, in rooster-volgorde.
+  function moduleKodes() {
+    var kodes = [];
+    klasse.forEach(function (k) {
+      if (kodes.indexOf(k.kode) === -1) kodes.push(k.kode);
+    });
+    return kodes;
+  }
 
-    if (klasse.length === 0) {
+  // Al die klas-sessies van een module, in dag/tyd-volgorde (klasse is
+  // reeds so gesorteer).
+  function sessiesVirModule(kode) {
+    return klasse.filter(function (k) { return k.kode === kode; });
+  }
+
+  // Hierdie funksie vul die "Kies Module"-keuselys (of wys 'n enkele
+  // gedeaktiveerde boodskap as daar niks is nie) en vul dan die dag-lys.
+  function populateModuleSelect(boodskap) {
+    if (!moduleSelect) return;
+    moduleSelect.innerHTML = '';
+
+    var kodes = moduleKodes();
+    if (kodes.length === 0) {
       var leeg = document.createElement('option');
       leeg.value = '';
       leeg.textContent = boodskap || 'Geen klasse toegewys nie';
       leeg.disabled = true;
       leeg.selected = true;
-      klasSelect.appendChild(leeg);
-      klasSelect.disabled = true;
+      moduleSelect.appendChild(leeg);
+      moduleSelect.disabled = true;
+      populateDagSelect(null, boodskap || 'Geen klasse toegewys nie');
       return;
     }
 
-    klasSelect.disabled = false;
-    klasse.forEach(function (k) {
+    moduleSelect.disabled = false;
+    kodes.forEach(function (kode) {
+      var opt = document.createElement('option');
+      opt.value = kode;
+      var naam = sessiesVirModule(kode)[0].moduleNaam;
+      opt.textContent = naam ? kode + ' — ' + naam : kode;
+      moduleSelect.appendChild(opt);
+    });
+    if (currentKlas) moduleSelect.value = currentKlas.kode;
+    populateDagSelect(moduleSelect.value);
+  }
+
+  // Hierdie funksie vul die "Kies Dag"-keuselys met die gekose module se
+  // sessies.
+  function populateDagSelect(kode, boodskap) {
+    if (!dagSelect) return;
+    dagSelect.innerHTML = '';
+
+    var sessies = kode ? sessiesVirModule(kode) : [];
+    if (sessies.length === 0) {
+      var leeg = document.createElement('option');
+      leeg.value = '';
+      leeg.textContent = boodskap || 'Geen dae nie';
+      leeg.disabled = true;
+      leeg.selected = true;
+      dagSelect.appendChild(leeg);
+      dagSelect.disabled = true;
+      return;
+    }
+
+    dagSelect.disabled = false;
+    sessies.forEach(function (k) {
       var opt = document.createElement('option');
       opt.value = k.id;
-      opt.textContent = k.label;
-      if (k.moduleNaam) opt.title = k.moduleNaam;
-      klasSelect.appendChild(opt);
+      opt.textContent = k.dagLabel;
+      dagSelect.appendChild(opt);
     });
-    if (currentKlas) klasSelect.value = currentKlas.id;
+    if (currentKlas && currentKlas.kode === kode) dagSelect.value = currentKlas.id;
   }
 
   // Hierdie funksie maak 'n klas die huidige een, laai sy klasregister van
@@ -873,11 +926,20 @@
   }
 
   // ----- Event wiring -----
-  // As die gebruiker 'n ander klas kies, wys die nuwe klas se data.
-  if (klasSelect) {
-    klasSelect.addEventListener('change', function () {
+  // As die gebruiker 'n ander module kies, wys sy eerste sessie se data.
+  if (moduleSelect) {
+    moduleSelect.addEventListener('change', function () {
+      populateDagSelect(moduleSelect.value);
+      var eerste = sessiesVirModule(moduleSelect.value)[0];
+      if (eerste) kiesKlas(eerste);
+    });
+  }
+
+  // As die gebruiker 'n ander dag/sessie kies, wys daardie sessie se data.
+  if (dagSelect) {
+    dagSelect.addEventListener('change', function () {
       var gekies = klasse.filter(function (k) {
-        return k.id === klasSelect.value;
+        return k.id === dagSelect.value;
       })[0];
       if (gekies) kiesKlas(gekies);
     });
@@ -925,12 +987,12 @@
   document.addEventListener('DOMContentLoaded', function () {
     renderKalender();
     renderDashboard();
-    populateKlasSelect('Laai klasse...');
+    populateModuleSelect('Laai klasse...');
     renderLeegBoodskap(rosterList, 'Laai klasse...');
 
     laaiKlasse().then(function (lys) {
       klasse = lys;
-      populateKlasSelect();
+      populateModuleSelect();
       if (klasse.length === 0) {
         renderDashboardLeeg();
         renderLeegBoodskap(rosterList,
@@ -941,7 +1003,7 @@
       return kiesKlas(klasse[0]);
     }).catch(function (err) {
       klasse = [];
-      populateKlasSelect('Kon nie klasse laai nie');
+      populateModuleSelect('Kon nie klasse laai nie');
       renderDashboardLeeg();
       renderLeegBoodskap(rosterList, 'Kon nie klasse laai nie: ' + err.message);
     });
