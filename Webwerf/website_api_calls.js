@@ -219,6 +219,18 @@
     },
 
     /**
+     * PUT /lokasies/{lokasieId}/nfc-tag  (slegs Admin)
+     * Koppel/hernoem die lokaal se fisiese NFC-tag-UID.
+     */
+    updateLokasieTag: async function (lokasieId, nfcUid) {
+      const r = await apiRequest('/lokasies/' + lokasieId + '/nfc-tag', {
+        method: 'PUT',
+        body: JSON.stringify({ NFC_UID: nfcUid }),
+      });
+      return r.body;
+    },
+
+    /**
      * PUT /koshuise/{koshuisId}  (slegs Admin)
      */
     // Hierdie funksie roep PUT /koshuise/{id} — dit stuur nuwe inligting

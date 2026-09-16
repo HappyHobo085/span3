@@ -37,6 +37,7 @@
   const createClassBtn = document.getElementById('create-class-button');
   const classRoomName = document.getElementById('class-room-name');
   const classKampus = document.getElementById('class-kampus');
+  const classTagUid = document.getElementById('class-tag-uid');
   const classModalTitle = document.getElementById('class-modal-title');
   const deleteLokaalBtn = document.getElementById('delete-lokaal-btn');
 
@@ -115,6 +116,7 @@
   let editingUserId = null;
   let editingKampusId = null;
   let editingLokaalId = null;
+  let editingLokaalOldUid = '';
   let editingKoshuisId = null;
 
   // ===== LOOKUP MAPS =====
@@ -537,6 +539,8 @@
     classModalOverlay.setAttribute('aria-hidden', 'true');
     if (classRoomName) classRoomName.value = '';
     if (classKampus) classKampus.value = '';
+    if (classTagUid) classTagUid.value = '';
+    editingLokaalOldUid = '';
     // Return the shared modal to create mode after closing.
     editingLokaalId = null;
     if (classModalTitle) classModalTitle.textContent = 'Skep nuwe klas';
@@ -552,6 +556,8 @@
     const nameSpan = row.querySelector('.admin-venue-name');
     if (classRoomName) classRoomName.value = nameSpan ? nameSpan.textContent : '';
     if (classKampus) classKampus.value = row.dataset.kampusId || '';
+    if (classTagUid) classTagUid.value = row.dataset.nfcUid || '';
+    editingLokaalOldUid = row.dataset.nfcUid || '';
     if (classModalTitle) classModalTitle.textContent = 'Wysig Lokaal';
     if (createClassBtn) createClassBtn.textContent = 'Stoor Veranderinge';
     if (deleteLokaalBtn) deleteLokaalBtn.style.display = '';
@@ -821,13 +827,13 @@
     venueList.innerHTML = '';
     if (gateList) gateList.innerHTML = '';
     json.data.forEach(function (lok) {
-      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID, lok.LOK_Tipe);
+      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID, lok.LOK_Tipe, lok.NFC_UID);
     });
   }
 
   // Hierdie funksie voeg een lokaal-ry by die lys: naam,
   // kampus-etiket en 'n "Wysig"-knoppie.
-  function addVenueRow(lokasieId, name, kampusId, lokasieType) {
+  function addVenueRow(lokasieId, name, kampusId, lokasieType, nfcUid) {
     const targetList = lokasieType === 'Kampus' ? gateList : venueList;
     if (!targetList) return;
 
@@ -842,6 +848,10 @@
     badge.className = 'campus-badge';
     badge.textContent = kampusMap[String(kampusId)] || 'Onbekend';
 
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'campus-badge tag-badge';
+    tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'btn-outline btn-sm';
@@ -850,9 +860,11 @@
 
     row.dataset.lokasieId = String(lokasieId);
     row.dataset.kampusId = String(kampusId);
+    row.dataset.nfcUid = nfcUid || '';
     row.dataset.name = name.toLowerCase();
     row.appendChild(nameSpan);
     row.appendChild(badge);
+    row.appendChild(tagBadge);
     row.appendChild(editBtn);
     targetList.appendChild(row);
   }
@@ -860,7 +872,7 @@
   /** Update an existing venue row in place with fresh data. */
   // Hierdie funksie werk 'n bestaande lokaal-ry se naam en kampus by
   // sonder om die hele lys oor te bou.
-  function updateVenueRow(lokasieId, name, kampusId) {
+  function updateVenueRow(lokasieId, name, kampusId, nfcUid) {
     if (!venueList) return;
 
     const row = document.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]');
@@ -874,6 +886,9 @@
 
     row.dataset.kampusId = String(kampusId);
     row.dataset.name = name.toLowerCase();
+    const tagBadge = row.querySelector('.tag-badge');
+    if (tagBadge) tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+    row.dataset.nfcUid = nfcUid || '';
   }
 
  // Hierdie funksie wys net die lokale wat by die soekwoord en die
@@ -917,14 +932,28 @@
         Kampus_ID: kampusId
       });
 
-      if (json && json.sukses) {
-        alert('Lokaal suksesvol opgedateer.');
-        closeClassModal();
-        updateVenueRow(lokasieId, roomName, kampusId);
-        applyVenueFilter();
-      } else {
+      if (!json || !json.sukses) {
         alert((json && json.fout) || (json && json.detail) || 'Kon nie lokaal opdateer nie.');
+        return;
       }
+
+      // Koppel/hernoem die NFC-tag as die UID verander het. Die venster bly
+      // oop by 'n fout (bv. UID reeds in gebruik) sodat die admin kan regmaak.
+      const nuweUid = classTagUid ? classTagUid.value.trim() : '';
+      let finaleUid = editingLokaalOldUid;
+      if (nuweUid && nuweUid !== editingLokaalOldUid) {
+        const tagJson = await window.MoonApi.updateLokasieTag(lokasieId, nuweUid);
+        if (!tagJson || !tagJson.sukses) {
+          alert(foutBoodskap(tagJson, 'Kon nie die NFC-tag opdateer nie.'));
+          return;
+        }
+        finaleUid = nuweUid;
+      }
+
+      alert('Lokaal suksesvol opgedateer.');
+      closeClassModal();
+      updateVenueRow(lokasieId, roomName, kampusId, finaleUid);
+      applyVenueFilter();
       return;
     }
 
@@ -934,7 +963,7 @@
       LOK_Naam: roomName,
       LOK_Tipe: 'Klaskamer',
       Kampus_ID: kampusId,
-      NFC_UID: 'TEMP',
+      NFC_UID: (classTagUid && classTagUid.value.trim()) || 'TEMP',
       NFC_Tipe: 'Lokasie'
     });
 
@@ -942,10 +971,11 @@
       alert('Lokaal suksesvol geskep.');
       closeClassModal();
       const nuweId = json.data && json.data.lokasie ? json.data.lokasie.Lokasie_ID : '';
-      addVenueRow(nuweId, roomName, kampusId, 'Klaskamer');
+      const nuweUid = json.data && json.data.nfc_tag ? json.data.nfc_tag.NFC_UID : '';
+      addVenueRow(nuweId, roomName, kampusId, 'Klaskamer', nuweUid);
       capListHeight(venueList, '.admin-venue-row', 6);
     } else {
-      alert((json && json.fout) || 'Kon nie lokaal skep nie.');
+      alert(foutBoodskap(json, 'Kon nie lokaal skep nie.'));
     }
   }
 
