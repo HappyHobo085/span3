@@ -125,6 +125,21 @@
         </div>
         <p id="rooster-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
       </article>
+      <!-- Roosterlokaal mapping: koppel elke Lantiv-lokaal eenmalig aan 'n fisiese MOON-klaskamer/NFC-tag. -->
+      <article class="glass-card panel" aria-label="Roosterlokaal Koppeling">
+        <h2>Roosterlokale Koppeling</h2>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:10px">
+          Koppel elke lokaalnaam uit die Lantiv-rooster aan die werklike MOON-klaskamer.
+          Die koppeling word onthou en weer gebruik wanneer 'n nuwe rooster ingevoer word.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn-outline btn-sm" id="refresh-rooster-lokale-btn" type="button">Verfris Lokale</button>
+          <span id="rooster-lokale-opsomming" style="font-size:11px;color:var(--text-2)">--</span>
+        </div>
+        <div id="rooster-lokale-status" class="modal-status" aria-live="polite"></div>
+        <div id="rooster-lokale-list" class="admin-list" aria-label="Lantiv na MOON lokaal koppelings"></div>
+      </article>
+
       <!-- Paneel 6: Studente en hul groepe/modules. Bepaal wie op 'n klas se
            register (personeel.html) verskyn: groep -> klasse, module -> klasse. -->
       <article class="glass-card panel" aria-label="Studente en Groepe">
@@ -470,8 +485,8 @@
 
   <!-- Skripte: website_api_calls.js praat met die bediener, main.js is
        gedeelde kode, en admin.js beheer hierdie spesifieke bladsy -->
-  <script src="website_api_calls.js?v=20260916"></script>
+  <script src="website_api_calls.js?v=20260916c"></script>
   <script src="main.js?v=20260915"></script>
-  <script src="admin.js?v=20260916"></script>
+  <script src="admin.js?v=20260916c"></script>
 </body>
 </html>

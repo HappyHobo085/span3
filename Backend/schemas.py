@@ -340,6 +340,11 @@ class Klas(KlasBase):
 class KlasLokasieAssign(BaseModel):
     Lokasie_ID: int = Field(..., gt=0)
 
+class RoosterLokaalKoppelingUpdate(BaseModel):
+    KLA_Lokaal: str = Field(..., min_length=1, max_length=100)
+    Lokasie_ID: Optional[int] = Field(default=None, gt=0)
+
+
 class KlasGroepAssign(BaseModel):
     Groep_ID: int
 

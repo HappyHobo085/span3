@@ -2400,6 +2400,7 @@ async function refreshDashboard() {
         (d.groepe_geskep || 0) + ' nuwe groepe, ' + (d.klasse_geskep || 0) + ' klasse.';
       if (foute.length) boodskap += ' ' + foute.length + ' ry(e) oorgeslaan: ' + foute.slice(0, 3).join('; ') + (foute.length > 3 ? ' …' : '');
       await loadRoosterPaneel();
+      await loadRoosterLokaalKoppelings();
       await loadStudentPaneel();
       setStatusBox(roosterStatus, boodskap, foute.length && !d.klasse_geskep ? 'error' : 'success');
     } catch (err) {
@@ -2422,6 +2423,143 @@ async function refreshDashboard() {
     moduleModal.addEventListener('click', function (ev) {
       if (ev.target === moduleModal) closeModuleModal();
     });
+  }
+
+  // =====================================================================
+  //  ROOSTERLOKALE KOPPELING (Lantiv -> MOON Klaskamer/NFC)
+  // =====================================================================
+
+  const roosterLokaleList = document.getElementById('rooster-lokale-list');
+  const roosterLokaleStatus = document.getElementById('rooster-lokale-status');
+  const roosterLokaleOpsomming = document.getElementById('rooster-lokale-opsomming');
+  const refreshRoosterLokaleBtn = document.getElementById('refresh-rooster-lokale-btn');
+
+  let roosterLokaalKoppelings = [];
+  let roosterMoonKlaskamers = [];
+
+  function roosterLokaalOpsieLabel(lok) {
+    const kampus = kampusMap[String(lok.Kampus_ID)] || 'Onbekende kampus';
+    const nfc = lok.NFC_UID ? ' · NFC ' + lok.NFC_UID : ' · geen NFC';
+    return (lok.LOK_Naam || 'Onbekende lokaal') + ' — ' + kampus + nfc;
+  }
+
+  function renderRoosterLokaalKoppelings() {
+    if (!roosterLokaleList) return;
+    roosterLokaleList.innerHTML = '';
+
+    if (!roosterLokaalKoppelings.length) {
+      const leeg = document.createElement('div');
+      leeg.className = 'admin-venue-row';
+      leeg.textContent = 'Geen roosterlokale gevind nie. Laai eers die Lantiv-rooster op.';
+      roosterLokaleList.appendChild(leeg);
+      if (roosterLokaleOpsomming) roosterLokaleOpsomming.textContent = '0 roosterlokale';
+      return;
+    }
+
+    let gekoppel = 0;
+    roosterLokaalKoppelings.forEach(function (item) {
+      if (item.Gekoppel) gekoppel += 1;
+
+      const row = document.createElement('div');
+      row.className = 'admin-venue-row';
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = 'minmax(170px,1fr) minmax(240px,1.4fr)';
+      row.style.gap = '12px';
+      row.style.alignItems = 'center';
+
+      const info = document.createElement('div');
+      const naam = document.createElement('div');
+      naam.className = 'admin-venue-name';
+      naam.textContent = item.KLA_Lokaal || 'Onbekende Lantiv-lokaal';
+      const meta = document.createElement('div');
+      meta.className = 'admin-user-email';
+      meta.textContent = (item.Klas_Aantal || 0) + ' klas' + ((item.Klas_Aantal || 0) === 1 ? '' : 'se') +
+        (item.Gekoppel ? ' · gekoppel' : ' · NIE GEKOPPEL NIE');
+      info.appendChild(naam);
+      info.appendChild(meta);
+
+      const select = document.createElement('select');
+      select.className = 'glass-select';
+      select.setAttribute('aria-label', 'Koppel ' + (item.KLA_Lokaal || '') + ' aan MOON lokaal');
+
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = '— Nie gekoppel nie —';
+      select.appendChild(none);
+
+      roosterMoonKlaskamers.forEach(function (lok) {
+        const opt = document.createElement('option');
+        opt.value = String(lok.Lokasie_ID);
+        opt.textContent = roosterLokaalOpsieLabel(lok);
+        select.appendChild(opt);
+      });
+
+      select.value = item.Lokasie_ID == null ? '' : String(item.Lokasie_ID);
+      select.addEventListener('change', async function () {
+        const nuweId = select.value ? Number(select.value) : null;
+        select.disabled = true;
+        setStatusBox(roosterLokaleStatus, 'Stoor koppeling vir ' + item.KLA_Lokaal + '...', 'success');
+        try {
+          const json = await window.MoonApi.saveRoosterLokaalKoppeling(item.KLA_Lokaal, nuweId);
+          if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie lokaal-koppeling stoor nie.'));
+          const d = json.data || {};
+          setStatusBox(
+            roosterLokaleStatus,
+            nuweId == null
+              ? item.KLA_Lokaal + ' is ontkoppel.'
+              : item.KLA_Lokaal + ' is gekoppel aan ' + (d.LOK_Naam || 'die gekose MOON-lokaal') +
+                '. ' + (d.Klasse_Bygewerk || 0) + ' klas(se) bygewerk.',
+            'success'
+          );
+          await loadRoosterLokaalKoppelings();
+          await loadRoosterPaneel();
+        } catch (err) {
+          setStatusBox(roosterLokaleStatus, 'Kon nie koppeling stoor nie: ' + err.message, 'error');
+          select.value = item.Lokasie_ID == null ? '' : String(item.Lokasie_ID);
+        } finally {
+          select.disabled = false;
+        }
+      });
+
+      row.appendChild(info);
+      row.appendChild(select);
+      roosterLokaleList.appendChild(row);
+    });
+
+    if (roosterLokaleOpsomming) {
+      roosterLokaleOpsomming.textContent = gekoppel + '/' + roosterLokaalKoppelings.length + ' roosterlokale gekoppel';
+    }
+    capListHeight(roosterLokaleList, '.admin-venue-row', 8);
+  }
+
+  async function loadRoosterLokaalKoppelings() {
+    if (!roosterLokaleList || !window.MoonApi) return;
+    try {
+      const resultate = await Promise.all([
+        window.MoonApi.fetchRoosterLokaalKoppelings(),
+        window.MoonApi.fetchLokasies(),
+      ]);
+      const mapJson = resultate[0];
+      const lokJson = resultate[1];
+      if (!isOk(mapJson)) throw new Error(foutBoodskap(mapJson, 'Kon nie roosterlokale laai nie.'));
+      if (!isOk(lokJson)) throw new Error(foutBoodskap(lokJson, 'Kon nie MOON-lokale laai nie.'));
+
+      roosterLokaalKoppelings = Array.isArray(mapJson.data) ? mapJson.data : [];
+      roosterMoonKlaskamers = (Array.isArray(lokJson.data) ? lokJson.data : [])
+        .filter(function (lok) { return String(lok.LOK_Tipe || '').toLowerCase() === 'klaskamer'; })
+        .sort(function (a, b) {
+          const ka = kampusMap[String(a.Kampus_ID)] || '';
+          const kb = kampusMap[String(b.Kampus_ID)] || '';
+          return (ka + ' ' + (a.LOK_Naam || '')).localeCompare(kb + ' ' + (b.LOK_Naam || ''));
+        });
+      renderRoosterLokaalKoppelings();
+    } catch (err) {
+      setStatusBox(roosterLokaleStatus, 'Kon nie roosterlokale laai nie: ' + err.message, 'error');
+    }
+  }
+
+  if (refreshRoosterLokaleBtn) {
+    refreshRoosterLokaleBtn.addEventListener('click', loadRoosterLokaalKoppelings);
   }
 
   // =====================================================================
@@ -2868,6 +3006,7 @@ async function refreshDashboard() {
   applyUserFilter();
 
   await loadRoosterPaneel();
+  await loadRoosterLokaalKoppelings();
   await loadStudentPaneel();
 
   await loadAutoUitcheckTydstip();

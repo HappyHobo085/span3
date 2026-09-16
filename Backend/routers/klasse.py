@@ -181,6 +181,29 @@ def _probeer_bind_klas_lokasie(db: Session, klas: models.Klas) -> bool:
     return True
 
 
+def _kry_rooster_lokaal_mapping(db: Session, lokaal_naam: str | None) -> models.Rooster_Lokaal_Koppeling | None:
+    naam = (lokaal_naam or "").strip()
+    if not naam:
+        return None
+    return (
+        db.query(models.Rooster_Lokaal_Koppeling)
+        .options(joinedload(models.Rooster_Lokaal_Koppeling.lokasie))
+        .filter(models.Rooster_Lokaal_Koppeling.KLA_Lokaal == naam)
+        .first()
+    )
+
+
+def _pas_rooster_lokaal_mapping_toe(db: Session, klas: models.Klas) -> bool:
+    """Gebruik slegs 'n eksplisiete Admin mapping; moenie nuwe name outomaties raai nie."""
+    mapping = _kry_rooster_lokaal_mapping(db, klas.KLA_Lokaal)
+    if mapping is None:
+        return False
+    if klas.Lokasie_ID == mapping.Lokasie_ID:
+        return False
+    klas.Lokasie_ID = mapping.Lokasie_ID
+    return True
+
+
 def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     """Merg (dedupeer) die student se rooster uit 3 bronne."""
     gesien: set[int] = set()
@@ -495,6 +518,127 @@ def lys_klasse(
     return schemas.APIResponse(
         sukses=True,
         data=[_klas_na_dict(k) for k in klasse],
+    )
+
+
+# --- ROOSTER-LOKAAL MAPPING (admin) ---
+
+@router.get("/lokaal-koppelings")
+def lys_rooster_lokaal_koppelings(
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Unieke Lantiv-lokale met hul gestoorde MOON-klaskamer/NFC-koppeling."""
+    bron_rye = (
+        db.query(models.Klas.KLA_Lokaal, func.count(models.Klas.Klas_ID))
+        .filter(models.Klas.KLA_Lokaal.isnot(None))
+        .group_by(models.Klas.KLA_Lokaal)
+        .order_by(models.Klas.KLA_Lokaal)
+        .all()
+    )
+
+    mappings = {
+        m.KLA_Lokaal: m
+        for m in (
+            db.query(models.Rooster_Lokaal_Koppeling)
+            .options(
+                joinedload(models.Rooster_Lokaal_Koppeling.lokasie)
+                .joinedload(models.Lokasie.kampus),
+                joinedload(models.Rooster_Lokaal_Koppeling.lokasie)
+                .joinedload(models.Lokasie.nfc_tags),
+            )
+            .all()
+        )
+    }
+
+    data = []
+    for bron_lokaal, klas_aantal in bron_rye:
+        mapping = mappings.get(bron_lokaal)
+        lokasie = mapping.lokasie if mapping else None
+        data.append({
+            "KLA_Lokaal": bron_lokaal,
+            "Klas_Aantal": int(klas_aantal or 0),
+            "Gekoppel": bool(mapping and lokasie),
+            "Lokasie_ID": mapping.Lokasie_ID if mapping else None,
+            "LOK_Naam": lokasie.LOK_Naam if lokasie else None,
+            "Kampus_ID": lokasie.Kampus_ID if lokasie else None,
+            "KAM_Naam": lokasie.kampus.KAM_Naam if lokasie and lokasie.kampus else None,
+            "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
+            "NFC_Gekoppel": bool(lokasie and _aktiewe_lokasie_nfc_uid(lokasie)),
+        })
+
+    return schemas.APIResponse(sukses=True, data=data)
+
+
+@router.post("/lokaal-koppelings")
+def stoor_rooster_lokaal_koppeling(
+    data: schemas.RoosterLokaalKoppelingUpdate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    bron_lokaal = data.KLA_Lokaal.strip()
+    if not bron_lokaal:
+        raise HTTPException(status_code=400, detail="Lantiv-lokaal is verpligtend")
+
+    mapping = db.query(models.Rooster_Lokaal_Koppeling).filter(
+        models.Rooster_Lokaal_Koppeling.KLA_Lokaal == bron_lokaal
+    ).first()
+
+    if data.Lokasie_ID is None:
+        if mapping:
+            db.delete(mapping)
+        verander = (
+            db.query(models.Klas)
+            .filter(models.Klas.KLA_Lokaal == bron_lokaal)
+            .update({models.Klas.Lokasie_ID: None}, synchronize_session=False)
+        )
+        db.commit()
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "KLA_Lokaal": bron_lokaal,
+                "Lokasie_ID": None,
+                "Gekoppel": False,
+                "Klasse_Bygewerk": int(verander or 0),
+            },
+        )
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == data.Lokasie_ID
+    ).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="MOON-lokaal nie gevind nie")
+    if str(lokasie.LOK_Tipe or "").strip().casefold() != "klaskamer":
+        raise HTTPException(status_code=400, detail="Jy kan net 'n Klaskamer-lokasie aan 'n roosterlokaal koppel")
+
+    if mapping:
+        mapping.Lokasie_ID = lokasie.Lokasie_ID
+        mapping.Gewysig_Op = datetime.utcnow()
+    else:
+        mapping = models.Rooster_Lokaal_Koppeling(
+            KLA_Lokaal=bron_lokaal,
+            Lokasie_ID=lokasie.Lokasie_ID,
+        )
+        db.add(mapping)
+
+    verander = (
+        db.query(models.Klas)
+        .filter(models.Klas.KLA_Lokaal == bron_lokaal)
+        .update({models.Klas.Lokasie_ID: lokasie.Lokasie_ID}, synchronize_session=False)
+    )
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "KLA_Lokaal": bron_lokaal,
+            "Lokasie_ID": lokasie.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Kampus_ID": lokasie.Kampus_ID,
+            "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
+            "Gekoppel": True,
+            "Klasse_Bygewerk": int(verander or 0),
+        },
     )
 
 
@@ -1019,9 +1163,9 @@ async def importeer_klasse(
                 db.flush()
                 resultaat.klasse_geskep += 1
 
-            # Bind die roosterperiode outomaties aan die fisiese Klaskamer/NFC-lokasie
-            # wanneer die lokaalnaam uniek match (bv. GH117 A en GH117 A (50)).
-            _probeer_bind_klas_lokasie(db, klas)
+            # Gebruik die Admin se gestoorde Lantiv -> MOON-lokaal mapping.
+            # Onbekende Lantiv-lokale bly doelbewus ongekoppel totdat Admin dit kies.
+            _pas_rooster_lokaal_mapping_toe(db, klas)
 
             # Koppel elke groep (komma-geskei) aan die klas.
             groepe = [g.strip() for g in ry["groep"].split(",") if g.strip()]

@@ -87,6 +87,23 @@ class Klas(Base):
     module = relationship("Module", back_populates="klasse")
     lokasie = relationship("Lokasie", lazy="selectin")
 
+class Rooster_Lokaal_Koppeling(Base):
+    __tablename__ = 'rooster_lokaal_koppeling'
+
+    Koppeling_ID = Column(Integer, primary_key=True, index=True)
+    KLA_Lokaal = Column(String(100), nullable=False, unique=True, index=True)
+    Lokasie_ID = Column(
+        Integer,
+        ForeignKey('lokasie.Lokasie_ID', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    lokasie = relationship('Lokasie', lazy='selectin')
+
+
 class Student_Groep(Base):
     __tablename__ = 'student_groep'
 
