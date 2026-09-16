@@ -153,9 +153,11 @@ def kry_my_dashboard(
 
     kampus_status = "ONBEKEND"
     if laaste_kampus_log:
-        if laaste_kampus_log.TOE_Rigting == "IN":
+        # laaste_kampus_log is 'n Row van (ToegangsLogs, Lokasie) — pak eers uit
+        kampus_log = laaste_kampus_log[0]
+        if kampus_log.TOE_Rigting == "IN":
             kampus_status = "OP_KAMPUS"
-        elif laaste_kampus_log.TOE_Rigting == "UIT":
+        elif kampus_log.TOE_Rigting == "UIT":
             kampus_status = "NIE_OP_KAMPUS"
 
     return {
