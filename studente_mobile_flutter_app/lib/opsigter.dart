@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
 import 'profile_page.dart';
+import 'noodgeval_dashboard.dart';
 
 
 ThemeData _moonPickerTheme(BuildContext context) {
@@ -1516,124 +1517,10 @@ class _NoodPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const AppScreenHeader(
-              title: 'Nood',
-              subtitle: 'Kampus noodbeheer',
-              showBack: true,
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.red.withOpacity(0.8),
-                          width: 1.4,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.emergency_rounded,
-                            color: Colors.red,
-                            size: 52,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'NOODSTELSEL',
-                            style: GoogleFonts.inter(
-                              color: Colors.red,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.3,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Geen aktiewe noodgeval',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              color: kText1,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Die noodsein en sirene word later aan Firebase gekoppel.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              color: kText2,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const _SectionTitle('NOODAKSIE'),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton.icon(
-                              onPressed: null,
-                              icon: const Icon(Icons.warning_amber_rounded),
-                              label: Text(
-                                'AKTIVEER NOOD',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                disabledBackgroundColor:
-                                    Colors.red.withOpacity(0.28),
-                                disabledForegroundColor:
-                                    Colors.white.withOpacity(0.55),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Die knoppie bly vir nou gedeaktiveer totdat ons die noodsein, sirene en toestelkennisgewings koppel.',
-                            style: GoogleFonts.inter(
-                              color: kTextMuted,
-                              fontSize: 11,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    // Die volledige noodstelsel is reeds in NoodgevalDashboardPage:
+    // REST skep/sluit/herstuur, MQTT waarskuwings en live WebSocket-status.
+    // Hierdie blad hou net die bestaande Opsigter navigasie-pad stabiel.
+    return const NoodgevalDashboardPage();
   }
 }
 
