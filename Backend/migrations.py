@@ -919,3 +919,107 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 018 "
             f"(Noodgeval eksterne Event-gaste) het misluk: {_migrasie_fout}"
         )
+
+    # Migrasie 019: Koppel rooster-klas aan fisiese Klaskamer/NFC-lokasie
+    # 018 is doelbewus oorgeslaan hier omdat dit deur die Nood/Event-gaste stap
+    # gebruik kan word. Hierdie migrasie is idempotent en nie-destruktief.
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                ALTER TABLE klas
+                ADD COLUMN IF NOT EXISTS "Lokasie_ID" INT NULL
+            '''))
+            _conn.execute(text('''
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'fk_klas_lokasie'
+                          AND conrelid = 'klas'::regclass
+                    ) THEN
+                        ALTER TABLE klas
+                        ADD CONSTRAINT fk_klas_lokasie
+                        FOREIGN KEY ("Lokasie_ID")
+                        REFERENCES lokasie("Lokasie_ID")
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_klas_lokasie_id
+                ON klas ("Lokasie_ID")
+            '''))
+            # Veilige eerste backfill: presiese lokaalnaam-match op Klaskamer.
+            _conn.execute(text('''
+                UPDATE klas k
+                SET "Lokasie_ID" = l."Lokasie_ID"
+                FROM lokasie l
+                WHERE k."Lokasie_ID" IS NULL
+                  AND lower(trim(k."KLA_Lokaal")) = lower(trim(l."LOK_Naam"))
+                  AND lower(trim(l."LOK_Tipe")) = 'klaskamer'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM lokasie l2
+                      WHERE lower(trim(l2."LOK_Naam")) = lower(trim(k."KLA_Lokaal"))
+                        AND lower(trim(l2."LOK_Tipe")) = 'klaskamer'
+                        AND l2."Lokasie_ID" <> l."Lokasie_ID"
+                  )
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 019 "
+            f"(Rooster-klas -> Klaskamer/NFC-lokasie) het misluk: {_migrasie_fout}"
+        )
+
+    # Migrasie 020: Permanente Lantiv-roosterlokaal -> MOON-klaskamer mapping
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS rooster_lokaal_koppeling (
+                    "Koppeling_ID" SERIAL PRIMARY KEY,
+                    "KLA_Lokaal" VARCHAR(100) NOT NULL UNIQUE,
+                    "Lokasie_ID" INT NOT NULL,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_rooster_lokaal_koppeling_lokasie
+                        FOREIGN KEY ("Lokasie_ID")
+                        REFERENCES lokasie("Lokasie_ID")
+                        ON DELETE CASCADE
+                )
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_rooster_lokaal_koppeling_lokasie
+                ON rooster_lokaal_koppeling ("Lokasie_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_rooster_lokaal_koppeling_lantiv
+                ON rooster_lokaal_koppeling ("KLA_Lokaal")
+            '''))
+
+            # Bewaar veilige bestaande Step 16-koppelings as permanente mappings,
+            # maar slegs waar dieselfde Lantiv-lokaal reeds oral dieselfde mapping het.
+            _conn.execute(text('''
+                INSERT INTO rooster_lokaal_koppeling ("KLA_Lokaal", "Lokasie_ID")
+                SELECT k."KLA_Lokaal", MIN(k."Lokasie_ID")
+                FROM klas k
+                WHERE k."KLA_Lokaal" IS NOT NULL
+                  AND k."Lokasie_ID" IS NOT NULL
+                GROUP BY k."KLA_Lokaal"
+                HAVING COUNT(DISTINCT k."Lokasie_ID") = 1
+                ON CONFLICT ("KLA_Lokaal") DO NOTHING
+            '''))
+
+            # Pas enige reeds-gestoorde mappings konsekwent op bestaande klasse toe.
+            _conn.execute(text('''
+                UPDATE klas k
+                SET "Lokasie_ID" = m."Lokasie_ID"
+                FROM rooster_lokaal_koppeling m
+                WHERE k."KLA_Lokaal" = m."KLA_Lokaal"
+                  AND k."Lokasie_ID" IS DISTINCT FROM m."Lokasie_ID"
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 020 "
+            f"(Roosterlokaal mapping) het misluk: {_migrasie_fout}"
+        )
+

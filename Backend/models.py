@@ -76,12 +76,33 @@ class Klas(Base):
 
     Klas_ID = Column(Integer, primary_key=True, index=True)
     Module_ID = Column(Integer, ForeignKey('module.Module_ID'), nullable=False)
+    # Fisiese klaskamer wat aan hierdie roosterperiode gekoppel is.
+    # Nullable vir bestaande/imported klasse totdat 'n lokaal gematch of handmatig gekoppel is.
+    Lokasie_ID = Column(Integer, ForeignKey('lokasie.Lokasie_ID', ondelete='SET NULL'), nullable=True, index=True)
     KLA_Lokaal = Column(String(100), nullable=False)
     KLA_Dag = Column(String(50), nullable=False)
     KLA_Begin_Tyd = Column(String(20), nullable=False)
     KLA_Eind_Tyd = Column(String(20), nullable=False)
 
     module = relationship("Module", back_populates="klasse")
+    lokasie = relationship("Lokasie", lazy="selectin")
+
+class Rooster_Lokaal_Koppeling(Base):
+    __tablename__ = 'rooster_lokaal_koppeling'
+
+    Koppeling_ID = Column(Integer, primary_key=True, index=True)
+    KLA_Lokaal = Column(String(100), nullable=False, unique=True, index=True)
+    Lokasie_ID = Column(
+        Integer,
+        ForeignKey('lokasie.Lokasie_ID', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    lokasie = relationship('Lokasie', lazy='selectin')
+
 
 class Student_Groep(Base):
     __tablename__ = 'student_groep'

@@ -4,7 +4,6 @@ import 'package:share_plus/share_plus.dart';
 import 'app_shared.dart';
 import 'moon_api.dart';
 import 'profile_page.dart';
-import 'noodgeval_dashboard.dart';
 
 
 ThemeData _moonPickerTheme(BuildContext context) {
@@ -61,7 +60,7 @@ class _OpsigterHomePageState extends State<OpsigterHomePage> {
       return;
     }
     if (index == 3) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const NoodgevalDashboardPage()));
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const _NoodPage()));
       return;
     }
     setState(() => _selectedIndex = index);
@@ -374,7 +373,7 @@ class _TuisTabState extends State<_TuisTab> {
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const NoodgevalDashboardPage(),
+                                  builder: (_) => const _NoodPage(),
                                 ),
                               ),
                             ),
@@ -1111,6 +1110,20 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                               value: _laai ? '—' : '${inCount == 0 && scannedIn.isNotEmpty ? scannedIn.length : inCount}',
                               subtitle: 'In koshuis',
                               icon: Icons.bed_rounded,
+                              onTap: _laai || _gekoseKoshuis == null
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => _KoshuisPeopleListPage(
+                                            title: 'Inwoners in Koshuis',
+                                            koshuisNaam: _gekoseKoshuis!.naam,
+                                            items: scannedIn,
+                                            emptyText: 'Geen inwoners is tans in hierdie koshuis nie.',
+                                            fallbackRigting: 'IN',
+                                          ),
+                                        ),
+                                      ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1120,6 +1133,20 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                               value: _laai ? '—' : '${outCount == 0 && scannedOut.isNotEmpty ? scannedOut.length : outCount}',
                               subtitle: 'Uit koshuis',
                               icon: Icons.logout_rounded,
+                              onTap: _laai || _gekoseKoshuis == null
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => _KoshuisPeopleListPage(
+                                            title: 'Inwoners uit Koshuis',
+                                            koshuisNaam: _gekoseKoshuis!.naam,
+                                            items: scannedOut,
+                                            emptyText: 'Geen inwoners is tans as uit hierdie koshuis gemerk nie.',
+                                            fallbackRigting: 'UIT',
+                                          ),
+                                        ),
+                                      ),
                             ),
                           ),
                         ],
@@ -1144,6 +1171,20 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                               value: _laai ? '—' : '$inwoners',
                               subtitle: 'Inwoners',
                               icon: Icons.people_rounded,
+                              onTap: _laai || _gekoseKoshuis == null
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => _KoshuisPeopleListPage(
+                                            title: 'Huidige Inwoners',
+                                            koshuisNaam: _gekoseKoshuis!.naam,
+                                            items: scannedIn,
+                                            emptyText: 'Geen inwoners is tans in hierdie koshuis nie.',
+                                            fallbackRigting: 'IN',
+                                          ),
+                                        ),
+                                      ),
                             ),
                           ),
                         ],
@@ -1187,6 +1228,121 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _KoshuisPeopleListPage extends StatelessWidget {
+  final String title;
+  final String koshuisNaam;
+  final List<Map<String, dynamic>> items;
+  final String emptyText;
+  final String fallbackRigting;
+
+  const _KoshuisPeopleListPage({
+    required this.title,
+    required this.koshuisNaam,
+    required this.items,
+    required this.emptyText,
+    required this.fallbackRigting,
+  });
+
+  String _naam(Map<String, dynamic> item) {
+    final naam = item['GEB_Naam']?.toString() ??
+        item['naam']?.toString() ??
+        item['Naam']?.toString() ??
+        '';
+    final van = item['GEB_Van']?.toString() ??
+        item['van']?.toString() ??
+        item['Van']?.toString() ??
+        '';
+    final full = '$naam $van'.trim();
+    return full.isEmpty ? 'Onbekende inwoner' : full;
+  }
+
+  String _detail(Map<String, dynamic> item) {
+    final rol = item['Rol_Naam']?.toString() ??
+        item['rol']?.toString() ??
+        item['Rol']?.toString() ??
+        'Student';
+    final rigting = item['Rigting']?.toString() ??
+        item['rigting']?.toString() ??
+        fallbackRigting;
+    final metode = item['Metode']?.toString() ??
+        item['metode']?.toString() ??
+        '';
+    final tydRaw = item['Tydstempel']?.toString() ??
+        item['tyd']?.toString() ??
+        item['timestamp']?.toString() ??
+        '';
+
+    String tyd = '';
+    if (tydRaw.isNotEmpty) {
+      // Hou dieselfde tydformaat as die bestaande Koshuis-statuslys.
+      tyd = tydRaw.length >= 16 ? tydRaw.substring(11, 16) : tydRaw;
+    }
+
+    return [rol, rigting, metode, tyd]
+        .where((v) => v.trim().isNotEmpty)
+        .join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: title,
+              subtitle: koshuisNaam,
+              showBack: true,
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          emptyText,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final isIn = (item['Rigting']?.toString() ??
+                                    item['rigting']?.toString() ??
+                                    fallbackRigting)
+                                .toUpperCase() ==
+                            'IN';
+
+                        return GlassCard(
+                          padding: const EdgeInsets.all(14),
+                          child: _MiniLogRow(
+                            name: _naam(item),
+                            detail: _detail(item),
+                            icon: isIn
+                                ? Icons.login_rounded
+                                : Icons.logout_rounded,
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

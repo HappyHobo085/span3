@@ -2,9 +2,13 @@
 
 import csv
 import io
-from datetime import datetime
+import re
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -119,7 +123,53 @@ def parse_student_toewysing_csv(inhoud: str) -> list[dict]:
 
 # --- ROOSTER RESOLUTION HELPERS ---
 
+def _aktiewe_lokasie_nfc_uid(lokasie: models.Lokasie | None) -> str | None:
+    if lokasie is None:
+        return None
+    for tag in (getattr(lokasie, "nfc_tags", None) or []):
+        if tag.NFC_Is_Aktief and str(tag.NFC_Tipe or "").strip().casefold() == "lokasie":
+            return tag.NFC_UID
+    return None
+
+
+def _normaliseer_nfc_uid(value: str | None) -> str:
+    """Vergelyk NFC-kodes robuust: hoofletters en skeidingstekens maak nie saak nie."""
+    return re.sub(r"[^A-Z0-9]", "", str(value or "").strip().upper())
+
+
+def _vind_aktiewe_nfc_tag(db: Session, uid: str) -> models.NFC_Tags | None:
+    """Vind eers presies; val terug na 'n genormaliseerde vergelyking."""
+    rou = str(uid or "").strip()
+    if not rou:
+        return None
+
+    tag = (
+        db.query(models.NFC_Tags)
+        .filter(
+            models.NFC_Tags.NFC_UID == rou,
+            models.NFC_Tags.NFC_Is_Aktief == True,
+        )
+        .first()
+    )
+    if tag is not None:
+        return tag
+
+    gesoek = _normaliseer_nfc_uid(rou)
+    if not gesoek:
+        return None
+
+    for kandidaat in (
+        db.query(models.NFC_Tags)
+        .filter(models.NFC_Tags.NFC_Is_Aktief == True)
+        .all()
+    ):
+        if _normaliseer_nfc_uid(kandidaat.NFC_UID) == gesoek:
+            return kandidaat
+    return None
+
+
 def _klas_na_dict(klas: models.Klas) -> dict:
+    lokasie = getattr(klas, "lokasie", None)
     return {
         "Klas_ID": klas.Klas_ID,
         "Module_ID": klas.Module_ID,
@@ -129,7 +179,66 @@ def _klas_na_dict(klas: models.Klas) -> dict:
         "KLA_Dag": klas.KLA_Dag,
         "KLA_Begin_Tyd": klas.KLA_Begin_Tyd,
         "KLA_Eind_Tyd": klas.KLA_Eind_Tyd,
+        "Lokasie_ID": getattr(klas, "Lokasie_ID", None),
+        "LOK_Naam": lokasie.LOK_Naam if lokasie else None,
+        "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
+        "NFC_Gekoppel": bool(lokasie and _aktiewe_lokasie_nfc_uid(lokasie)),
     }
+
+
+def _normaliseer_lokaal_naam(naam: str | None) -> str:
+    """Normaliseer rooster/lokasie-name; bv. 'GH117 A (50)' -> 'gh117 a'."""
+    teks = (naam or "").strip().casefold()
+    teks = re.sub(r"\s*\([^)]*\)\s*$", "", teks)
+    return " ".join(teks.split())
+
+
+def _vind_klaskamer_lokasie(db: Session, lokaal_naam: str | None) -> models.Lokasie | None:
+    """Vind 'n unieke Klaskamer-lokasie wat by die rooster se lokaalnaam pas."""
+    normaal = _normaliseer_lokaal_naam(lokaal_naam)
+    if not normaal:
+        return None
+    kandidate = (
+        db.query(models.Lokasie)
+        .filter(func.lower(models.Lokasie.LOK_Tipe) == "klaskamer")
+        .all()
+    )
+    matches = [l for l in kandidate if _normaliseer_lokaal_naam(l.LOK_Naam) == normaal]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _probeer_bind_klas_lokasie(db: Session, klas: models.Klas) -> bool:
+    """Koppel 'n nog-ongekoppelde roosterklas outomaties wanneer lokaalnaam uniek match."""
+    if getattr(klas, "Lokasie_ID", None):
+        return False
+    lokasie = _vind_klaskamer_lokasie(db, klas.KLA_Lokaal)
+    if lokasie is None:
+        return False
+    klas.Lokasie_ID = lokasie.Lokasie_ID
+    return True
+
+
+def _kry_rooster_lokaal_mapping(db: Session, lokaal_naam: str | None) -> models.Rooster_Lokaal_Koppeling | None:
+    naam = (lokaal_naam or "").strip()
+    if not naam:
+        return None
+    return (
+        db.query(models.Rooster_Lokaal_Koppeling)
+        .options(joinedload(models.Rooster_Lokaal_Koppeling.lokasie))
+        .filter(models.Rooster_Lokaal_Koppeling.KLA_Lokaal == naam)
+        .first()
+    )
+
+
+def _pas_rooster_lokaal_mapping_toe(db: Session, klas: models.Klas) -> bool:
+    """Gebruik slegs 'n eksplisiete Admin mapping; moenie nuwe name outomaties raai nie."""
+    mapping = _kry_rooster_lokaal_mapping(db, klas.KLA_Lokaal)
+    if mapping is None:
+        return False
+    if klas.Lokasie_ID == mapping.Lokasie_ID:
+        return False
+    klas.Lokasie_ID = mapping.Lokasie_ID
+    return True
 
 
 def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
@@ -143,7 +252,6 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
         gesien.add(klas.Klas_ID)
         resultaat.append(_klas_na_dict(klas))
 
-    # 1. Groep-gebaseer (verstek): Student_Groep -> Klas_Groep -> Klas
     groepe = (
         db.query(models.Student_Groep.Groep_ID)
         .filter(models.Student_Groep.Gebruiker_ID == gebruiker_id)
@@ -158,14 +266,13 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
         )
         groepeer_klasse = (
             db.query(models.Klas)
-            .options(joinedload(models.Klas.module))
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
             .filter(models.Klas.Klas_ID.in_([kid for (kid,) in klas_ids]))
             .all()
         )
         for klas in groepeer_klasse:
             voeg_by(klas)
 
-    # 2. Module-inskrywing: Student_Module -> Klas
     module_ids = [
         m[0]
         for m in db.query(models.Student_Module.Module_ID)
@@ -175,13 +282,12 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if module_ids:
         for klas in (
             db.query(models.Klas)
-            .options(joinedload(models.Klas.module))
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
             .filter(models.Klas.Module_ID.in_(module_ids))
             .all()
         ):
             voeg_by(klas)
 
-    # 3. Direkte toewysing: Student_Klas -> Klas
     direkte_ids = [
         k[0]
         for k in db.query(models.Student_Klas.Klas_ID)
@@ -191,7 +297,7 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if direkte_ids:
         for klas in (
             db.query(models.Klas)
-            .options(joinedload(models.Klas.module))
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
             .filter(models.Klas.Klas_ID.in_(direkte_ids))
             .all()
         ):
@@ -211,7 +317,6 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
         gesien.add(klas.Klas_ID)
         resultaat.append(_klas_na_dict(klas))
 
-    # 1. Module-inskrywing: Personeel_Module -> Klas
     module_ids = [
         m[0]
         for m in db.query(models.Personeel_Module.Module_ID)
@@ -221,13 +326,12 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if module_ids:
         for klas in (
             db.query(models.Klas)
-            .options(joinedload(models.Klas.module))
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
             .filter(models.Klas.Module_ID.in_(module_ids))
             .all()
         ):
             voeg_by(klas)
 
-    # 2. Direkte toewysing: Personeel_Klas -> Klas
     direkte_ids = [
         k[0]
         for k in db.query(models.Personeel_Klas.Klas_ID)
@@ -237,7 +341,7 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     if direkte_ids:
         for klas in (
             db.query(models.Klas)
-            .options(joinedload(models.Klas.module))
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
             .filter(models.Klas.Klas_ID.in_(direkte_ids))
             .all()
         ):
@@ -246,54 +350,57 @@ def resolver_personeel_rooster(db: Session, gebruiker_id: int) -> list[dict]:
     return resultaat
 
 
-def _laaste_skanderings_vandag(db: Session, gebruiker_ids: set[int]) -> dict[int, dict]:
-    """Jongste 'IN'-skandering van vandag (UTC-dag) per gebruiker.
+_SA_TZ = ZoneInfo("Africa/Johannesburg")
+_DAE = {
+    "maandag": 0, "monday": 0,
+    "dinsdag": 1, "tuesday": 1,
+    "woensdag": 2, "wednesday": 2,
+    "donderdag": 3, "thursday": 3,
+    "vrydag": 4, "friday": 4,
+    "saterdag": 5, "saturday": 5,
+    "sondag": 6, "sunday": 6,
+}
 
-    Een groepsquery; die frontend formateer die ISO-UTC-tydstempel na
-    plaaslike tyd sodat personeel nie UTC sien nie.
+
+def _parse_klas_tyd(value: str) -> time:
+    teks = (value or "").strip()
+    for fmt in ("%H:%M", "%H:%M:%S", "%H.%M"):
+        try:
+            return datetime.strptime(teks, fmt).time()
+        except ValueError:
+            pass
+    raise HTTPException(status_code=400, detail=f"Ongeldige klas-tyd: '{value}'")
+
+
+def _klas_scan_venster(klas: models.Klas, dag: date) -> tuple[datetime, datetime, datetime, datetime]:
+    """Gee die presiese geskeduleerde klasvenster in SA-tyd en UTC-naive.
+
+    Ons gebruik doelbewus die rooster se begin/eind sonder vroeë/laat overlap,
+    sodat twee opeenvolgende klasse in dieselfde lokaal nie dieselfde NFC-scan
+    kan erf nie.
     """
-    if not gebruiker_ids:
-        return {}
-    vandag_begin = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    rye = (
-        db.query(models.ToegangsLogs, models.Lokasie.LOK_Naam)
-        .outerjoin(models.Lokasie, models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID)
-        .filter(
-            models.ToegangsLogs.Gebruiker_ID.in_(gebruiker_ids),
-            models.ToegangsLogs.TOE_Rigting == "IN",
-            models.ToegangsLogs.TOE_Tydstempel >= vandag_begin,
-        )
-        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
-        .all()
-    )
-    resultaat: dict[int, dict] = {}
-    for log, lok_naam in rye:
-        if log.Gebruiker_ID not in resultaat:
-            resultaat[log.Gebruiker_ID] = {
-                "lokaal": lok_naam,
-                "tyd": log.TOE_Tydstempel.isoformat() + "Z",
-            }
-    return resultaat
+    begin_local = datetime.combine(dag, _parse_klas_tyd(klas.KLA_Begin_Tyd), tzinfo=_SA_TZ)
+    eind_local = datetime.combine(dag, _parse_klas_tyd(klas.KLA_Eind_Tyd), tzinfo=_SA_TZ)
+    if eind_local <= begin_local:
+        eind_local += timedelta(days=1)
+    venster_begin_local = begin_local
+    venster_eind_local = eind_local
+    begin_utc = venster_begin_local.astimezone(timezone.utc).replace(tzinfo=None)
+    eind_utc = venster_eind_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return venster_begin_local, venster_eind_local, begin_utc, eind_utc
 
 
-def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
-    """Studente wat 'n spesifieke klas moet bywoon (gededupeer uit 3 bronne).
+def _klas_dag_match(klas: models.Klas, dag: date) -> bool:
+    indeks = _DAE.get((klas.KLA_Dag or "").strip().casefold())
+    return indeks is None or indeks == dag.weekday()
 
-    Spieëlbeeld van resolver_student_rooster: groep-lidmaatskap via
-    Klas_Groep -> Student_Groep, module-inskrywing via Student_Module op die
-    klas se module, en direkte toewysing via Student_Klas.
-    """
-    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
-    if klas is None:
-        return []
 
+def _klas_roster_gebruiker_ids(db: Session, klas: models.Klas) -> set[int]:
     gebruiker_ids: set[int] = set()
-
-    # 1. Groep-gebaseer: Klas_Groep -> Student_Groep
     groep_ids = [
         g[0]
         for g in db.query(models.Klas_Groep.Groep_ID)
-        .filter(models.Klas_Groep.Klas_ID == klas_id)
+        .filter(models.Klas_Groep.Klas_ID == klas.Klas_ID)
         .all()
     ]
     if groep_ids:
@@ -304,7 +411,6 @@ def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
         ):
             gebruiker_ids.add(gid)
 
-    # 2. Module-inskrywing: Student_Module op die klas se module
     for (gid,) in (
         db.query(models.Student_Module.Gebruiker_ID)
         .filter(models.Student_Module.Module_ID == klas.Module_ID)
@@ -312,14 +418,71 @@ def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
     ):
         gebruiker_ids.add(gid)
 
-    # 3. Direkte toewysing: Student_Klas
     for (gid,) in (
         db.query(models.Student_Klas.Gebruiker_ID)
-        .filter(models.Student_Klas.Klas_ID == klas_id)
+        .filter(models.Student_Klas.Klas_ID == klas.Klas_ID)
         .all()
     ):
         gebruiker_ids.add(gid)
+    return gebruiker_ids
 
+
+def _klas_scan_statusse(
+    db: Session,
+    klas: models.Klas,
+    gebruiker_ids: set[int],
+    dag: date,
+) -> tuple[dict[int, dict], dict]:
+    """Jongste klaskamer-NFC scan binne hierdie roosterperiode per student."""
+    venster_begin_local, venster_eind_local, begin_utc, eind_utc = _klas_scan_venster(klas, dag)
+    meta = {
+        "begin": venster_begin_local.isoformat(),
+        "eind": venster_eind_local.isoformat(),
+        "rooster_dag_match": _klas_dag_match(klas, dag),
+    }
+    if not gebruiker_ids or not getattr(klas, "Lokasie_ID", None) or not meta["rooster_dag_match"]:
+        return {}, meta
+
+    logs = (
+        db.query(models.ToegangsLogs)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID.in_(gebruiker_ids),
+            models.ToegangsLogs.Lokasie_ID == klas.Lokasie_ID,
+            models.ToegangsLogs.TOE_Metode == "NFC",
+            models.ToegangsLogs.TOE_Tydstempel >= begin_utc,
+            models.ToegangsLogs.TOE_Tydstempel < eind_utc,
+        )
+        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc(), models.ToegangsLogs.Log_ID.desc())
+        .all()
+    )
+    resultaat: dict[int, dict] = {}
+    for log in logs:
+        if log.Gebruiker_ID in resultaat:
+            continue
+        local_dt = log.TOE_Tydstempel.replace(tzinfo=timezone.utc).astimezone(_SA_TZ)
+        resultaat[log.Gebruiker_ID] = {
+            "lokaal": klas.lokasie.LOK_Naam if getattr(klas, "lokasie", None) else klas.KLA_Lokaal,
+            "lokasie_id": klas.Lokasie_ID,
+            "tyd": local_dt.isoformat(),
+            "rigting": log.TOE_Rigting,
+            "metode": log.TOE_Metode,
+            "teenwoordig": str(log.TOE_Rigting or "").upper() == "IN",
+        }
+    return resultaat, meta
+
+
+def resolver_klas_studente(db: Session, klas_id: int, dag: Optional[date] = None) -> list[dict]:
+    """Klasregister + klas-spesifieke NFC-status vir 'n roosterperiode."""
+    klas = (
+        db.query(models.Klas)
+        .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+        .filter(models.Klas.Klas_ID == klas_id)
+        .first()
+    )
+    if klas is None:
+        return []
+
+    gebruiker_ids = _klas_roster_gebruiker_ids(db, klas)
     if not gebruiker_ids:
         return []
 
@@ -330,17 +493,23 @@ def resolver_klas_studente(db: Session, klas_id: int) -> list[dict]:
         .order_by(models.Gebruikers.GEB_Van, models.Gebruikers.GEB_Naam)
         .all()
     )
-    skanderings = _laaste_skanderings_vandag(db, gebruiker_ids)
-    return [
-        {
+    dag = dag or datetime.now(_SA_TZ).date()
+    skanderings, _ = _klas_scan_statusse(db, klas, gebruiker_ids, dag)
+    resultaat = []
+    for gebruiker, student in rye:
+        scan = skanderings.get(gebruiker.Gebruiker_ID)
+        resultaat.append({
             "Gebruiker_ID": gebruiker.Gebruiker_ID,
             "GEB_Naam": gebruiker.GEB_Naam,
             "GEB_Van": gebruiker.GEB_Van,
+            "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
             "STU_Nommer": student.STU_Nommer if student else None,
-            "Laaste_Skandering": skanderings.get(gebruiker.Gebruiker_ID),
-        }
-        for gebruiker, student in rye
-    ]
+            "Teenwoordig": bool(scan and scan["teenwoordig"]),
+            "Ingescan_Tyd": scan["tyd"] if scan and scan["teenwoordig"] else None,
+            "Laaste_Rigting": scan["rigting"] if scan else None,
+            "Laaste_Skandering": scan,
+        })
+    return resultaat
 
 
 # --- ADMIN LYS-EINDPUNTE ---
@@ -386,6 +555,127 @@ def lys_klasse(
     return schemas.APIResponse(
         sukses=True,
         data=[_klas_na_dict(k) for k in klasse],
+    )
+
+
+# --- ROOSTER-LOKAAL MAPPING (admin) ---
+
+@router.get("/lokaal-koppelings")
+def lys_rooster_lokaal_koppelings(
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Unieke Lantiv-lokale met hul gestoorde MOON-klaskamer/NFC-koppeling."""
+    bron_rye = (
+        db.query(models.Klas.KLA_Lokaal, func.count(models.Klas.Klas_ID))
+        .filter(models.Klas.KLA_Lokaal.isnot(None))
+        .group_by(models.Klas.KLA_Lokaal)
+        .order_by(models.Klas.KLA_Lokaal)
+        .all()
+    )
+
+    mappings = {
+        m.KLA_Lokaal: m
+        for m in (
+            db.query(models.Rooster_Lokaal_Koppeling)
+            .options(
+                joinedload(models.Rooster_Lokaal_Koppeling.lokasie)
+                .joinedload(models.Lokasie.kampus),
+                joinedload(models.Rooster_Lokaal_Koppeling.lokasie)
+                .joinedload(models.Lokasie.nfc_tags),
+            )
+            .all()
+        )
+    }
+
+    data = []
+    for bron_lokaal, klas_aantal in bron_rye:
+        mapping = mappings.get(bron_lokaal)
+        lokasie = mapping.lokasie if mapping else None
+        data.append({
+            "KLA_Lokaal": bron_lokaal,
+            "Klas_Aantal": int(klas_aantal or 0),
+            "Gekoppel": bool(mapping and lokasie),
+            "Lokasie_ID": mapping.Lokasie_ID if mapping else None,
+            "LOK_Naam": lokasie.LOK_Naam if lokasie else None,
+            "Kampus_ID": lokasie.Kampus_ID if lokasie else None,
+            "KAM_Naam": lokasie.kampus.KAM_Naam if lokasie and lokasie.kampus else None,
+            "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
+            "NFC_Gekoppel": bool(lokasie and _aktiewe_lokasie_nfc_uid(lokasie)),
+        })
+
+    return schemas.APIResponse(sukses=True, data=data)
+
+
+@router.post("/lokaal-koppelings")
+def stoor_rooster_lokaal_koppeling(
+    data: schemas.RoosterLokaalKoppelingUpdate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    bron_lokaal = data.KLA_Lokaal.strip()
+    if not bron_lokaal:
+        raise HTTPException(status_code=400, detail="Lantiv-lokaal is verpligtend")
+
+    mapping = db.query(models.Rooster_Lokaal_Koppeling).filter(
+        models.Rooster_Lokaal_Koppeling.KLA_Lokaal == bron_lokaal
+    ).first()
+
+    if data.Lokasie_ID is None:
+        if mapping:
+            db.delete(mapping)
+        verander = (
+            db.query(models.Klas)
+            .filter(models.Klas.KLA_Lokaal == bron_lokaal)
+            .update({models.Klas.Lokasie_ID: None}, synchronize_session=False)
+        )
+        db.commit()
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "KLA_Lokaal": bron_lokaal,
+                "Lokasie_ID": None,
+                "Gekoppel": False,
+                "Klasse_Bygewerk": int(verander or 0),
+            },
+        )
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == data.Lokasie_ID
+    ).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="MOON-lokaal nie gevind nie")
+    if str(lokasie.LOK_Tipe or "").strip().casefold() != "klaskamer":
+        raise HTTPException(status_code=400, detail="Jy kan net 'n Klaskamer-lokasie aan 'n roosterlokaal koppel")
+
+    if mapping:
+        mapping.Lokasie_ID = lokasie.Lokasie_ID
+        mapping.Gewysig_Op = datetime.utcnow()
+    else:
+        mapping = models.Rooster_Lokaal_Koppeling(
+            KLA_Lokaal=bron_lokaal,
+            Lokasie_ID=lokasie.Lokasie_ID,
+        )
+        db.add(mapping)
+
+    verander = (
+        db.query(models.Klas)
+        .filter(models.Klas.KLA_Lokaal == bron_lokaal)
+        .update({models.Klas.Lokasie_ID: lokasie.Lokasie_ID}, synchronize_session=False)
+    )
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "KLA_Lokaal": bron_lokaal,
+            "Lokasie_ID": lokasie.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Kampus_ID": lokasie.Kampus_ID,
+            "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
+            "Gekoppel": True,
+            "Klasse_Bygewerk": int(verander or 0),
+        },
     )
 
 
@@ -438,14 +728,45 @@ def skep_klas(
     module = db.query(models.Module).filter(models.Module.Module_ID == data.Module_ID).first()
     if not module:
         raise HTTPException(status_code=404, detail="Module nie gevind nie")
+    lokasie_id = data.Lokasie_ID
+    if lokasie_id is not None:
+        lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == lokasie_id).first()
+        if not lokasie or str(lokasie.LOK_Tipe or "").casefold() != "klaskamer":
+            raise HTTPException(status_code=400, detail="Lokasie_ID moet na 'n geldige Klaskamer-lokasie verwys")
+    else:
+        lokasie = _vind_klaskamer_lokasie(db, data.KLA_Lokaal)
+        lokasie_id = lokasie.Lokasie_ID if lokasie else None
     klas = models.Klas(
         Module_ID=data.Module_ID,
+        Lokasie_ID=lokasie_id,
         KLA_Lokaal=data.KLA_Lokaal,
         KLA_Dag=data.KLA_Dag,
         KLA_Begin_Tyd=data.KLA_Begin_Tyd,
         KLA_Eind_Tyd=data.KLA_Eind_Tyd,
     )
     db.add(klas)
+    db.commit()
+    db.refresh(klas)
+    return schemas.APIResponse(sukses=True, data=_klas_na_dict(klas))
+
+
+@router.put("/klasse/{klas_id}/lokasie")
+def koppel_lokasie_aan_roosterklas(
+    klas_id: int,
+    data: schemas.KlasLokasieAssign,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Bind 'n rooster-Klas_ID aan die fisiese Klaskamer/NFC-lokasie."""
+    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
+    if not klas:
+        raise HTTPException(status_code=404, detail="Klas nie gevind nie")
+    lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == data.Lokasie_ID).first()
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokasie nie gevind nie")
+    if str(lokasie.LOK_Tipe or "").strip().casefold() != "klaskamer":
+        raise HTTPException(status_code=400, detail="Net 'n Klaskamer-lokasie kan aan 'n roosterklas gekoppel word")
+    klas.Lokasie_ID = lokasie.Lokasie_ID
     db.commit()
     db.refresh(klas)
     return schemas.APIResponse(sukses=True, data=_klas_na_dict(klas))
@@ -712,6 +1033,214 @@ def ken_personeel_klas_toe(
     return schemas.APIResponse(sukses=True, data={"Gebruiker_ID": gebruiker_id, "Klas_ID": data.Klas_ID})
 
 
+@router.get("/studente/my-koshuis-status")
+def kry_my_koshuis_status(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Gee slegs die aangemelde student se eie koshuis-IN/UIT status.
+
+    Nie-koshuisstudente kry ``is_koshuis_student = False`` en die Flutter UI
+    wys dan glad nie 'n Koshuis-kaart nie.  Vir 'n koshuisstudent word die
+    jongste IN/UIT log NET by sy/haar toegewysde koshuis se Lokasie_ID gelees,
+    sodat kampus- of klaskamerskanderings nooit die koshuisstatus kan verander nie.
+    """
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    if not student:
+        raise HTTPException(status_code=403, detail="Net studente het 'n koshuisstatus")
+
+    if not bool(student.STU_Is_Koshuis) or not student.Koshuis_ID:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": False,
+                "koshuis_id": None,
+                "koshuis_naam": None,
+                "status": None,
+                "laaste_scan": None,
+            },
+        )
+
+    koshuis = (
+        db.query(models.Koshuis)
+        .filter(models.Koshuis.Koshuis_ID == student.Koshuis_ID)
+        .first()
+    )
+    if not koshuis:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": True,
+                "koshuis_id": student.Koshuis_ID,
+                "koshuis_naam": "Onbekende koshuis",
+                "status": "ONBEKEND",
+                "lokasie_gekoppel": False,
+                "laaste_scan": None,
+            },
+        )
+
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(
+            models.Lokasie.Kampus_ID == koshuis.Kampus_ID,
+            func.lower(models.Lokasie.LOK_Tipe) == "koshuis",
+            models.Lokasie.LOK_Naam == koshuis.KOS_Naam,
+        )
+        .first()
+    )
+
+    if not lokasie:
+        return schemas.APIResponse(
+            sukses=True,
+            data={
+                "is_koshuis_student": True,
+                "koshuis_id": koshuis.Koshuis_ID,
+                "koshuis_naam": koshuis.KOS_Naam,
+                "status": "ONBEKEND",
+                "lokasie_gekoppel": False,
+                "laaste_scan": None,
+            },
+        )
+
+    laaste_log = (
+        db.query(models.ToegangsLogs)
+        .filter(
+            models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
+            models.ToegangsLogs.Lokasie_ID == lokasie.Lokasie_ID,
+            models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+        )
+        .order_by(
+            models.ToegangsLogs.TOE_Tydstempel.desc(),
+            models.ToegangsLogs.Log_ID.desc(),
+        )
+        .first()
+    )
+
+    laaste_scan = None
+    status = "NOG_NIE_GESCAN"
+    if laaste_log:
+        status = laaste_log.TOE_Rigting
+        laaste_scan = {
+            "log_id": laaste_log.Log_ID,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "lokasie": lokasie.LOK_Naam,
+            "rigting": laaste_log.TOE_Rigting,
+            "metode": laaste_log.TOE_Metode,
+            "tyd": (
+                laaste_log.TOE_Tydstempel.isoformat()
+                if laaste_log.TOE_Tydstempel
+                else None
+            ),
+        }
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "is_koshuis_student": True,
+            "koshuis_id": koshuis.Koshuis_ID,
+            "koshuis_naam": koshuis.KOS_Naam,
+            "status": status,
+            "lokasie_gekoppel": True,
+            "laaste_scan": laaste_scan,
+        },
+    )
+
+
+class StudentKlasNfcValideerRequest(BaseModel):
+    nfc_uid: str
+
+
+@router.post("/studente/klas-nfc/valideer")
+def valideer_student_klas_nfc(
+    data: StudentKlasNfcValideerRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Valideer 'n fisiese klaskamer-tag teen die student se huidige roosterklas.
+
+    Die backend, nie die foon nie, besluit op grond van SA-tyd en Lokasie_ID.
+    Geen ToegangsLogs word hier geskryf nie; dit is net die fail-closed pre-check.
+    """
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.Gebruiker_ID == current_user.Gebruiker_ID)
+        .first()
+    )
+    if not student:
+        raise HTTPException(status_code=403, detail="Net studente kan klas-NFC valideer")
+
+    tag = _vind_aktiewe_nfc_tag(db, data.nfc_uid)
+    if not tag or not tag.Lokasie_ID:
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(models.Lokasie.Lokasie_ID == tag.Lokasie_ID)
+        .first()
+    )
+    if not lokasie:
+        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+
+    nou = datetime.now(_SA_TZ)
+    vandag = nou.date()
+    rooster = resolver_student_rooster(db, current_user.Gebruiker_ID)
+
+    huidige_klasse: list[models.Klas] = []
+    for item in rooster:
+        klas_id = item.get("Klas_ID")
+        if not klas_id:
+            continue
+        klas = (
+            db.query(models.Klas)
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+            .filter(models.Klas.Klas_ID == klas_id)
+            .first()
+        )
+        if klas is None or not _klas_dag_match(klas, vandag):
+            continue
+        begin_local, eind_local, _, _ = _klas_scan_venster(klas, vandag)
+        if begin_local <= nou < eind_local:
+            huidige_klasse.append(klas)
+
+    if not huidige_klasse:
+        raise HTTPException(
+            status_code=409,
+            detail="Jy het nie tans 'n geskeduleerde klas om in te skandeer nie",
+        )
+
+    vir_lokaal = [
+        klas for klas in huidige_klasse
+        if getattr(klas, "Lokasie_ID", None) == tag.Lokasie_ID
+    ]
+    if not vir_lokaal:
+        verwag = ", ".join(
+            sorted({
+                (klas.lokasie.LOK_Naam if getattr(klas, "lokasie", None) else klas.KLA_Lokaal)
+                for klas in huidige_klasse
+            })
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"Verkeerde lokaal. Jou huidige klas is in: {verwag}",
+        )
+
+    klas = vir_lokaal[0]
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "NFC_UID": tag.NFC_UID,
+            "Lokasie_ID": tag.Lokasie_ID,
+            "LOK_Naam": lokasie.LOK_Naam,
+            "Klas": _klas_na_dict(klas),
+            "Bediener_Tyd": nou.isoformat(),
+        },
+    )
+
+
 # --- ROOSTER-LEES (eie + admin) ---
 
 @router.get("/studente/{gebruiker_id}/rooster")
@@ -745,28 +1274,84 @@ def personeel_rooster(
     return schemas.APIResponse(sukses=True, data=rooster)
 
 
-@router.get("/klasse/{klas_id}/studente")
-def klas_studente(
+def _require_klas_register_toegang(
     klas_id: int,
     request: Request,
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-):
-    """Klasregister: die studente wat hierdie klas moet bywoon.
-
-    Admin sien enige klas; personeel sien net klasse op hul eie rooster.
-    """
-    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
+    db: Session,
+    current_user: models.Gebruikers,
+) -> models.Klas:
+    klas = (
+        db.query(models.Klas)
+        .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+        .filter(models.Klas.Klas_ID == klas_id)
+        .first()
+    )
     if not klas:
         raise HTTPException(status_code=404, detail="Klas nie gevind nie")
-
     rolle = list(getattr(request.state, "roles", []) or [])
     if "Administrateur" not in rolle:
         eie_rooster = resolver_personeel_rooster(db, current_user.Gebruiker_ID)
         if not any(k["Klas_ID"] == klas_id for k in eie_rooster):
             raise HTTPException(status_code=403, detail="Jy mag net jou eie klasse se register sien")
+    return klas
 
-    return schemas.APIResponse(sukses=True, data=resolver_klas_studente(db, klas_id))
+
+@router.get("/klasse/{klas_id}/studente")
+def klas_studente(
+    klas_id: int,
+    request: Request,
+    datum: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Klasregister met huidige klas-spesifieke NFC-status per student."""
+    _require_klas_register_toegang(klas_id, request, db, current_user)
+    dag = None
+    if datum:
+        try:
+            dag = date.fromisoformat(datum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik YYYY-MM-DD")
+    return schemas.APIResponse(sukses=True, data=resolver_klas_studente(db, klas_id, dag))
+
+
+@router.get("/klasse/{klas_id}/bywoning")
+def klas_bywoning(
+    klas_id: int,
+    request: Request,
+    datum: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Refresh-vriendelike bywoning vir een geskeduleerde klas/NFC-lokasie."""
+    klas = _require_klas_register_toegang(klas_id, request, db, current_user)
+    if datum:
+        try:
+            dag = date.fromisoformat(datum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik YYYY-MM-DD")
+    else:
+        dag = datetime.now(_SA_TZ).date()
+
+    gebruiker_ids = _klas_roster_gebruiker_ids(db, klas)
+    studente = resolver_klas_studente(db, klas_id, dag)
+    _, venster = _klas_scan_statusse(db, klas, gebruiker_ids, dag)
+    present = [s for s in studente if s["Teenwoordig"]]
+    absent = [s for s in studente if not s["Teenwoordig"]]
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Klas": _klas_na_dict(klas),
+            "Datum": dag.isoformat(),
+            "Lokasie_Gekoppel": bool(getattr(klas, "Lokasie_ID", None)),
+            "Scan_Venster": venster,
+            "Total_Students": len(studente),
+            "Present_Count": len(present),
+            "Absent_Count": len(absent),
+            "Present": present,
+            "Absent": absent,
+        },
+    )
 
 
 # --- CSV-INVOER (admin) ---
@@ -822,6 +1407,10 @@ async def importeer_klasse(
                 db.add(klas)
                 db.flush()
                 resultaat.klasse_geskep += 1
+
+            # Gebruik die Admin se gestoorde Lantiv -> MOON-lokaal mapping.
+            # Onbekende Lantiv-lokale bly doelbewus ongekoppel totdat Admin dit kies.
+            _pas_rooster_lokaal_mapping_toe(db, klas)
 
             # Koppel elke groep (komma-geskei) aan die klas.
             groepe = [g.strip() for g in ry["groep"].split(",") if g.strip()]

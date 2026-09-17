@@ -187,6 +187,70 @@ class LokasieDto {
 
 }
 
+
+/// =========================
+/// Student rooster / klas NFC DTO
+/// =========================
+class StudentRoosterKlasDto {
+  final int klasId;
+  final int? moduleId;
+  final String moduleKode;
+  final String moduleNaam;
+  final String dag;
+  final String beginTyd;
+  final String eindTyd;
+  final String lokaal;
+  final int? lokasieId;
+  final String? lokasieNaam;
+  final String? nfcUid;
+  final bool nfcGekoppel;
+
+  StudentRoosterKlasDto({
+    required this.klasId,
+    required this.moduleId,
+    required this.moduleKode,
+    required this.moduleNaam,
+    required this.dag,
+    required this.beginTyd,
+    required this.eindTyd,
+    required this.lokaal,
+    this.lokasieId,
+    this.lokasieNaam,
+    this.nfcUid,
+    required this.nfcGekoppel,
+  });
+
+  factory StudentRoosterKlasDto.fromJson(Map<String, dynamic> json) {
+    return StudentRoosterKlasDto(
+      klasId: (json['Klas_ID'] as num).toInt(),
+      moduleId: (json['Module_ID'] as num?)?.toInt(),
+      moduleKode: json['MOD_Kode']?.toString() ?? '',
+      moduleNaam: json['MOD_Naam']?.toString() ?? '',
+      dag: json['KLA_Dag']?.toString() ?? '',
+      beginTyd: json['KLA_Begin_Tyd']?.toString() ?? '',
+      eindTyd: json['KLA_Eind_Tyd']?.toString() ?? '',
+      lokaal: json['KLA_Lokaal']?.toString() ?? '',
+      lokasieId: (json['Lokasie_ID'] as num?)?.toInt(),
+      lokasieNaam: json['LOK_Naam']?.toString(),
+      nfcUid: json['NFC_UID']?.toString(),
+      nfcGekoppel: json['NFC_Gekoppel'] == true,
+    );
+  }
+
+  String get vertoonNaam {
+    final module = moduleKode.trim().isNotEmpty
+        ? moduleKode.trim()
+        : (moduleNaam.trim().isNotEmpty ? moduleNaam.trim() : 'Klas $klasId');
+    return module;
+  }
+
+  String get vertoonLokaal {
+    final naam = lokasieNaam?.trim();
+    if (naam != null && naam.isNotEmpty) return naam;
+    return lokaal.trim().isNotEmpty ? lokaal.trim() : 'Onbekende lokaal';
+  }
+}
+
 class StudentSearchDto {
 
   final int gebruikerId;
@@ -1699,6 +1763,74 @@ class MoonApi {
 
   /// -------------------------
 
+  static Future<List<StudentRoosterKlasDto>> fetchMyStudentRooster() async {
+    if (myProfile == null) {
+      await getMyProfile();
+    }
+
+    final gebruikerId = myGebruikerId;
+    if (gebruikerId == null) {
+      throw Exception('Kon nie die student se gebruiker-ID bepaal nie');
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/rooster/studente/$gebruikerId/rooster'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ?? decoded['fout'] ?? 'Kon nie studenterooster laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw is! List) return <StudentRoosterKlasDto>[];
+
+    return raw
+        .whereType<Map>()
+        .map((item) => StudentRoosterKlasDto.fromJson(
+              Map<String, dynamic>.from(item),
+            ))
+        .toList();
+  }
+
+  static Future<Map<String, dynamic>> valideerStudentKlasNfc({
+    required String nfcUid,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/rooster/studente/klas-nfc/valideer'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${bearerToken!}',
+      },
+      body: jsonEncode({
+        'nfc_uid': nfcUid,
+      }),
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Kon nie die klas-NFC teen jou rooster valideer nie',
+      );
+    }
+
+    final data = decoded['data'];
+    if (data is! Map) {
+      throw Exception('Ongeldige klas-NFC validasie antwoord');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<Map<String, dynamic>> studentScanKlas({
 
     required String nfcUid,
@@ -2021,6 +2153,28 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
   }
 
+
+  static int? get myGebruikerId {
+    final raw = myProfile?['gebruiker_id'] ?? myProfile?['Gebruiker_ID'];
+    if (raw is num) return raw.toInt();
+    if (raw != null) return int.tryParse(raw.toString());
+
+    final token = bearerToken;
+    if (token == null || token.trim().isEmpty) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = jsonDecode(utf8.decode(base64Url.decode(normalized)));
+      if (payload is! Map) return null;
+      final sub = payload['sub'];
+      if (sub is num) return sub.toInt();
+      return sub == null ? null : int.tryParse(sub.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<String> uploadMyProfilePhoto(File file) async {
 
     final uri = Uri.parse('$baseUrl/me/foto');
@@ -2185,6 +2339,34 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
   return Map<String, dynamic>.from(decoded['data']);
 
+  }
+
+
+
+  static Future<Map<String, dynamic>> fetchMyKoshuisStatus() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/rooster/studente/my-koshuis-status'),
+      headers: {
+        'Accept': 'application/json',
+        if (bearerToken != null && bearerToken!.trim().isNotEmpty)
+          'Authorization': 'Bearer ${bearerToken!.trim()}',
+      },
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200 || decoded['sukses'] != true) {
+      throw Exception(
+        decoded['detail'] ??
+            decoded['fout'] ??
+            'Kon nie jou koshuisstatus laai nie',
+      );
+    }
+
+    final raw = decoded['data'];
+    if (raw is! Map) {
+      throw Exception('Ongeldige koshuisstatus antwoord');
+    }
+    return Map<String, dynamic>.from(raw);
   }
 
   static Future<List<SkandeerPlekDto>> fetchWagteSkandeerPlekke() async {
