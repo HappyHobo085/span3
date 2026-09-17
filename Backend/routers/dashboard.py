@@ -119,8 +119,14 @@ def kry_my_dashboard(
     if not role_names and current_user.rol is not None:
         role_names = [current_user.rol.ROL_Naam]
 
-    def laaste_log(metode):
-        return (
+    def laaste_lokasie_log(lokasie_tipe: str, metode: str | None = None):
+        """Kry die jongste IN/UIT-log vir 'n spesifieke fisiese lokasietipe.
+
+        Belangrik: kampus/koshuis/klas word deur Lokasie.LOK_Tipe onderskei,
+        nie deur QR/NFC nie. Dieselfde skandeermetode kan by verskillende
+        fisiese plekke gebruik word.
+        """
+        query = (
             db.query(models.ToegangsLogs, models.Lokasie)
             .join(
                 models.Lokasie,
@@ -128,15 +134,28 @@ def kry_my_dashboard(
             )
             .filter(
                 models.ToegangsLogs.Gebruiker_ID == current_user.Gebruiker_ID,
-                models.ToegangsLogs.TOE_Metode == metode,
+                func.lower(models.Lokasie.LOK_Tipe) == lokasie_tipe.lower(),
                 models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
             )
-            .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
+        )
+        if metode is not None:
+            query = query.filter(models.ToegangsLogs.TOE_Metode == metode)
+
+        return (
+            query
+            .order_by(
+                models.ToegangsLogs.TOE_Tydstempel.desc(),
+                models.ToegangsLogs.Log_ID.desc(),
+            )
             .first()
         )
 
-    laaste_kampus_log = laaste_log("QR")
-    laaste_klas_log = laaste_log("NFC")
+    # Kampusstatus kom NET van 'n fisiese Kampus-lokasie.
+    # 'n Koshuis QR/NFC of klas NFC kan dus nie meer OP KAMPUS verander nie.
+    laaste_kampus_log = laaste_lokasie_log("kampus")
+
+    # Laaste klas kom NET van 'n Klaskamer-lokasie en moet steeds 'n NFC-scan wees.
+    laaste_klas_log = laaste_lokasie_log("klaskamer", metode="NFC")
 
     def log_to_dict(log_row):
         if not log_row:
@@ -182,19 +201,32 @@ def dashboard_live(
 ):
     vandag = datetime.now(ZoneInfo("Africa/Johannesburg")).date()
 
-    laaste_logs_subq = (
+    # Bepaal elke gebruiker se jongste KAMPUS-log only. Voorheen is die
+    # jongste log oor alle lokasies gebruik; 'n Koshuis- of Klaskamer-log kon
+    # daarom die kampustelling verkeerd verander.
+    laaste_kampus_logs_subq = (
         db.query(
             models.ToegangsLogs.Gebruiker_ID,
             func.max(models.ToegangsLogs.Log_ID).label("max_log_id")
         )
-        .filter(models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]))
+        .join(
+            models.Lokasie,
+            models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
+        )
+        .filter(
+            func.lower(models.Lokasie.LOK_Tipe) == "kampus",
+            models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+        )
         .group_by(models.ToegangsLogs.Gebruiker_ID)
         .subquery()
     )
 
     op_kampus_subq = (
         db.query(models.ToegangsLogs.Gebruiker_ID)
-        .join(laaste_logs_subq, models.ToegangsLogs.Log_ID == laaste_logs_subq.c.max_log_id)
+        .join(
+            laaste_kampus_logs_subq,
+            models.ToegangsLogs.Log_ID == laaste_kampus_logs_subq.c.max_log_id,
+        )
         .filter(models.ToegangsLogs.TOE_Rigting == "IN")
         .subquery()
     )
