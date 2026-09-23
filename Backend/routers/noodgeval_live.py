@@ -241,6 +241,15 @@ def _external_event_guests_in_campus(db: Session, kampus_id: int) -> list[dict[s
             models.FunksiePubliekToegang.Rigting == "IN",
             models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
             models.Funksie.Kampus_ID == kampus_id,
+
+            # 'n Eksterne gas mag slegs deel van die noodlys wees terwyl
+            # sy/haar Event self nog aktief is en binne die Event-hekvenster val.
+            # Dit beskerm ook teen ou legacy RSVP's wat voor hierdie fix as
+            # "GAAN" agtergebly het nadat 'n Event gekanselleer is.
+            models.Funksie.FUN_Is_Aktief.is_(True),
+            models.Funksie.FUN_Status == "AKTIEF",
+            models.Funksie.FUN_Begin_Tyd <= datetime.utcnow() + timedelta(hours=4),
+            models.Funksie.FUN_Eind_Tyd >= datetime.utcnow() - timedelta(hours=6),
         )
         .all()
     )
