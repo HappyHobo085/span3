@@ -88,7 +88,13 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       });
 
       if (_campus?.kampusId != null) {
-        await _checkActiveEmergency(force: true);
+        // Hou die kampus-WebSocket permanent oop terwyl hierdie Nood-skerm oop is.
+        // Dit laat meer as een Opsigter op dieselfde kampus onmiddellik dieselfde
+        // noodgeval-toestand sien, selfs voordat 'n noodgeval geaktiveer is.
+        await _connectSocket();
+        if (!_socketConnected) {
+          await _checkActiveEmergency(force: true);
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -112,7 +118,10 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       _activeEmergencyId = null;
       _error = null;
     });
-    await _checkActiveEmergency(force: true);
+    await _connectSocket();
+    if (!_socketConnected) {
+      await _checkActiveEmergency(force: true);
+    }
   }
 
   Future<void> _checkActiveEmergency({bool force = false}) async {
@@ -131,14 +140,20 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       final rows = raw is List ? raw : const [];
 
       if (rows.isEmpty) {
-        await _disconnectSocket();
         if (!mounted) return;
         setState(() {
           _activeEmergencyId = null;
           _snapshot = null;
           _error = null;
         });
-        _startIdlePolling();
+        // Moenie 'n werkende socket ontkoppel net omdat daar nog geen nood is nie.
+        // Die oop socket is presies wat 'n tweede Opsigter se skerm onmiddellik
+        // laat reageer wanneer 'n ander Opsigter 'n nood aktiveer.
+        if (_socketConnected) {
+          _idlePollTimer?.cancel();
+        } else {
+          _startIdlePolling();
+        }
       } else {
         final first = Map<String, dynamic>.from(rows.first as Map);
         final id = _readInt(first, const ['Noodgeval_ID', 'noodgeval_id']);
@@ -163,11 +178,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
   }
 
   void _startIdlePolling() {
-    if (_disposed || _activeEmergencyId != null) return;
+    // REST polling is nou slegs 'n fallback indien die WebSocket nie beskikbaar is nie.
+    if (_disposed || _socketConnected || _campus?.kampusId == null) return;
     _idlePollTimer?.cancel();
     _idlePollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_disposed && _activeEmergencyId == null) {
-        _checkActiveEmergency();
+      if (!_disposed && !_socketConnected && _campus?.kampusId != null) {
+        _checkActiveEmergency(force: true);
       }
     });
   }
@@ -186,7 +202,9 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
 
   Future<void> _connectSocket() async {
     final campusId = _campus?.kampusId;
-    if (campusId == null || _activeEmergencyId == null || _disposed) return;
+    // Die socket bly oop vir die gekose kampus, selfs wanneer daar nog geen
+    // aktiewe noodgeval is nie. Dit is die kern van multi-Opsigter live sync.
+    if (campusId == null || _disposed) return;
     if (_socketConnected || _socket != null) return;
 
     final token = (MoonApi.bearerToken ?? '').trim();
@@ -198,12 +216,13 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     _reconnectTimer?.cancel();
     try {
       final socket = await WebSocket.connect(_webSocketUri(campusId).toString());
-      if (_disposed || _activeEmergencyId == null) {
+      if (_disposed || _campus?.kampusId != campusId) {
         await socket.close();
         return;
       }
 
       _socket = socket;
+      _idlePollTimer?.cancel();
       if (mounted) {
         setState(() {
           _socketConnected = true;
@@ -225,6 +244,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
           _error = 'Live verbinding kon nie koppel nie: ${_cleanError(e)}';
         });
       }
+      _startIdlePolling();
       _scheduleReconnect();
     }
   }
@@ -247,9 +267,12 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
             _snapshot = null;
             _activeEmergencyId = null;
             _busyUsers.clear();
+            _error = null;
           });
         }
-        _disconnectSocket().then((_) => _startIdlePolling());
+        // Bly gekoppel. As 'n ander Opsigter op dieselfde kampus nou 'n nood
+        // aktiveer, stuur die backend binne ongeveer 1 sekonde die nuwe snapshot.
+        _idlePollTimer?.cancel();
         return;
       }
 
@@ -291,18 +314,19 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         if (error != null) _error = 'Live verbinding onderbreek: ${_cleanError(error)}';
       });
     }
-    if (_activeEmergencyId != null) {
-      _scheduleReconnect();
-    } else {
-      _startIdlePolling();
-    }
+    // Probeer altyd die kampus-socket herstel, ongeag of daar tans 'n aktiewe
+    // noodgeval is. REST bly intussen die fallback.
+    _startIdlePolling();
+    _scheduleReconnect();
   }
 
   void _scheduleReconnect() {
-    if (_disposed || _activeEmergencyId == null) return;
+    if (_disposed || _campus?.kampusId == null) return;
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 2), () {
-      if (!_disposed && _activeEmergencyId != null) _connectSocket();
+      if (!_disposed && !_socketConnected && _campus?.kampusId != null) {
+        _connectSocket();
+      }
     });
   }
 
@@ -528,8 +552,13 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         _busyUsers.clear();
         _error = null;
       });
-      await _disconnectSocket();
-      _startIdlePolling();
+      // Hou die kampus-WebSocket oop. Die ander Opsigters kry dieselfde
+      // GESLUIT toestand uit PostgreSQL, en hierdie toestel bly gereed vir die
+      // volgende noodgeval sonder 'n handmatige refresh.
+      if (!_socketConnected) {
+        _startIdlePolling();
+        _scheduleReconnect();
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
