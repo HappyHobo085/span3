@@ -6,6 +6,8 @@ import 'app_shared.dart';
 import 'moon_api.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'profile_page.dart';
 
@@ -876,7 +878,7 @@ class _DashboardInfoCard extends StatelessWidget {
   }
 }
 
-// ─── Saamry tab — backend-gekoppel, binne student.dart ─────────────────────
+// ─── Saamry tab — permanente groepe, eenmalige events en chat ───────────────
 
 class SaamryTab extends StatefulWidget {
   const SaamryTab({super.key});
@@ -890,12 +892,26 @@ class _SaamryTabState extends State<SaamryTab> {
   bool _busy = false;
   String? _error;
   SaamryStatusDto? _status;
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshQuietly(),
+    );
   }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  String _cleanError(Object error) =>
+      error.toString().replaceFirst('Exception: ', '');
 
   Future<void> _load() async {
     if (mounted) {
@@ -904,7 +920,6 @@ class _SaamryTabState extends State<SaamryTab> {
         _error = null;
       });
     }
-
     try {
       final status = await MoonApi.fetchSaamryStatus();
       if (!mounted) return;
@@ -921,30 +936,39 @@ class _SaamryTabState extends State<SaamryTab> {
     }
   }
 
-  String _cleanError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
+  Future<void> _refreshQuietly() async {
+    if (!mounted || _busy) return;
+    try {
+      final status = await MoonApi.fetchSaamryStatus();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _error = null;
+      });
+    } catch (_) {
+      // Hou die laaste geldige status; pull-to-refresh wys enige fout eksplisiet.
+    }
   }
 
-  void _message(String message, {bool error = false}) {
+  void _message(String text, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: error ? Colors.red : null,
-        content: Text(message),
+        content: Text(text),
       ),
     );
   }
 
   Future<void> _runAction(
     Future<void> Function() action,
-    String successMessage,
+    String success,
   ) async {
     if (_busy) return;
     setState(() => _busy = true);
-
     try {
       await action();
       if (!mounted) return;
-      _message(successMessage);
+      _message(success);
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -959,56 +983,91 @@ class _SaamryTabState extends State<SaamryTab> {
     required String message,
     String confirmLabel = 'Bevestig',
   }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF111827),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: Text(message, style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Kanselleer'),
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF111827),
+            title: Text(title, style: const TextStyle(color: Colors.white)),
+            content: Text(message, style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Kanselleer'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(confirmLabel),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
-    );
-    return result == true;
+        ) ??
+        false;
   }
 
   Future<void> _openCreateGroup() async {
-    final created = await Navigator.push<bool>(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateSaamryGroupPage()),
     );
-    if (created == true) await _load();
+    if (changed == true) await _load();
   }
 
   Future<void> _openAddFriend() async {
-    final sent = await Navigator.push<bool>(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const AddSaamryFriendPage()),
     );
-    if (sent == true) await _load();
+    if (changed == true) await _load();
   }
 
-  Future<void> _openInviteFriend(SaamryGroupDto group) async {
-    final friends = _status?.friends ?? const <SaamryFriendItemDto>[];
-    final existingIds = group.lede.map((e) => e.gebruiker.gebruikerId).toSet();
-    final available = friends
-        .where((friend) => !existingIds.contains(friend.gebruiker.gebruikerId))
+  Future<void> _openCreateEvent({SaamryGroupDto? initialGroup}) async {
+    final allGroups = _status?.groups ?? const <SaamryGroupDto>[];
+    final ownedActive = allGroups
+        .where((g) => g.isBestuurder && g.aktieweEvent != null)
+        .toList();
+    if (ownedActive.isNotEmpty) {
+      _message(
+        'Jy het reeds ’n aktiewe Saamry-event in ${ownedActive.first.naam}. Voltooi of kanselleer dit eers.',
+      );
+      return;
+    }
+
+    final driverGroups = allGroups
+        .where((g) => g.isBestuurder && g.aktieweEvent == null)
+        .where((g) => g.lede.any(
+              (m) => !m.isBestuurder && m.status == 'AANVAAR',
+            ))
         .toList();
 
+    if (driverGroups.isEmpty) {
+      _message(
+        'Jy het geen Driver/Admin-groep wat gereed is vir ’n nuwe Saamry-event nie.',
+      );
+      return;
+    }
+
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateSaamryEventPage(
+          groups: driverGroups,
+          initialGroupId: initialGroup?.groepId,
+        ),
+      ),
+    );
+    if (changed == true) await _load();
+  }
+
+  Future<void> _openInvite(SaamryGroupDto group) async {
+    final existing = group.lede.map((e) => e.gebruiker.gebruikerId).toSet();
+    final available = (_status?.friends ?? const <SaamryFriendItemDto>[])
+        .where((friend) => !existing.contains(friend.gebruiker.gebruikerId))
+        .toList();
     if (available.isEmpty) {
       _message('Geen beskikbare vriende om te nooi nie');
       return;
     }
-
-    final invited = await Navigator.push<bool>(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => InviteSaamryFriendPage(
@@ -1017,107 +1076,140 @@ class _SaamryTabState extends State<SaamryTab> {
         ),
       ),
     );
-    if (invited == true) await _load();
+    if (changed == true) await _load();
   }
 
-  String _formatDateTime(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$day/$month/${value.year} · $hour:$minute';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading && _status == null) {
-      return const Center(child: CircularProgressIndicator());
+  Future<void> _transferDriver(SaamryGroupDto group) async {
+    final candidates = group.lede
+        .where((m) => m.status == 'AANVAAR' && !m.isBestuurder)
+        .toList();
+    if (candidates.isEmpty) {
+      _message('Daar is geen ander aanvaarde lid om Driver/Admin te maak nie');
+      return;
     }
 
-    if (_error != null && _status == null) {
-      return RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
-          children: [
-            const SizedBox(height: 80),
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 14),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
-            ),
-            const SizedBox(height: 18),
-            GradientActionButton(label: 'Probeer Weer', onTap: _load, height: 48),
-          ],
+    final selected = await showDialog<SaamryGroupMemberDto>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111827),
+        title: const Text(
+          'Gee Driver/Admin oor',
+          style: TextStyle(color: Colors.white),
         ),
-      );
-    }
-
-    final status = _status!;
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        children: [
-          Text(
-            'Saamry',
-            style: GoogleFonts.inter(
-              color: kText1,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: candidates
+                .map(
+                  (member) => ListTile(
+                    leading: const Icon(
+                      Icons.drive_eta_rounded,
+                      color: kAccent,
+                    ),
+                    title: Text(
+                      member.gebruiker.volleNaam,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    subtitle: Text(
+                      '${member.gebruiker.rol} · ${member.gebruiker.nommer}',
+                      style: const TextStyle(color: Colors.white60),
+                    ),
+                    onTap: () => Navigator.pop(context, member),
+                  ),
+                )
+                .toList(),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Skep ’n groep, voeg vriende by en bestuur uitnodigings.',
-            style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
-          ),
-
-          if (status.incomingRequests.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _sectionTitle('VRIENDSKAPVERSOEKE'),
-            const SizedBox(height: 8),
-            ...status.incomingRequests.map(_incomingFriendCard),
-          ],
-
-          if (status.groupInvites.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _sectionTitle('SAAMRY-UITNODIGINGS'),
-            const SizedBox(height: 8),
-            ...status.groupInvites.map(_groupInviteCard),
-          ],
-
-          const SizedBox(height: 18),
-          if (status.myGroup == null)
-            _noGroupCard()
-          else
-            _activeGroupCard(status.myGroup!),
-
-          const SizedBox(height: 18),
-          _friendsCard(status),
-
-          if (status.outgoingRequests.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _outgoingRequestsCard(status.outgoingRequests),
-          ],
-        ],
+        ),
       ),
+    );
+    if (selected == null) return;
+
+    final confirm = await _confirm(
+      title: 'Bevestig Driver/Admin',
+      message:
+          '${selected.gebruiker.volleNaam} word die nuwe Driver én Admin van ${group.naam}. Jy sal daarna ’n gewone lid wees.',
+      confirmLabel: 'Gee Oor',
+    );
+    if (!confirm) return;
+
+    await _runAction(
+      () => MoonApi.transferSaamryDriver(
+        groepId: group.groepId,
+        nuweBestuurderId: selected.gebruiker.gebruikerId,
+      ),
+      'Driver/Admin is oorgedra',
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.inter(
-        color: kTextMuted,
-        fontSize: 9,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.1,
+  Future<void> _openFriendChat(SaamryFriendItemDto friend) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaamryChatPage(friend: friend.gebruiker),
+      ),
+    );
+    await _load();
+  }
+
+  Future<void> _openGroupChat(SaamryGroupDto group) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaamryChatPage(group: group),
+      ),
+    );
+    await _load();
+  }
+
+  Widget _sectionTitle(String text) => Text(
+        text,
+        style: GoogleFonts.inter(
+          color: kTextMuted,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
+      );
+
+  Widget _avatar(SaamryUserDto user, {double size = 42}) {
+    final raw = user.fotoUrl?.trim() ?? '';
+    final imageUrl = raw.isEmpty
+        ? null
+        : (raw.startsWith('http') ? raw : '${MoonApi.baseUrl}$raw');
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: Colors.white10,
+      backgroundImage: imageUrl == null ? null : NetworkImage(imageUrl),
+      child: imageUrl == null
+          ? Text(
+              user.naam.isEmpty ? '?' : user.naam[0].toUpperCase(),
+              style: GoogleFonts.inter(
+                color: kAccent,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _badge(int count) {
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: kAccent,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '$count',
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -1129,13 +1221,27 @@ class _SaamryTabState extends State<SaamryTab> {
         padding: const EdgeInsets.all(14),
         child: Column(
           children: [
-            _userRow(request.gebruiker),
+            Row(
+              children: [
+                _avatar(request.gebruiker),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    request.gebruiker.volleNaam,
+                    style: GoogleFonts.inter(
+                      color: kText1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: GradientActionButton(
-                    label: _busy ? 'Besig...' : 'Aanvaar',
+                    label: 'Aanvaar',
                     onTap: _busy
                         ? () {}
                         : () => _runAction(
@@ -1174,45 +1280,36 @@ class _SaamryTabState extends State<SaamryTab> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GlassCard(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.directions_car, color: kAccent, size: 28),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    group.naam,
-                    style: GoogleFonts.inter(
-                      color: kText1,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              group.naam,
+              style: GoogleFonts.inter(
+                color: kText1,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Driver/Admin: ${group.bestuurder.volleNaam}',
+              style: GoogleFonts.inter(color: kText2, fontSize: 12),
             ),
             const SizedBox(height: 12),
-            _smallInfo(Icons.route, '${group.vertrekpunt} → ${group.bestemming}'),
-            const SizedBox(height: 7),
-            _smallInfo(Icons.schedule, _formatDateTime(group.vertrekTyd)),
-            const SizedBox(height: 7),
-            _smallInfo(Icons.person, 'Bestuurder: ${group.bestuurder.volleNaam}'),
-            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
                   child: GradientActionButton(
-                    label: 'Aanvaar',
+                    label: 'Sluit Aan',
                     onTap: _busy
                         ? () {}
                         : () => _runAction(
                               () async {
                                 await MoonApi.acceptSaamryGroupInvite(group.groepId);
                               },
-                              'Saamry-uitnodiging aanvaar',
+                              'Jy het by ${group.naam} aangesluit',
                             ),
                     height: 44,
                   ),
@@ -1225,7 +1322,7 @@ class _SaamryTabState extends State<SaamryTab> {
                         ? () {}
                         : () => _runAction(
                               () => MoonApi.declineSaamryGroupInvite(group.groepId),
-                              'Uitnodiging geweier',
+                              'Groepuitnodiging geweier',
                             ),
                     height: 44,
                   ),
@@ -1238,172 +1335,261 @@ class _SaamryTabState extends State<SaamryTab> {
     );
   }
 
-  Widget _noGroupCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _eventBanner(SaamryGroupDto group) {
+    final event = group.aktieweEvent;
+    if (event == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Text(
+          'Geen aktiewe Saamry-event nie. Almal scan individueel totdat ’n nuwe event geskep word.',
+          style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
+        ),
+      );
+    }
+
+    final passengers = event.lede.where((e) => !e.isBestuurder).length;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: kAccent.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kAccent.withOpacity(0.45)),
+      ),
+      child: Row(
         children: [
-          const Icon(Icons.directions_car_rounded, color: kAccent, size: 44),
-          const SizedBox(height: 14),
-          Text(
-            'Geen aktiewe saamrygroep nie',
-            style: GoogleFonts.inter(
-              color: kText1,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+          const Icon(Icons.directions_car_filled_rounded, color: kAccent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AKTIEWE SAAMRY-EVENT',
+                  style: GoogleFonts.inter(
+                    color: kAccent,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$passengers passasier${passengers == 1 ? '' : 's'} · verdwyn ná Driver se suksesvolle IN/UIT scan',
+                  style: GoogleFonts.inter(color: kText1, fontSize: 12),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Skep ’n groep as jy die bestuurder is, of aanvaar ’n uitnodiging.',
-            style: GoogleFonts.inter(color: kText2, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          GradientActionButton(
-            label: 'Skep Groep',
-            onTap: _openCreateGroup,
-            height: 50,
           ),
         ],
       ),
     );
   }
 
-  Widget _activeGroupCard(SaamryGroupDto group) {
+  Widget _groupCard(SaamryGroupDto group) {
     return GlassCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 27),
+              const Icon(Icons.groups_2_rounded, color: kAccent, size: 28),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  group.naam,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: kText1,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.naam,
+                      style: GoogleFonts.inter(
+                        color: kText1,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      'Driver/Admin: ${group.bestuurder.volleNaam}',
+                      style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              if (group.isBestuurder)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: kAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'DRIVER / ADMIN',
+                    style: TextStyle(
+                      color: kAccent,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _eventBanner(group),
+          const SizedBox(height: 12),
+          _sectionTitle('LEDE'),
+          const SizedBox(height: 8),
+          ...group.lede.map(
+                (member) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    children: [
+                      _avatar(member.gebruiker, size: 34),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          member.gebruiker.volleNaam,
+                          style: GoogleFonts.inter(color: kText1, fontSize: 12),
+                        ),
+                      ),
+                      if (member.isBestuurder)
+                        const Text(
+                          'DRIVER',
+                          style: TextStyle(
+                            color: kAccent,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      else if (member.status == 'HANGEND')
+                        const Text(
+                          'HANGEND',
+                          style: TextStyle(
+                            color: Colors.orangeAccent,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openGroupChat(group),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Groepchat'),
+                      if (group.ongelees > 0) ...[
+                        const SizedBox(width: 6),
+                        _badge(group.ongelees),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 15),
-          _infoRow('Status', group.status, valueColor: Colors.green),
-          const Divider(color: Color(0x0AFFFFFF), height: 1),
-          _infoRow('Bestuurder', group.bestuurder.volleNaam),
-          const Divider(color: Color(0x0AFFFFFF), height: 1),
-          _infoRow('Roete', '${group.vertrekpunt} → ${group.bestemming}'),
-          const Divider(color: Color(0x0AFFFFFF), height: 1),
-          _infoRow('Vertrek', _formatDateTime(group.vertrekTyd)),
-          const Divider(color: Color(0x0AFFFFFF), height: 1),
-          _infoRow(
-            'Sitplekke oop',
-            '${group.beskikbareSitplekke} van ${group.sitplekke}',
-          ),
-
-          const SizedBox(height: 16),
-          _sectionTitle('GROEPLEDE'),
-          const SizedBox(height: 10),
-          ...group.lede.map((member) {
-            final phone = member.gebruiker.selfoon;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  _avatar(member.gebruiker, size: 38),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          member.gebruiker.volleNaam,
-                          style: GoogleFonts.inter(
-                            color: kText1,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (phone != null && phone.trim().isNotEmpty)
-                          Text(
-                            phone,
-                            style: GoogleFonts.inter(
-                              color: kTextMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    member.isBestuurder ? 'Bestuurder' : _statusLabel(member.status),
-                    style: GoogleFonts.inter(
-                      color: member.status == 'AANVAAR'
-                          ? Colors.green
-                          : Colors.orange,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-
-          const SizedBox(height: 8),
           if (group.isBestuurder) ...[
-            GradientActionButton(
-              label: 'Nooi Vriend',
-              onTap: group.beskikbareSitplekke <= 0
-                  ? () => _message('Die groep is vol')
-                  : () => _openInviteFriend(group),
-              height: 48,
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: GradientActionButton(
+                    label: group.aktieweEvent == null ? 'Nuwe Saamry' : 'Event Aktief',
+                    onTap: group.aktieweEvent == null
+                        ? () => _openCreateEvent(initialGroup: group)
+                        : () {},
+                    height: 44,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlineActionButton(
+                    label: 'Nooi Vriend',
+                    onTap: () => _openInvite(group),
+                    height: 44,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            OutlineActionButton(
-              label: _busy ? 'Besig...' : 'Sluit Groep',
-              onTap: _busy
-                  ? () {}
-                  : () async {
-                      final confirm = await _confirm(
-                        title: 'Sluit Saamrygroep',
-                        message: 'Is jy seker jy wil hierdie groep sluit?',
-                        confirmLabel: 'Sluit',
-                      );
-                      if (!confirm) return;
-                      await _runAction(
-                        () => MoonApi.closeSaamryGroup(group.groepId),
-                        'Saamrygroep is gesluit',
-                      );
-                    },
-              height: 48,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlineActionButton(
+                    label: 'Gee Driver Oor',
+                    onTap: () => _transferDriver(group),
+                    height: 44,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlineActionButton(
+                    label: group.aktieweEvent != null ? 'Kanselleer Event' : 'Sluit Groep',
+                    onTap: _busy
+                        ? () {}
+                        : () async {
+                            if (group.aktieweEvent != null) {
+                              final ok = await _confirm(
+                                title: 'Kanselleer Saamry-event',
+                                message: 'Die permanente groep bly bestaan; net hierdie aktiewe rit word gekanselleer.',
+                                confirmLabel: 'Kanselleer Event',
+                              );
+                              if (!ok) return;
+                              await _runAction(
+                                () => MoonApi.cancelSaamryEvent(group.aktieweEvent!.eventId),
+                                'Saamry-event gekanselleer',
+                              );
+                            } else {
+                              final ok = await _confirm(
+                                title: 'Sluit Permanente Groep',
+                                message: 'Dit sluit die permanente groep. Die groepchat en nuwe events sal daarna nie beskikbaar wees nie.',
+                                confirmLabel: 'Sluit Groep',
+                              );
+                              if (!ok) return;
+                              await _runAction(
+                                () => MoonApi.closeSaamryGroup(group.groepId),
+                                'Permanente Saamrygroep gesluit',
+                              );
+                            }
+                          },
+                    height: 44,
+                  ),
+                ),
+              ],
             ),
-          ] else
+          ] else ...[
+            const SizedBox(height: 10),
             OutlineActionButton(
-              label: _busy ? 'Besig...' : 'Verlaat Groep',
+              label: 'Verlaat Groep',
               onTap: _busy
                   ? () {}
                   : () async {
-                      final confirm = await _confirm(
-                        title: 'Verlaat Saamrygroep',
-                        message: 'Is jy seker jy wil die groep verlaat?',
+                      final ok = await _confirm(
+                        title: 'Verlaat Groep',
+                        message: 'Jy sal nie meer die groepchat of toekomstige Saamry-events van hierdie groep sien nie.',
                         confirmLabel: 'Verlaat',
                       );
-                      if (!confirm) return;
+                      if (!ok) return;
                       await _runAction(
                         () => MoonApi.leaveSaamryGroup(group.groepId),
                         'Jy het die groep verlaat',
                       );
                     },
-              height: 48,
+              height: 44,
             ),
+          ],
         ],
       ),
     );
@@ -1411,36 +1597,35 @@ class _SaamryTabState extends State<SaamryTab> {
 
   Widget _friendsCard(SaamryStatusDto status) {
     return GlassCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: _sectionTitle('VRIENDE')),
-              Text(
-                status.friends.length.toString(),
-                style: GoogleFonts.inter(
-                  color: kAccent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
+              Expanded(child: _sectionTitle('VRIENDE & PRIVAAT CHAT')),
+              TextButton.icon(
+                onPressed: _openAddFriend,
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
+                label: const Text('Voeg By'),
               ),
             ],
           ),
-          const SizedBox(height: 12),
           if (status.friends.isEmpty)
-            Text(
-              'Nog geen vriende nie',
-              style: GoogleFonts.inter(color: kText2, fontSize: 13),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Nog geen vriende nie',
+                style: GoogleFonts.inter(color: kText2, fontSize: 12),
+              ),
             )
           else
-            ...status.friends.map((friend) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+            ...status.friends.map(
+              (friend) => Padding(
+                padding: const EdgeInsets.only(top: 10),
                 child: Row(
                   children: [
-                    _avatar(friend.gebruiker, size: 40),
+                    _avatar(friend.gebruiker),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1450,33 +1635,39 @@ class _SaamryTabState extends State<SaamryTab> {
                             friend.gebruiker.volleNaam,
                             style: GoogleFonts.inter(
                               color: kText1,
-                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
                             '${friend.gebruiker.rol} · ${friend.gebruiker.nommer}',
-                            style: GoogleFonts.inter(
-                              color: kTextMuted,
-                              fontSize: 11,
-                            ),
+                            style: GoogleFonts.inter(color: kTextMuted, fontSize: 10.5),
                           ),
                         ],
                       ),
                     ),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        IconButton(
+                          tooltip: 'Boodskap',
+                          onPressed: () => _openFriendChat(friend),
+                          icon: const Icon(Icons.chat_rounded, color: kAccent),
+                        ),
+                        if (friend.ongelees > 0)
+                          Positioned(right: 0, top: 0, child: _badge(friend.ongelees)),
+                      ],
+                    ),
                     IconButton(
                       tooltip: 'Verwyder vriend',
-                      icon: const Icon(Icons.person_remove_outlined, color: kTextMuted),
                       onPressed: _busy
                           ? null
                           : () async {
-                              final confirm = await _confirm(
+                              final ok = await _confirm(
                                 title: 'Verwyder Vriend',
-                                message:
-                                    'Verwyder ${friend.gebruiker.volleNaam} uit jou vriende?',
+                                message: 'Verwyder ${friend.gebruiker.volleNaam} uit jou vriende?',
                                 confirmLabel: 'Verwyder',
                               );
-                              if (!confirm) return;
+                              if (!ok) return;
                               await _runAction(
                                 () => MoonApi.removeSaamryFriend(
                                   friend.gebruiker.gebruikerId,
@@ -1484,369 +1675,171 @@ class _SaamryTabState extends State<SaamryTab> {
                                 'Vriend verwyder',
                               );
                             },
+                      icon: const Icon(
+                        Icons.person_remove_outlined,
+                        color: kTextMuted,
+                      ),
                     ),
                   ],
                 ),
-              );
-            }),
-          const SizedBox(height: 12),
-          OutlineActionButton(
-            label: 'Voeg Vriend By',
-            onTap: _openAddFriend,
-            height: 46,
-          ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _outgoingRequestsCard(List<SaamryFriendItemDto> requests) {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _status == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _status == null) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 80),
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final status = _status!;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
-          _sectionTitle('HANGENDE VERSOEKE'),
-          const SizedBox(height: 12),
-          ...requests.map(
-            (request) => Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: Row(
-                children: [
-                  const Icon(Icons.schedule, color: kTextMuted, size: 21),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      request.gebruiker.volleNaam,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Saamry',
                       style: GoogleFonts.inter(
-                        color: kText2,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        color: kText1,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  Text(
-                    'Hangend',
-                    style: GoogleFonts.inter(
-                      color: Colors.orange,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                    Text(
+                      'Permanente groepe, eenmalige rit-events en live chat.',
+                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Herlaai',
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlineActionButton(
+                  label: 'Nuwe Groep',
+                  onTap: _openCreateGroup,
+                  height: 46,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GradientActionButton(
+                  label: 'Nuwe Saamry',
+                  onTap: () => _openCreateEvent(),
+                  height: 46,
+                ),
+              ),
+            ],
+          ),
+          if (status.incomingRequests.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _sectionTitle('VRIENDSKAPVERSOEKE'),
+            const SizedBox(height: 8),
+            ...status.incomingRequests.map(_incomingFriendCard),
+          ],
+          if (status.groupInvites.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _sectionTitle('GROEPUITNODIGINGS'),
+            const SizedBox(height: 8),
+            ...status.groupInvites.map(_groupInviteCard),
+          ],
+          const SizedBox(height: 18),
+          _sectionTitle('MY PERMANENTE GROEPE'),
+          const SizedBox(height: 8),
+          if (status.groups.isEmpty)
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Text(
+                'Jy behoort nog nie aan ’n permanente Saamrygroep nie.',
+                style: GoogleFonts.inter(color: kText2, fontSize: 12.5),
+              ),
+            )
+          else
+            ...status.groups.expand(
+              (group) => [
+                _groupCard(group),
+                const SizedBox(height: 12),
+              ],
+            ),
+          const SizedBox(height: 8),
+          _friendsCard(status),
+          if (status.outgoingRequests.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle('HANGENDE VRIENDVERSOEKE'),
+                  const SizedBox(height: 8),
+                  ...status.outgoingRequests.map(
+                    (request) => Padding(
+                      padding: const EdgeInsets.only(bottom: 7),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.schedule_rounded, color: Colors.orangeAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              request.gebruiker.volleNaam,
+                              style: GoogleFonts.inter(color: kText1, fontSize: 12),
+                            ),
+                          ),
+                          Text(
+                            'Hangend',
+                            style: GoogleFonts.inter(color: kTextMuted, fontSize: 10),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _userRow(SaamryUserDto user) {
-    return Row(
-      children: [
-        _avatar(user, size: 44),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user.volleNaam,
-                style: GoogleFonts.inter(
-                  color: kText1,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${user.rol} · ${user.nommer}',
-                style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _avatar(SaamryUserDto user, {double size = 42}) {
-    final foto = user.fotoUrl;
-    if (foto != null && foto.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(size / 2),
-        child: Image.network(
-          '${MoonApi.baseUrl}$foto',
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.person,
-            color: kTextMuted,
-            size: size * 0.8,
-          ),
-        ),
-      );
-    }
-    return Icon(Icons.person, color: kTextMuted, size: size * 0.85);
-  }
-
-  Widget _smallInfo(IconData icon, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: kTextMuted, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: GoogleFonts.inter(color: kText2, fontSize: 12),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _infoRow(String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 105,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                color: kTextMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.inter(
-                color: valueColor ?? kText1,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'AANVAAR':
-        return 'Aanvaar';
-      case 'HANGEND':
-        return 'Hangend';
-      case 'GEWEIER':
-        return 'Geweier';
-      default:
-        return status;
-    }
-  }
-}
-
-
-class AddSaamryFriendPage extends StatefulWidget {
-  const AddSaamryFriendPage({super.key});
-
-  @override
-  State<AddSaamryFriendPage> createState() => _AddSaamryFriendPageState();
-}
-
-class _AddSaamryFriendPageState extends State<AddSaamryFriendPage> {
-  final TextEditingController _searchController = TextEditingController();
-  bool _loading = false;
-  int? _busyUserId;
-  String? _error;
-  List<SaamryUserDto> _results = [];
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _search() async {
-    final query = _searchController.text.trim();
-    if (query.length < 2) {
-      setState(() {
-        _error = 'Tik minstens 2 karakters';
-        _results = [];
-      });
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final results = await MoonApi.searchSaamryUsers(query);
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _sendRequest(SaamryUserDto user) async {
-    setState(() => _busyUserId = user.gebruikerId);
-    try {
-      await MoonApi.sendSaamryFriendRequest(user.gebruikerId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Versoek gestuur na ${user.volleNaam}')),
-      );
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
-      setState(() => _busyUserId = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const AppScreenHeader(
-              title: 'Voeg Vriend By',
-              subtitle: 'Student of personeel',
-              showBack: true,
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: GlassInput(
-                controller: _searchController,
-                hintText: 'Naam, nommer of ID-nommer',
-                prefixIcon: const Icon(Icons.search, color: kTextMuted, size: 18),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GradientActionButton(
-                label: _loading ? 'Soek...' : 'Soek',
-                onTap: _loading ? () {} : _search,
-                height: 46,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Text(
-                              _error!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
-                            ),
-                          ),
-                        )
-                      : _results.isEmpty
-                          ? Center(
-                              child: Text(
-                                'Soek vir ’n student of personeellid',
-                                style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
-                              ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _results.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final user = _results[index];
-                                return GlassCard(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.person, color: kAccent, size: 34),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              user.volleNaam,
-                                              style: GoogleFonts.inter(
-                                                color: kText1,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              '${user.rol} · ${user.nommer}',
-                                              style: GoogleFonts.inter(
-                                                color: kTextMuted,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      _relationshipButton(user),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-            ),
           ],
-        ),
+        ],
       ),
     );
   }
-
-  Widget _relationshipButton(SaamryUserDto user) {
-    final status = user.vriendskapStatus ?? 'GEEN';
-    if (status == 'VRIEND') {
-      return const Text('Vriend', style: TextStyle(color: Colors.green));
-    }
-    if (status == 'HANGEND_UIT') {
-      return const Text('Hangend', style: TextStyle(color: Colors.orange));
-    }
-    if (status == 'HANGEND_IN') {
-      return const Text('Het jou genooi', style: TextStyle(color: Colors.orange));
-    }
-
-    final busy = _busyUserId == user.gebruikerId;
-    return TextButton(
-      onPressed: busy ? null : () => _sendRequest(user),
-      child: Text(busy ? 'Stuur...' : 'Voeg by'),
-    );
-  }
 }
-
 
 class CreateSaamryGroupPage extends StatefulWidget {
   const CreateSaamryGroupPage({super.key});
@@ -1856,116 +1849,31 @@ class CreateSaamryGroupPage extends StatefulWidget {
 }
 
 class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
-  final _nameController = TextEditingController();
-  final _fromController = TextEditingController();
-  final _toController = TextEditingController();
-  final _seatsController = TextEditingController(text: '3');
-
-  DateTime _date = DateTime.now().add(const Duration(days: 1));
-  TimeOfDay _time = const TimeOfDay(hour: 7, minute: 0);
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _seatsController = TextEditingController(text: '4');
   bool _busy = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _fromController.dispose();
-    _toController.dispose();
     _seatsController.dispose();
     super.dispose();
   }
 
-  String _dateLabel() {
-    final d = _date.day.toString().padLeft(2, '0');
-    final m = _date.month.toString().padLeft(2, '0');
-    return '$d/$m/${_date.year}';
-  }
-
-  String _timeLabel() {
-    final h = _time.hour.toString().padLeft(2, '0');
-    final m = _time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  Future<void> _pickDate() async {
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      barrierColor: Colors.black.withOpacity(0.88),
-      helpText: 'KIES DATUM',
-      cancelText: 'KANSELLEER',
-      confirmText: 'KIES',
-      builder: (context, child) {
-        return Theme(
-          data: _moonPickerTheme(context),
-          child: child!,
-        );
-      },
-    );
-
-    if (selected != null) {
-      setState(() => _date = selected);
-    }
-  }
-
-  Future<void> _pickTime() async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: _time,
-      barrierColor: Colors.black.withOpacity(0.88),
-      helpText: 'KIES TYD',
-      cancelText: 'KANSELLEER',
-      confirmText: 'KIES',
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: true,
-          ),
-          child: Theme(
-            data: _moonPickerTheme(context),
-            child: child!,
-          ),
-        );
-      },
-    );
-
-    if (selected != null) {
-      setState(() => _time = selected);
-    }
-  }
-
   Future<void> _create() async {
-    final from = _fromController.text.trim();
-    final to = _toController.text.trim();
+    final name = _nameController.text.trim();
     final seats = int.tryParse(_seatsController.text.trim());
-
-    if (from.isEmpty || to.isEmpty) {
-      _error('Vul vertrekpunt en bestemming in');
+    if (name.isEmpty) {
+      _error('Gee die permanente groep ’n naam');
       return;
     }
     if (seats == null || seats < 1 || seats > 8) {
-      _error('Sitplekke moet tussen 1 en 8 wees');
+      _error('Passasiersitplekke moet tussen 1 en 8 wees');
       return;
     }
-
-    final departure = DateTime(
-      _date.year,
-      _date.month,
-      _date.day,
-      _time.hour,
-      _time.minute,
-    );
-
     setState(() => _busy = true);
     try {
-      await MoonApi.createSaamryGroup(
-        naam: _nameController.text,
-        vertrekpunt: from,
-        bestemming: to,
-        vertrekTyd: departure,
-        sitplekke: seats,
-      );
+      await MoonApi.createSaamryGroup(naam: name, sitplekke: seats);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -1989,8 +1897,8 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
         child: Column(
           children: [
             const AppScreenHeader(
-              title: 'Skep Saamrygroep',
-              subtitle: 'Ritbesonderhede',
+              title: 'Nuwe Permanente Groep',
+              subtitle: 'Die Driver is outomaties die Admin',
               showBack: true,
             ),
             Expanded(
@@ -2001,51 +1909,46 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _label('GROEPNAAM (OPSIONEEL)'),
+                      Text(
+                        'GROEPNAAM',
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       GlassInput(
                         controller: _nameController,
-                        hintText: 'Byvoorbeeld: Leriba Oggendrit',
-                        prefixIcon: const Icon(Icons.group, color: kTextMuted, size: 18),
+                        hintText: 'bv. Werk Saamry',
+                        prefixIcon: const Icon(Icons.groups_rounded, color: kTextMuted),
                       ),
                       const SizedBox(height: 14),
-                      _label('VERTREKPUNT'),
-                      const SizedBox(height: 8),
-                      GlassInput(
-                        controller: _fromController,
-                        hintText: 'Waar vertrek julle?',
-                        prefixIcon: const Icon(Icons.trip_origin, color: kTextMuted, size: 18),
+                      Text(
+                        'PASSASIERSITPLEKKE',
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      _label('BESTEMMING'),
-                      const SizedBox(height: 8),
-                      GlassInput(
-                        controller: _toController,
-                        hintText: 'Waarheen ry julle?',
-                        prefixIcon: const Icon(Icons.location_on, color: kTextMuted, size: 18),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(child: _pickerTile(Icons.calendar_month, 'Datum', _dateLabel(), _pickDate)),
-                          const SizedBox(width: 10),
-                          Expanded(child: _pickerTile(Icons.schedule, 'Tyd', _timeLabel(), _pickTime)),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      _label('PASSASIERSITPLEKKE'),
                       const SizedBox(height: 8),
                       GlassInput(
                         controller: _seatsController,
                         hintText: '1 tot 8',
                         keyboardType: TextInputType.number,
-                        prefixIcon: const Icon(Icons.event_seat, color: kTextMuted, size: 18),
+                        prefixIcon: const Icon(Icons.event_seat_rounded, color: kTextMuted),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Die groep bly bestaan nadat ’n rit klaar is. Vir elke werklike rit skep die Driver later ’n nuwe Saamry-event.',
+                        style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                       ),
                       const SizedBox(height: 20),
                       GradientActionButton(
-                        label: _busy ? 'Skep...' : 'Skep Groep',
+                        label: _busy ? 'Skep...' : 'Skep Permanente Groep',
                         onTap: _busy ? () {} : _create,
-                        height: 52,
+                        height: 50,
                       ),
                     ],
                   ),
@@ -2057,48 +1960,196 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
       ),
     );
   }
+}
 
-  Widget _label(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.inter(
-        color: kTextMuted,
-        fontSize: 9,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.1,
-      ),
-    );
+class CreateSaamryEventPage extends StatefulWidget {
+  final List<SaamryGroupDto> groups;
+  final int? initialGroupId;
+
+  const CreateSaamryEventPage({
+    super.key,
+    required this.groups,
+    this.initialGroupId,
+  });
+
+  @override
+  State<CreateSaamryEventPage> createState() => _CreateSaamryEventPageState();
+}
+
+class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
+  late int _groupId;
+  final Set<int> _selected = <int>{};
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _groupId = widget.groups.any((g) => g.groepId == widget.initialGroupId)
+        ? widget.initialGroupId!
+        : widget.groups.first.groepId;
+    _selectDefaultPassengers();
   }
 
-  Widget _pickerTile(
-    IconData icon,
-    String label,
-    String value,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          // Meer solied sodat Datum/Tyd nie in die agtergrond verdwyn nie.
-          color: const Color(0xFF182235),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF334155)),
+  SaamryGroupDto get _group =>
+      widget.groups.firstWhere((g) => g.groepId == _groupId);
+
+  List<SaamryGroupMemberDto> get _passengers => _group.lede
+      .where((m) => !m.isBestuurder && m.status == 'AANVAAR')
+      .toList();
+
+  void _selectDefaultPassengers() {
+    _selected
+      ..clear()
+      ..addAll(_passengers.map((m) => m.gebruiker.gebruikerId));
+  }
+
+  Future<void> _create() async {
+    if (_selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kies minstens een passasier')),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await MoonApi.createSaamryEvent(
+        groepId: _groupId,
+        gebruikerIds: _selected.toList(),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
         ),
+      );
+      setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
         child: Column(
           children: [
-            Icon(icon, color: kAccent, size: 23),
-            const SizedBox(height: 6),
-            Text(label, style: GoogleFonts.inter(color: kTextMuted, fontSize: 10)),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                color: kText1,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+            const AppScreenHeader(
+              title: 'Nuwe Saamry',
+              subtitle: 'Kies permanente groep en passasiers',
+              showBack: true,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  GlassCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PERMANENTE GROEP',
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int>(
+                          value: _groupId,
+                          dropdownColor: const Color(0xFF111827),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.05),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          items: widget.groups
+                              .map(
+                                (group) => DropdownMenuItem<int>(
+                                  value: group.groepId,
+                                  child: Text(group.naam),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _busy
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    _groupId = value;
+                                    _selectDefaultPassengers();
+                                  });
+                                },
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Driver/Admin: ${_group.bestuurder.volleNaam}',
+                          style: GoogleFonts.inter(
+                            color: kAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'WIE RY SAAM?',
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ..._passengers.map(
+                          (member) => CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: kAccent,
+                            checkColor: Colors.black,
+                            title: Text(
+                              member.gebruiker.volleNaam,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              '${member.gebruiker.rol} · ${member.gebruiker.nommer}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            value: _selected.contains(member.gebruiker.gebruikerId),
+                            onChanged: _busy
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _selected.add(member.gebruiker.gebruikerId);
+                                      } else {
+                                        _selected.remove(member.gebruiker.gebruikerId);
+                                      }
+                                    });
+                                  },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Geen tyd word gebruik om die event te voltooi nie. Sodra die Driver by die kampushek suksesvol IN of UIT scan, word die event outomaties voltooi en verdwyn.',
+                          style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
+                        ),
+                        const SizedBox(height: 18),
+                        GradientActionButton(
+                          label: _busy ? 'Skep...' : 'Aktiveer Saamry-event',
+                          onTap: _busy ? () {} : _create,
+                          height: 50,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -2108,6 +2159,166 @@ class _CreateSaamryGroupPageState extends State<CreateSaamryGroupPage> {
   }
 }
 
+class AddSaamryFriendPage extends StatefulWidget {
+  const AddSaamryFriendPage({super.key});
+
+  @override
+  State<AddSaamryFriendPage> createState() => _AddSaamryFriendPageState();
+}
+
+class _AddSaamryFriendPageState extends State<AddSaamryFriendPage> {
+  final TextEditingController _controller = TextEditingController();
+  Timer? _debounce;
+  bool _loading = false;
+  int? _busyId;
+  List<SaamryUserDto> _results = [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _searchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () => _search(value));
+  }
+
+  Future<void> _search(String value) async {
+    if (value.trim().length < 2) {
+      if (mounted) setState(() => _results = []);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final rows = await MoonApi.searchSaamryUsers(value);
+      if (!mounted) return;
+      setState(() {
+        _results = rows;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _send(SaamryUserDto user) async {
+    setState(() => _busyId = user.gebruikerId);
+    try {
+      await MoonApi.sendSaamryFriendRequest(user.gebruikerId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Versoek aan ${user.volleNaam} gestuur')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busyId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'Voeg Vriend By',
+              subtitle: 'Soek student of personeel',
+              showBack: true,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: _controller,
+                onChanged: _searchChanged,
+                style: GoogleFonts.inter(color: kText1, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Naam, van of nommer',
+                  hintStyle: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded, color: kTextMuted),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            if (_loading) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                itemCount: _results.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 9),
+                itemBuilder: (context, index) {
+                  final user = _results[index];
+                  final status = user.vriendskapStatus ?? 'GEEN';
+                  final canAdd = status == 'GEEN' || status == 'GEWEIER';
+                  return GlassCard(
+                    padding: const EdgeInsets.all(13),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_rounded, color: kAccent),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.volleNaam,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '${user.rol} · ${user.nommer}',
+                                style: const TextStyle(color: Colors.white54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: !canAdd || _busyId == user.gebruikerId
+                              ? null
+                              : () => _send(user),
+                          child: Text(
+                            status == 'VRIEND'
+                                ? 'Vriend'
+                                : status.startsWith('HANGEND')
+                                    ? 'Hangend'
+                                    : _busyId == user.gebruikerId
+                                        ? 'Stuur...'
+                                        : 'Voeg By',
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class InviteSaamryFriendPage extends StatefulWidget {
   final int groepId;
@@ -2134,19 +2345,16 @@ class _InviteSaamryFriendPageState extends State<InviteSaamryFriendPage> {
         gebruikerId: friend.gebruiker.gebruikerId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${friend.gebruiker.volleNaam} is genooi')),
-      );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _busyId = null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.red,
           content: Text(e.toString().replaceFirst('Exception: ', '')),
         ),
       );
-      setState(() => _busyId = null);
     }
   }
 
@@ -2159,7 +2367,7 @@ class _InviteSaamryFriendPageState extends State<InviteSaamryFriendPage> {
           children: [
             const AppScreenHeader(
               title: 'Nooi Vriend',
-              subtitle: 'Kies ’n passasier',
+              subtitle: 'Voeg by permanente groep',
               showBack: true,
             ),
             Expanded(
@@ -2169,35 +2377,30 @@ class _InviteSaamryFriendPageState extends State<InviteSaamryFriendPage> {
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final friend = widget.friends[index];
-                  final busy = _busyId == friend.gebruiker.gebruikerId;
                   return GlassCard(
                     padding: const EdgeInsets.all(14),
                     child: Row(
                       children: [
-                        const Icon(Icons.person_add_alt_1, color: kAccent, size: 28),
-                        const SizedBox(width: 12),
+                        const Icon(Icons.person_add_alt_1, color: kAccent),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                friend.gebruiker.volleNaam,
-                                style: GoogleFonts.inter(
-                                  color: kText1,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                '${friend.gebruiker.rol} · ${friend.gebruiker.nommer}',
-                                style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
-                              ),
-                            ],
+                          child: Text(
+                            friend.gebruiker.volleNaam,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         TextButton(
-                          onPressed: busy ? null : () => _invite(friend),
-                          child: Text(busy ? 'Nooi...' : 'Nooi'),
+                          onPressed: _busyId == friend.gebruiker.gebruikerId
+                              ? null
+                              : () => _invite(friend),
+                          child: Text(
+                            _busyId == friend.gebruiker.gebruikerId
+                                ? 'Nooi...'
+                                : 'Nooi',
+                          ),
                         ),
                       ],
                     ),
@@ -2211,6 +2414,339 @@ class _InviteSaamryFriendPageState extends State<InviteSaamryFriendPage> {
     );
   }
 }
+
+class SaamryChatPage extends StatefulWidget {
+  final SaamryUserDto? friend;
+  final SaamryGroupDto? group;
+
+  const SaamryChatPage({
+    super.key,
+    this.friend,
+    this.group,
+  }) : assert((friend == null) != (group == null));
+
+  @override
+  State<SaamryChatPage> createState() => _SaamryChatPageState();
+}
+
+class _SaamryChatPageState extends State<SaamryChatPage> {
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  List<SaamryMessageDto> _messages = [];
+  bool _loading = true;
+  bool _sending = false;
+  String? _error;
+  WebSocket? _socket;
+  StreamSubscription<dynamic>? _socketSub;
+  Timer? _reconnectTimer;
+  bool _disposed = false;
+
+  static const _quick = <String>[
+    'Waar moet ek jou optel?',
+    'Ek is hier',
+    'Ek is 5 min weg',
+    'Ek wag by die hek',
+  ];
+
+  bool get _isGroup => widget.group != null;
+  String get _title => _isGroup ? widget.group!.naam : widget.friend!.volleNaam;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitial();
+    _connectSocket();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _reconnectTimer?.cancel();
+    _socketSub?.cancel();
+    _socket?.close();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _wsBase() {
+    if (MoonApi.baseUrl.startsWith('https://')) {
+      return MoonApi.baseUrl.replaceFirst('https://', 'wss://');
+    }
+    if (MoonApi.baseUrl.startsWith('http://')) {
+      return MoonApi.baseUrl.replaceFirst('http://', 'ws://');
+    }
+    return MoonApi.baseUrl;
+  }
+
+  Future<void> _loadInitial() async {
+    try {
+      final rows = _isGroup
+          ? await MoonApi.fetchSaamryGroupChat(widget.group!.groepId)
+          : await MoonApi.fetchSaamryFriendChat(widget.friend!.gebruikerId);
+      if (!mounted) return;
+      setState(() {
+        _messages = rows;
+        _loading = false;
+        _error = null;
+      });
+      _scrollBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _connectSocket() async {
+    if (_disposed) return;
+    _reconnectTimer?.cancel();
+    try {
+      await _socketSub?.cancel();
+      await _socket?.close();
+    } catch (_) {}
+
+    final token = MoonApi.bearerToken?.trim() ?? '';
+    if (token.isEmpty) return;
+    final path = _isGroup
+        ? '/saamry/chat/ws/groep/${widget.group!.groepId}'
+        : '/saamry/chat/ws/vriend/${widget.friend!.gebruikerId}';
+    final uri = Uri.parse(
+      '${_wsBase()}$path?token=${Uri.encodeQueryComponent(token)}',
+    );
+
+    try {
+      final socket = await WebSocket.connect(uri.toString());
+      if (_disposed) {
+        await socket.close();
+        return;
+      }
+      _socket = socket;
+      _socketSub = socket.listen(
+        _handleSocket,
+        onDone: _scheduleReconnect,
+        onError: (_) => _scheduleReconnect(),
+        cancelOnError: false,
+      );
+    } catch (_) {
+      _scheduleReconnect();
+    }
+  }
+
+  void _scheduleReconnect() {
+    if (_disposed) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 2), _connectSocket);
+  }
+
+  void _handleSocket(dynamic raw) {
+    try {
+      final decoded = jsonDecode(raw.toString());
+      if (decoded is! Map) return;
+      if (decoded['tipe'] == 'FOUT') {
+        if (mounted) setState(() => _error = decoded['fout']?.toString());
+        return;
+      }
+      final rows = ((decoded['boodskappe'] as List?) ?? const [])
+          .map((e) => SaamryMessageDto.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _messages = rows;
+        _loading = false;
+        _error = null;
+      });
+      _scrollBottom();
+    } catch (_) {}
+  }
+
+  void _scrollBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Future<void> _send([String? preset]) async {
+    final text = (preset ?? _controller.text).trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      if (_isGroup) {
+        await MoonApi.sendSaamryGroupMessage(
+          groepId: widget.group!.groepId,
+          boodskap: text,
+        );
+      } else {
+        await MoonApi.sendSaamryFriendMessage(
+          friendId: widget.friend!.gebruikerId,
+          boodskap: text,
+        );
+      }
+      _controller.clear();
+      await _loadInitial();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _time(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _bubble(SaamryMessageDto message) {
+    final mine = message.isMyne;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 310),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 7),
+        decoration: BoxDecoration(
+          color: mine ? kAccent.withOpacity(0.20) : const Color(0xFF182235),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: mine ? kAccent.withOpacity(0.35) : Colors.white12,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isGroup && !mine)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  message.stuurder?.volleNaam ?? 'Lid',
+                  style: GoogleFonts.inter(
+                    color: kAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            Text(
+              message.boodskap,
+              style: GoogleFonts.inter(color: kText1, fontSize: 13),
+            ),
+            const SizedBox(height: 3),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                _time(message.geskepOp),
+                style: GoogleFonts.inter(color: kTextMuted, fontSize: 9),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: _title,
+              subtitle: _isGroup ? 'Permanente Saamrygroep' : 'Privaat Saamry-chat',
+              showBack: true,
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                ),
+              ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      itemCount: _messages.length,
+                      itemBuilder: (_, index) => _bubble(_messages[index]),
+                    ),
+            ),
+            SizedBox(
+              height: 42,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                scrollDirection: Axis.horizontal,
+                itemCount: _quick.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 7),
+                itemBuilder: (_, index) => ActionChip(
+                  label: Text(_quick[index]),
+                  onPressed: _sending ? null : () => _send(_quick[index]),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Tik ’n boodskap...',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: const Color(0xFF182235),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _sending ? null : () => _send(),
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 class _VisitorsTab extends StatefulWidget {
   const _VisitorsTab();

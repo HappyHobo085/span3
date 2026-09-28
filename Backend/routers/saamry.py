@@ -1,9 +1,32 @@
-"""Saamry API — vriende, saamrygroepe en uitnodigings."""
+"""MOON Saamry API — permanente groepe, eenmalige rit-events en chat.
 
+Kernreëls:
+- 'n SaamryGroep is permanent en kan herhaaldelik gebruik word.
+- Die huidige Bestuurder is die groep se Admin.
+- Net die huidige Bestuurder kan die Driver/Admin-rol aan 'n aanvaarde lid oorgee.
+- 'n SaamryEvent is 'n eenmalige groepsrit. Geen tydvenster bepaal die event nie.
+- Sodra die Driver se hek-scan suksesvol gecommit is, word die event VOLTOOI.
+- Daarna val alle lede terug na normale individuele kampus-skandering.
+- Privaat chat is slegs vir aanvaarde vriende; groepchat slegs vir aanvaarde groepslede.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from jose import JWTError, jwt
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -14,10 +37,11 @@ import schemas
 
 
 router = APIRouter(prefix="/saamry", tags=["Saamry"])
+CHAT_WS_INTERVAL_SECONDS = 1.0
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Algemene helpers
 # ---------------------------------------------------------------------------
 
 def _require_saamry_user(db: Session, current_user: models.Gebruikers) -> None:
@@ -37,7 +61,6 @@ def _require_saamry_user(db: Session, current_user: models.Gebruikers) -> None:
         .first()
         is not None
     )
-
     if not is_student and not is_personeel:
         raise HTTPException(
             status_code=403,
@@ -45,14 +68,9 @@ def _require_saamry_user(db: Session, current_user: models.Gebruikers) -> None:
         )
 
 
-def _user_dict(
-    user: models.Gebruikers,
-    *,
-    include_contact: bool = False,
-) -> dict:
+def _user_dict(user: models.Gebruikers, *, include_contact: bool = False) -> dict:
     student = user.student
     personeel = user.personeel
-
     if student is not None:
         rol = "Student"
         nommer = student.STU_Nommer
@@ -72,11 +90,9 @@ def _user_dict(
         "rol": rol,
         "foto_url": user.GEB_Profiel_Foto,
     }
-
     if include_contact:
         data["selfoon"] = user.GEB_Selfoon_Nr
         data["epos"] = user.GEB_Epos
-
     return data
 
 
@@ -120,13 +136,18 @@ def _friendship_status(
     return friendship.SAA_Status
 
 
-def _accepted_passenger_count(group: models.SaamryGroep) -> int:
-    return sum(
-        1
-        for member in group.lede
-        if member.Gebruiker_ID != group.Bestuurder_ID
-        and member.SAA_Status == "AANVAAR"
-    )
+def _require_accepted_friend(
+    db: Session,
+    current_user_id: int,
+    friend_id: int,
+) -> models.SaamryVriendskap:
+    friendship = _friendship_between(db, current_user_id, friend_id)
+    if friendship is None or friendship.SAA_Status != "AANVAAR":
+        raise HTTPException(
+            status_code=403,
+            detail="Privaat Saamry-boodskappe is slegs tussen aanvaarde vriende beskikbaar",
+        )
+    return friendship
 
 
 def _viewer_is_accepted_member(group: models.SaamryGroep, viewer_id: int) -> bool:
@@ -138,85 +159,12 @@ def _viewer_is_accepted_member(group: models.SaamryGroep, viewer_id: int) -> boo
     )
 
 
-def _group_dict(group: models.SaamryGroep, viewer_id: int) -> dict:
-    viewer_accepted = _viewer_is_accepted_member(group, viewer_id)
-    my_member = next(
-        (member for member in group.lede if member.Gebruiker_ID == viewer_id),
-        None,
-    )
-
-    visible_members = [
-        member
-        for member in group.lede
-        if member.SAA_Status in ("HANGEND", "AANVAAR")
-    ]
-
-    reserved_count = sum(
-        1
-        for member in group.lede
-        if member.Gebruiker_ID != group.Bestuurder_ID
-        and member.SAA_Status in ("HANGEND", "AANVAAR")
-    )
-
-    return {
-        "groep_id": group.Groep_ID,
-        "naam": group.SAA_Naam,
-        "vertrekpunt": group.SAA_Vertrekpunt,
-        "bestemming": group.SAA_Bestemming,
-        "vertrek_tyd": group.SAA_Vertrek_Tyd.isoformat(),
-        "sitplekke": group.SAA_Sitplekke,
-        "beskikbare_sitplekke": max(group.SAA_Sitplekke - reserved_count, 0),
-        "status": group.SAA_Status,
-        "is_bestuurder": group.Bestuurder_ID == viewer_id,
-        "my_status": "AANVAAR" if group.Bestuurder_ID == viewer_id else (
-            my_member.SAA_Status if my_member else None
-        ),
-        "bestuurder": _user_dict(
-            group.bestuurder,
-            include_contact=viewer_accepted,
-        ),
-        "lede": [
-            {
-                "status": member.SAA_Status,
-                "is_bestuurder": member.Gebruiker_ID == group.Bestuurder_ID,
-                "gebruiker": _user_dict(
-                    member.gebruiker,
-                    include_contact=viewer_accepted,
-                ),
-            }
-            for member in visible_members
-        ],
-    }
-
-
-def _active_group_for_user(
-    db: Session,
-    user_id: int,
-    *,
-    exclude_group_id: Optional[int] = None,
-) -> Optional[models.SaamryGroep]:
-    query = (
-        db.query(models.SaamryGroep)
-        .outerjoin(
-            models.SaamryGroepLid,
-            models.SaamryGroepLid.Groep_ID == models.SaamryGroep.Groep_ID,
-        )
-        .filter(
-            models.SaamryGroep.SAA_Status == "AKTIEF",
-            or_(
-                models.SaamryGroep.Bestuurder_ID == user_id,
-                and_(
-                    models.SaamryGroepLid.Gebruiker_ID == user_id,
-                    models.SaamryGroepLid.SAA_Status == "AANVAAR",
-                ),
-            ),
-        )
-    )
-
-    if exclude_group_id is not None:
-        query = query.filter(models.SaamryGroep.Groep_ID != exclude_group_id)
-
-    return query.first()
+def _require_group_member(
+    group: models.SaamryGroep,
+    viewer_id: int,
+) -> None:
+    if not _viewer_is_accepted_member(group, viewer_id):
+        raise HTTPException(status_code=403, detail="Jy behoort nie aan hierdie Saamrygroep nie")
 
 
 def _get_group_or_404(db: Session, group_id: int) -> models.SaamryGroep:
@@ -228,6 +176,184 @@ def _get_group_or_404(db: Session, group_id: int) -> models.SaamryGroep:
     if not group:
         raise HTTPException(status_code=404, detail="Saamrygroep is nie gevind nie")
     return group
+
+
+def _accepted_passenger_count(group: models.SaamryGroep) -> int:
+    return sum(
+        1
+        for member in group.lede
+        if member.Gebruiker_ID != group.Bestuurder_ID
+        and member.SAA_Status == "AANVAAR"
+    )
+
+
+def _active_event_for_group(db: Session, group_id: int) -> Optional[models.SaamryEvent]:
+    return (
+        db.query(models.SaamryEvent)
+        .filter(
+            models.SaamryEvent.Groep_ID == group_id,
+            models.SaamryEvent.SAA_Status == "AKTIEF",
+        )
+        .order_by(models.SaamryEvent.Event_ID.desc())
+        .first()
+    )
+
+
+def _active_event_for_driver(db: Session, driver_id: int) -> Optional[models.SaamryEvent]:
+    return (
+        db.query(models.SaamryEvent)
+        .filter(
+            models.SaamryEvent.Bestuurder_ID == driver_id,
+            models.SaamryEvent.SAA_Status == "AKTIEF",
+        )
+        .order_by(models.SaamryEvent.Event_ID.desc())
+        .first()
+    )
+
+
+def _active_event_for_user(db: Session, user_id: int) -> Optional[models.SaamryEvent]:
+    return (
+        db.query(models.SaamryEvent)
+        .join(
+            models.SaamryEventLid,
+            models.SaamryEventLid.Event_ID == models.SaamryEvent.Event_ID,
+        )
+        .filter(
+            models.SaamryEventLid.Gebruiker_ID == user_id,
+            models.SaamryEvent.SAA_Status == "AKTIEF",
+        )
+        .order_by(models.SaamryEvent.Event_ID.desc())
+        .first()
+    )
+
+
+def _event_dict(event: models.SaamryEvent, viewer_id: int) -> dict:
+    members = []
+    for event_member in event.lede:
+        if event_member.gebruiker is None:
+            continue
+        members.append(
+            {
+                "is_bestuurder": event_member.Gebruiker_ID == event.Bestuurder_ID,
+                "gebruiker": _user_dict(event_member.gebruiker, include_contact=True),
+            }
+        )
+    members.sort(
+        key=lambda item: (
+            not item["is_bestuurder"],
+            item["gebruiker"]["volle_naam"].lower(),
+        )
+    )
+    return {
+        "event_id": event.Event_ID,
+        "groep_id": event.Groep_ID,
+        "bestuurder_id": event.Bestuurder_ID,
+        "status": event.SAA_Status,
+        "is_bestuurder": event.Bestuurder_ID == viewer_id,
+        "geskep_op": event.Geskep_Op.isoformat() if event.Geskep_Op else None,
+        "voltooi_op": event.Voltooi_Op.isoformat() if event.Voltooi_Op else None,
+        "voltooi_rigting": event.Voltooi_Rigting,
+        "voltooi_kampus_id": event.Voltooi_Kampus_ID,
+        "lede": members,
+    }
+
+
+def _read_message_ids_for_user(
+    db: Session,
+    message_ids: list[int],
+    user_id: int,
+) -> set[int]:
+    if not message_ids:
+        return set()
+    rows = (
+        db.query(models.SaamryBoodskapGelees.Boodskap_ID)
+        .filter(
+            models.SaamryBoodskapGelees.Gebruiker_ID == user_id,
+            models.SaamryBoodskapGelees.Boodskap_ID.in_(message_ids),
+        )
+        .all()
+    )
+    return {int(row[0]) for row in rows}
+
+
+def _unread_private_count(db: Session, viewer_id: int, friend_id: int) -> int:
+    rows = (
+        db.query(models.SaamryBoodskap.Boodskap_ID)
+        .filter(
+            models.SaamryBoodskap.Groep_ID.is_(None),
+            models.SaamryBoodskap.Stuurder_ID == friend_id,
+            models.SaamryBoodskap.Ontvanger_ID == viewer_id,
+        )
+        .all()
+    )
+    ids = [int(row[0]) for row in rows]
+    read_ids = _read_message_ids_for_user(db, ids, viewer_id)
+    return len([message_id for message_id in ids if message_id not in read_ids])
+
+
+def _unread_group_count(db: Session, viewer_id: int, group_id: int) -> int:
+    rows = (
+        db.query(models.SaamryBoodskap.Boodskap_ID)
+        .filter(
+            models.SaamryBoodskap.Groep_ID == group_id,
+            models.SaamryBoodskap.Stuurder_ID != viewer_id,
+        )
+        .all()
+    )
+    ids = [int(row[0]) for row in rows]
+    read_ids = _read_message_ids_for_user(db, ids, viewer_id)
+    return len([message_id for message_id in ids if message_id not in read_ids])
+
+
+def _group_dict(db: Session, group: models.SaamryGroep, viewer_id: int) -> dict:
+    viewer_accepted = _viewer_is_accepted_member(group, viewer_id)
+    my_member = next(
+        (member for member in group.lede if member.Gebruiker_ID == viewer_id),
+        None,
+    )
+    visible_members = [
+        member
+        for member in group.lede
+        if member.SAA_Status in ("HANGEND", "AANVAAR")
+    ]
+    reserved_count = sum(
+        1
+        for member in group.lede
+        if member.Gebruiker_ID != group.Bestuurder_ID
+        and member.SAA_Status in ("HANGEND", "AANVAAR")
+    )
+    active_event = _active_event_for_group(db, group.Groep_ID) if viewer_accepted else None
+
+    return {
+        "groep_id": group.Groep_ID,
+        "naam": group.SAA_Naam,
+        # Legacy velde word teruggestuur vir ou kliënte, maar is nie meer die rit nie.
+        "vertrekpunt": group.SAA_Vertrekpunt,
+        "bestemming": group.SAA_Bestemming,
+        "vertrek_tyd": group.SAA_Vertrek_Tyd.isoformat() if group.SAA_Vertrek_Tyd else None,
+        "sitplekke": group.SAA_Sitplekke,
+        "beskikbare_sitplekke": max(group.SAA_Sitplekke - reserved_count, 0),
+        "status": group.SAA_Status,
+        "is_bestuurder": group.Bestuurder_ID == viewer_id,
+        "my_status": "AANVAAR" if group.Bestuurder_ID == viewer_id else (
+            my_member.SAA_Status if my_member else None
+        ),
+        "bestuurder": _user_dict(group.bestuurder, include_contact=viewer_accepted),
+        "lede": [
+            {
+                "status": member.SAA_Status,
+                "is_bestuurder": member.Gebruiker_ID == group.Bestuurder_ID,
+                "gebruiker": _user_dict(
+                    member.gebruiker,
+                    include_contact=viewer_accepted,
+                ),
+            }
+            for member in visible_members
+            if member.gebruiker is not None
+        ],
+        "aktiewe_event": _event_dict(active_event, viewer_id) if active_event else None,
+        "ongelees": _unread_group_count(db, viewer_id, group.Groep_ID) if viewer_accepted else 0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -257,20 +383,22 @@ def get_saamry_status(
     friends = []
     incoming_requests = []
     outgoing_requests = []
-
     for friendship in friendships:
         other = (
             friendship.ontvanger
             if friendship.Versoeker_ID == user_id
             else friendship.versoeker
         )
-
         item = {
             "vriendskap_id": friendship.Vriendskap_ID,
             "status": friendship.SAA_Status,
             "gebruiker": _user_dict(other),
+            "ongelees": (
+                _unread_private_count(db, user_id, other.Gebruiker_ID)
+                if friendship.SAA_Status == "AANVAAR"
+                else 0
+            ),
         }
-
         if friendship.SAA_Status == "AANVAAR":
             friends.append(item)
         elif friendship.SAA_Status == "HANGEND":
@@ -279,7 +407,20 @@ def get_saamry_status(
             else:
                 outgoing_requests.append(item)
 
-    my_group = _active_group_for_user(db, user_id)
+    groups = (
+        db.query(models.SaamryGroep)
+        .join(
+            models.SaamryGroepLid,
+            models.SaamryGroepLid.Groep_ID == models.SaamryGroep.Groep_ID,
+        )
+        .filter(
+            models.SaamryGroepLid.Gebruiker_ID == user_id,
+            models.SaamryGroepLid.SAA_Status == "AANVAAR",
+            models.SaamryGroep.SAA_Status == "AKTIEF",
+        )
+        .order_by(models.SaamryGroep.Geskep_Op.desc())
+        .all()
+    )
 
     group_invite_members = (
         db.query(models.SaamryGroepLid)
@@ -293,6 +434,7 @@ def get_saamry_status(
         .all()
     )
 
+    group_dicts = [_group_dict(db, group, user_id) for group in groups]
     return schemas.APIResponse(
         sukses=True,
         data={
@@ -300,10 +442,12 @@ def get_saamry_status(
             "incoming_requests": incoming_requests,
             "outgoing_requests": outgoing_requests,
             "group_invites": [
-                _group_dict(member.groep, user_id)
+                _group_dict(db, member.groep, user_id)
                 for member in group_invite_members
             ],
-            "my_group": _group_dict(my_group, user_id) if my_group else None,
+            "groups": group_dicts,
+            # Backwards compatibility vir die ou enkel-groep Flutter DTO.
+            "my_group": group_dicts[0] if group_dicts else None,
         },
     )
 
@@ -328,7 +472,10 @@ def search_saamry_users(
         .filter(
             models.Gebruikers.Is_Aktief.is_(True),
             models.Gebruikers.Gebruiker_ID != current_user.Gebruiker_ID,
-            or_(models.Student.Gebruiker_ID.isnot(None), models.Personeel.Gebruiker_ID.isnot(None)),
+            or_(
+                models.Student.Gebruiker_ID.isnot(None),
+                models.Personeel.Gebruiker_ID.isnot(None),
+            ),
             or_(
                 models.Gebruikers.GEB_Naam.ilike(f"%{clean}%"),
                 models.Gebruikers.GEB_Van.ilike(f"%{clean}%"),
@@ -367,7 +514,6 @@ def send_friend_request(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
     if payload.ontvanger_id == current_user.Gebruiker_ID:
         raise HTTPException(status_code=400, detail="Jy kan nie jouself byvoeg nie")
 
@@ -381,9 +527,7 @@ def send_friend_request(
     )
     if not receiver:
         raise HTTPException(status_code=404, detail="Gebruiker is nie gevind nie")
-
-    receiver_is_eligible = receiver.student is not None or receiver.personeel is not None
-    if not receiver_is_eligible:
+    if receiver.student is None and receiver.personeel is None:
         raise HTTPException(status_code=400, detail="Gebruiker kan nie Saamry gebruik nie")
 
     friendship = _friendship_between(
@@ -391,14 +535,11 @@ def send_friend_request(
         current_user.Gebruiker_ID,
         payload.ontvanger_id,
     )
-
     if friendship:
         if friendship.SAA_Status == "AANVAAR":
             raise HTTPException(status_code=409, detail="Hierdie gebruiker is reeds jou vriend")
         if friendship.SAA_Status == "HANGEND":
             raise HTTPException(status_code=409, detail="Daar is reeds 'n hangende versoek")
-
-        # Laat 'n voorheen geweierde versoek weer gebruik word.
         friendship.Versoeker_ID = current_user.Gebruiker_ID
         friendship.Ontvanger_ID = payload.ontvanger_id
         friendship.SAA_Status = "HANGEND"
@@ -413,7 +554,6 @@ def send_friend_request(
 
     db.commit()
     db.refresh(friendship)
-
     return schemas.APIResponse(
         sukses=True,
         data={
@@ -430,7 +570,6 @@ def accept_friend_request(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
     friendship = (
         db.query(models.SaamryVriendskap)
         .filter(models.SaamryVriendskap.Vriendskap_ID == vriendskap_id)
@@ -442,11 +581,9 @@ def accept_friend_request(
         raise HTTPException(status_code=403, detail="Jy mag nie hierdie versoek aanvaar nie")
     if friendship.SAA_Status != "HANGEND":
         raise HTTPException(status_code=409, detail="Hierdie versoek is nie meer hangend nie")
-
     friendship.SAA_Status = "AANVAAR"
     friendship.Gewysig_Op = datetime.utcnow()
     db.commit()
-
     return schemas.APIResponse(sukses=True, data={"boodskap": "Vriend aanvaar"})
 
 
@@ -457,7 +594,6 @@ def decline_friend_request(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
     friendship = (
         db.query(models.SaamryVriendskap)
         .filter(models.SaamryVriendskap.Vriendskap_ID == vriendskap_id)
@@ -467,11 +603,9 @@ def decline_friend_request(
         raise HTTPException(status_code=404, detail="Vriendskapversoek is nie gevind nie")
     if friendship.Ontvanger_ID != current_user.Gebruiker_ID:
         raise HTTPException(status_code=403, detail="Jy mag nie hierdie versoek weier nie")
-
     friendship.SAA_Status = "GEWEIER"
     friendship.Gewysig_Op = datetime.utcnow()
     db.commit()
-
     return schemas.APIResponse(sukses=True, data={"boodskap": "Versoek geweier"})
 
 
@@ -482,18 +616,16 @@ def remove_friend(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
     friendship = _friendship_between(db, current_user.Gebruiker_ID, vriend_id)
     if not friendship or friendship.SAA_Status != "AANVAAR":
         raise HTTPException(status_code=404, detail="Vriendskap is nie gevind nie")
-
     db.delete(friendship)
     db.commit()
     return schemas.APIResponse(sukses=True, data={"boodskap": "Vriend verwyder"})
 
 
 # ---------------------------------------------------------------------------
-# Groepe
+# Permanente groepe
 # ---------------------------------------------------------------------------
 
 @router.post("/groepe", status_code=status.HTTP_201_CREATED)
@@ -503,32 +635,23 @@ def create_group(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
-    if _active_group_for_user(db, current_user.Gebruiker_ID):
-        raise HTTPException(
-            status_code=409,
-            detail="Jy behoort reeds aan 'n aktiewe saamrygroep",
-        )
-
-    if payload.sitplekke < 1 or payload.sitplekke > 8:
-        raise HTTPException(status_code=400, detail="Sitplekke moet tussen 1 en 8 wees")
-
     group_name = (payload.naam or "").strip()
     if not group_name:
-        group_name = f"{payload.vertrekpunt.strip()} → {payload.bestemming.strip()}"
+        raise HTTPException(status_code=400, detail="Gee die permanente Saamrygroep 'n naam")
 
+    # Die bestaande DB-kolomme bly vir backwards compatibility, maar 'n permanente
+    # groep se ritbesonderhede leef voortaan in SaamryEvent, nie op die groep nie.
     group = models.SaamryGroep(
         Bestuurder_ID=current_user.Gebruiker_ID,
         SAA_Naam=group_name,
-        SAA_Vertrekpunt=payload.vertrekpunt.strip(),
-        SAA_Bestemming=payload.bestemming.strip(),
-        SAA_Vertrek_Tyd=payload.vertrek_tyd,
+        SAA_Vertrekpunt=(payload.vertrekpunt or "-").strip() or "-",
+        SAA_Bestemming=(payload.bestemming or "-").strip() or "-",
+        SAA_Vertrek_Tyd=payload.vertrek_tyd or datetime.utcnow(),
         SAA_Sitplekke=payload.sitplekke,
         SAA_Status="AKTIEF",
     )
     db.add(group)
     db.flush()
-
     db.add(
         models.SaamryGroepLid(
             Groep_ID=group.Groep_ID,
@@ -537,11 +660,12 @@ def create_group(
             SAA_Status="AANVAAR",
         )
     )
-
     db.commit()
     db.refresh(group)
-
-    return schemas.APIResponse(sukses=True, data=_group_dict(group, current_user.Gebruiker_ID))
+    return schemas.APIResponse(
+        sukses=True,
+        data=_group_dict(db, group, current_user.Gebruiker_ID),
+    )
 
 
 @router.post("/groepe/{groep_id}/nooi", status_code=status.HTTP_201_CREATED)
@@ -553,13 +677,12 @@ def invite_friend_to_group(
 ):
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
-
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
-        raise HTTPException(status_code=403, detail="Slegs die bestuurder kan vriende nooi")
+        raise HTTPException(status_code=403, detail="Slegs die Driver/Admin kan vriende nooi")
     if group.SAA_Status != "AKTIEF":
         raise HTTPException(status_code=409, detail="Hierdie groep is nie meer aktief nie")
     if payload.gebruiker_id == current_user.Gebruiker_ID:
-        raise HTTPException(status_code=400, detail="Jy is reeds die bestuurder")
+        raise HTTPException(status_code=400, detail="Jy is reeds die Driver/Admin")
 
     friendship = _friendship_between(
         db,
@@ -587,7 +710,7 @@ def invite_friend_to_group(
         and member.SAA_Status in ("HANGEND", "AANVAAR")
     )
     if occupied_or_pending >= group.SAA_Sitplekke:
-        raise HTTPException(status_code=409, detail="Daar is nie meer beskikbare sitplekke nie")
+        raise HTTPException(status_code=409, detail="Die permanente groep is reeds vol")
 
     if existing_member:
         existing_member.SAA_Status = "HANGEND"
@@ -602,7 +725,6 @@ def invite_friend_to_group(
                 SAA_Status="HANGEND",
             )
         )
-
     db.commit()
     return schemas.APIResponse(sukses=True, data={"boodskap": "Saamry-uitnodiging gestuur"})
 
@@ -615,7 +737,6 @@ def accept_group_invite(
 ):
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
-
     member = (
         db.query(models.SaamryGroepLid)
         .filter(
@@ -628,21 +749,41 @@ def accept_group_invite(
         raise HTTPException(status_code=404, detail="Uitnodiging is nie gevind nie")
     if group.SAA_Status != "AKTIEF":
         raise HTTPException(status_code=409, detail="Hierdie groep is nie meer aktief nie")
-    if _active_group_for_user(
-        db,
-        current_user.Gebruiker_ID,
-        exclude_group_id=groep_id,
-    ):
-        raise HTTPException(status_code=409, detail="Jy behoort reeds aan 'n ander aktiewe groep")
     if _accepted_passenger_count(group) >= group.SAA_Sitplekke:
         raise HTTPException(status_code=409, detail="Die groep is reeds vol")
-
     member.SAA_Status = "AANVAAR"
     member.Gewysig_Op = datetime.utcnow()
-    db.commit()
 
+    # 'n Nuwe groepslid moet nie ou groepchat-boodskappe as ongelees erf nie.
+    existing_messages = (
+        db.query(models.SaamryBoodskap)
+        .filter(models.SaamryBoodskap.Groep_ID == groep_id)
+        .all()
+    )
+    existing_read = _read_message_ids_for_user(
+        db,
+        [message.Boodskap_ID for message in existing_messages],
+        current_user.Gebruiker_ID,
+    )
+    for message in existing_messages:
+        if (
+            message.Stuurder_ID == current_user.Gebruiker_ID
+            or message.Boodskap_ID in existing_read
+        ):
+            continue
+        db.add(
+            models.SaamryBoodskapGelees(
+                Boodskap_ID=message.Boodskap_ID,
+                Gebruiker_ID=current_user.Gebruiker_ID,
+            )
+        )
+
+    db.commit()
     db.refresh(group)
-    return schemas.APIResponse(sukses=True, data=_group_dict(group, current_user.Gebruiker_ID))
+    return schemas.APIResponse(
+        sukses=True,
+        data=_group_dict(db, group, current_user.Gebruiker_ID),
+    )
 
 
 @router.post("/groepe/{groep_id}/weier")
@@ -652,7 +793,6 @@ def decline_group_invite(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
-
     member = (
         db.query(models.SaamryGroepLid)
         .filter(
@@ -663,12 +803,82 @@ def decline_group_invite(
     )
     if not member or member.SAA_Status != "HANGEND":
         raise HTTPException(status_code=404, detail="Uitnodiging is nie gevind nie")
-
     member.SAA_Status = "GEWEIER"
     member.Gewysig_Op = datetime.utcnow()
     db.commit()
-
     return schemas.APIResponse(sukses=True, data={"boodskap": "Uitnodiging geweier"})
+
+
+@router.post("/groepe/{groep_id}/bestuurder")
+def transfer_driver_admin(
+    groep_id: int,
+    payload: schemas.SaamryBestuurderOordragRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    group = _get_group_or_404(db, groep_id)
+    if group.Bestuurder_ID != current_user.Gebruiker_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="Net die huidige Driver/Admin kan die rol oorgee",
+        )
+    if payload.nuwe_bestuurder_id == current_user.Gebruiker_ID:
+        raise HTTPException(status_code=400, detail="Jy is reeds die Driver/Admin")
+
+    target_member = (
+        db.query(models.SaamryGroepLid)
+        .filter(
+            models.SaamryGroepLid.Groep_ID == groep_id,
+            models.SaamryGroepLid.Gebruiker_ID == payload.nuwe_bestuurder_id,
+            models.SaamryGroepLid.SAA_Status == "AANVAAR",
+        )
+        .first()
+    )
+    if target_member is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Die nuwe Driver/Admin moet 'n aanvaarde lid van die groep wees",
+        )
+
+    event = _active_event_for_group(db, groep_id)
+    if event is not None:
+        other_event = _active_event_for_driver(db, payload.nuwe_bestuurder_id)
+        if other_event is not None and other_event.Event_ID != event.Event_ID:
+            raise HTTPException(
+                status_code=409,
+                detail="Hierdie lid is reeds Driver van 'n ander aktiewe Saamry-event",
+            )
+        # Die huidige aktiewe event volg die nuwe Driver/Admin.
+        event.Bestuurder_ID = payload.nuwe_bestuurder_id
+        event.Gewysig_Op = datetime.utcnow()
+        event_member = (
+            db.query(models.SaamryEventLid)
+            .filter(
+                models.SaamryEventLid.Event_ID == event.Event_ID,
+                models.SaamryEventLid.Gebruiker_ID == payload.nuwe_bestuurder_id,
+            )
+            .first()
+        )
+        if event_member is None:
+            db.add(
+                models.SaamryEventLid(
+                    Event_ID=event.Event_ID,
+                    Gebruiker_ID=payload.nuwe_bestuurder_id,
+                )
+            )
+
+    group.Bestuurder_ID = payload.nuwe_bestuurder_id
+    group.Gewysig_Op = datetime.utcnow()
+    db.commit()
+    db.refresh(group)
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "boodskap": "Driver/Admin is suksesvol oorgedra",
+            "groep": _group_dict(db, group, current_user.Gebruiker_ID),
+        },
+    )
 
 
 @router.post("/groepe/{groep_id}/sluit")
@@ -679,17 +889,21 @@ def close_group(
 ):
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
-
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
-        raise HTTPException(status_code=403, detail="Slegs die bestuurder kan die groep sluit")
+        raise HTTPException(status_code=403, detail="Slegs die Driver/Admin kan die groep sluit")
     if group.SAA_Status != "AKTIEF":
         raise HTTPException(status_code=409, detail="Hierdie groep is reeds gesluit")
+
+    event = _active_event_for_group(db, groep_id)
+    if event is not None:
+        event.SAA_Status = "GEKANSELLEER"
+        event.Voltooi_Op = datetime.utcnow()
+        event.Gewysig_Op = datetime.utcnow()
 
     group.SAA_Status = "GESLUIT"
     group.Gewysig_Op = datetime.utcnow()
     db.commit()
-
-    return schemas.APIResponse(sukses=True, data={"boodskap": "Saamrygroep is gesluit"})
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Permanente Saamrygroep is gesluit"})
 
 
 @router.post("/groepe/{groep_id}/verlaat")
@@ -700,10 +914,11 @@ def leave_group(
 ):
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
-
     if group.Bestuurder_ID == current_user.Gebruiker_ID:
-        raise HTTPException(status_code=400, detail="Die bestuurder moet die groep sluit")
-
+        raise HTTPException(
+            status_code=400,
+            detail="Gee eers die Driver/Admin-rol aan 'n ander lid oor of sluit die groep",
+        )
     member = (
         db.query(models.SaamryGroepLid)
         .filter(
@@ -716,29 +931,447 @@ def leave_group(
     if not member:
         raise HTTPException(status_code=404, detail="Jy behoort nie aan hierdie groep nie")
 
+    event = _active_event_for_group(db, groep_id)
+    if event is not None:
+        event_member = (
+            db.query(models.SaamryEventLid)
+            .filter(
+                models.SaamryEventLid.Event_ID == event.Event_ID,
+                models.SaamryEventLid.Gebruiker_ID == current_user.Gebruiker_ID,
+            )
+            .first()
+        )
+        if event_member is not None:
+            db.delete(event_member)
+            db.flush()
+            remaining = (
+                db.query(models.SaamryEventLid)
+                .filter(models.SaamryEventLid.Event_ID == event.Event_ID)
+                .count()
+            )
+            if remaining <= 1:
+                event.SAA_Status = "GEKANSELLEER"
+                event.Voltooi_Op = datetime.utcnow()
+                event.Gewysig_Op = datetime.utcnow()
+
     member.SAA_Status = "VERLAAT"
     member.Gewysig_Op = datetime.utcnow()
     db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Jy het die permanente groep verlaat"})
 
-    return schemas.APIResponse(sukses=True, data={"boodskap": "Jy het die groep verlaat"})
 
 # ---------------------------------------------------------------------------
-# Sekuriteitshek — bestuurder skandeer vir die hele voertuig
+# Eenmalige Saamry-events
 # ---------------------------------------------------------------------------
 
-def _require_security_guard(
-    _allowed: bool = Depends(auth.check_sekuriteit),
+@router.post("/events", status_code=status.HTTP_201_CREATED)
+def create_saamry_event(
+    payload: schemas.SaamryEventCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    group = _get_group_or_404(db, payload.groep_id)
+    if group.SAA_Status != "AKTIEF":
+        raise HTTPException(status_code=409, detail="Hierdie permanente groep is nie aktief nie")
+    if group.Bestuurder_ID != current_user.Gebruiker_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="Net die huidige Driver/Admin kan 'n Saamry-event skep",
+        )
+    if _active_event_for_group(db, group.Groep_ID) is not None:
+        raise HTTPException(status_code=409, detail="Hierdie groep het reeds 'n aktiewe Saamry-event")
+    if _active_event_for_driver(db, current_user.Gebruiker_ID) is not None:
+        raise HTTPException(status_code=409, detail="Jy is reeds Driver van 'n ander aktiewe Saamry-event")
+
+    accepted_member_ids = {
+        member.Gebruiker_ID
+        for member in group.lede
+        if member.SAA_Status == "AANVAAR"
+    }
+    accepted_member_ids.add(group.Bestuurder_ID)
+
+    selected_ids = list(dict.fromkeys(int(user_id) for user_id in payload.gebruiker_ids))
+    selected_ids = [user_id for user_id in selected_ids if user_id != group.Bestuurder_ID]
+    if not selected_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Kies minstens een passasier vir die Saamry-event",
+        )
+    invalid = [user_id for user_id in selected_ids if user_id not in accepted_member_ids]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail="Een of meer gekose passasiers is nie aanvaarde lede van hierdie groep nie",
+        )
+
+    for user_id in [group.Bestuurder_ID, *selected_ids]:
+        existing_event = _active_event_for_user(db, user_id)
+        if existing_event is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Een van die gekose persone is reeds deel van 'n ander aktiewe Saamry-event",
+            )
+
+    event = models.SaamryEvent(
+        Groep_ID=group.Groep_ID,
+        Bestuurder_ID=group.Bestuurder_ID,
+        SAA_Status="AKTIEF",
+    )
+    db.add(event)
+    db.flush()
+    for user_id in [group.Bestuurder_ID, *selected_ids]:
+        db.add(models.SaamryEventLid(Event_ID=event.Event_ID, Gebruiker_ID=user_id))
+    db.commit()
+    db.refresh(event)
+    return schemas.APIResponse(sukses=True, data=_event_dict(event, current_user.Gebruiker_ID))
+
+
+@router.post("/events/{event_id}/kanselleer")
+def cancel_saamry_event(
+    event_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    event = db.query(models.SaamryEvent).filter(models.SaamryEvent.Event_ID == event_id).first()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Saamry-event is nie gevind nie")
+    group = _get_group_or_404(db, event.Groep_ID)
+    if group.Bestuurder_ID != current_user.Gebruiker_ID:
+        raise HTTPException(status_code=403, detail="Net die Driver/Admin kan die event kanselleer")
+    if event.SAA_Status != "AKTIEF":
+        raise HTTPException(status_code=409, detail="Hierdie event is nie meer aktief nie")
+    event.SAA_Status = "GEKANSELLEER"
+    event.Voltooi_Op = datetime.utcnow()
+    event.Gewysig_Op = datetime.utcnow()
+    db.commit()
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Saamry-event is gekanselleer"})
+
+
+# ---------------------------------------------------------------------------
+# Chat helpers + REST
+# ---------------------------------------------------------------------------
+
+def _message_dict(message: models.SaamryBoodskap, viewer_id: int) -> dict:
+    return {
+        "boodskap_id": message.Boodskap_ID,
+        "stuurder_id": message.Stuurder_ID,
+        "ontvanger_id": message.Ontvanger_ID,
+        "groep_id": message.Groep_ID,
+        "boodskap": message.SAA_Boodskap,
+        "geskep_op": message.Geskep_Op.isoformat() if message.Geskep_Op else None,
+        "is_myne": message.Stuurder_ID == viewer_id,
+        "stuurder": _user_dict(message.stuurder) if message.stuurder else None,
+    }
+
+
+def _mark_messages_read(db: Session, messages: list[models.SaamryBoodskap], viewer_id: int) -> None:
+    incoming = [message for message in messages if message.Stuurder_ID != viewer_id]
+    if not incoming:
+        return
+    message_ids = [message.Boodskap_ID for message in incoming]
+    existing = _read_message_ids_for_user(db, message_ids, viewer_id)
+    changed = False
+    for message in incoming:
+        if message.Boodskap_ID in existing:
+            continue
+        db.add(
+            models.SaamryBoodskapGelees(
+                Boodskap_ID=message.Boodskap_ID,
+                Gebruiker_ID=viewer_id,
+            )
+        )
+        changed = True
+    if changed:
+        db.commit()
+
+
+def _private_messages(db: Session, viewer_id: int, friend_id: int, limit: int = 200):
+    rows = (
+        db.query(models.SaamryBoodskap)
+        .filter(
+            models.SaamryBoodskap.Groep_ID.is_(None),
+            or_(
+                and_(
+                    models.SaamryBoodskap.Stuurder_ID == viewer_id,
+                    models.SaamryBoodskap.Ontvanger_ID == friend_id,
+                ),
+                and_(
+                    models.SaamryBoodskap.Stuurder_ID == friend_id,
+                    models.SaamryBoodskap.Ontvanger_ID == viewer_id,
+                ),
+            ),
+        )
+        .order_by(models.SaamryBoodskap.Boodskap_ID.desc())
+        .limit(limit)
+        .all()
+    )
+    return list(reversed(rows))
+
+
+def _group_messages(db: Session, group_id: int, limit: int = 200):
+    rows = (
+        db.query(models.SaamryBoodskap)
+        .filter(models.SaamryBoodskap.Groep_ID == group_id)
+        .order_by(models.SaamryBoodskap.Boodskap_ID.desc())
+        .limit(limit)
+        .all()
+    )
+    return list(reversed(rows))
+
+
+@router.get("/chat/vriend/{friend_id}")
+def get_friend_chat(
+    friend_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    _require_accepted_friend(db, current_user.Gebruiker_ID, friend_id)
+    friend = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == friend_id).first()
+    if friend is None:
+        raise HTTPException(status_code=404, detail="Vriend is nie gevind nie")
+    messages = _private_messages(db, current_user.Gebruiker_ID, friend_id)
+    _mark_messages_read(db, messages, current_user.Gebruiker_ID)
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "tipe": "VRIEND",
+            "teiken": _user_dict(friend, include_contact=True),
+            "boodskappe": [_message_dict(message, current_user.Gebruiker_ID) for message in messages],
+        },
+    )
+
+
+@router.post("/chat/vriend/{friend_id}", status_code=status.HTTP_201_CREATED)
+def send_friend_chat(
+    friend_id: int,
+    payload: schemas.SaamryBoodskapCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    _require_accepted_friend(db, current_user.Gebruiker_ID, friend_id)
+    clean = payload.boodskap.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="Boodskap mag nie leeg wees nie")
+    message = models.SaamryBoodskap(
+        Stuurder_ID=current_user.Gebruiker_ID,
+        Ontvanger_ID=friend_id,
+        Groep_ID=None,
+        SAA_Boodskap=clean,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return schemas.APIResponse(sukses=True, data=_message_dict(message, current_user.Gebruiker_ID))
+
+
+@router.get("/chat/groep/{group_id}")
+def get_group_chat(
+    group_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    group = _get_group_or_404(db, group_id)
+    _require_group_member(group, current_user.Gebruiker_ID)
+    messages = _group_messages(db, group_id)
+    _mark_messages_read(db, messages, current_user.Gebruiker_ID)
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "tipe": "GROEP",
+            "teiken": {"groep_id": group.Groep_ID, "naam": group.SAA_Naam},
+            "boodskappe": [_message_dict(message, current_user.Gebruiker_ID) for message in messages],
+        },
+    )
+
+
+@router.post("/chat/groep/{group_id}", status_code=status.HTTP_201_CREATED)
+def send_group_chat(
+    group_id: int,
+    payload: schemas.SaamryBoodskapCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    group = _get_group_or_404(db, group_id)
+    _require_group_member(group, current_user.Gebruiker_ID)
+    clean = payload.boodskap.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="Boodskap mag nie leeg wees nie")
+    message = models.SaamryBoodskap(
+        Stuurder_ID=current_user.Gebruiker_ID,
+        Ontvanger_ID=None,
+        Groep_ID=group_id,
+        SAA_Boodskap=clean,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return schemas.APIResponse(sukses=True, data=_message_dict(message, current_user.Gebruiker_ID))
+
+
+# ---------------------------------------------------------------------------
+# Chat WebSockets — PostgreSQL bly die gedeelde bron oor workers/devices
+# ---------------------------------------------------------------------------
+
+def _extract_ws_token(websocket: WebSocket) -> Optional[str]:
+    header = websocket.headers.get("authorization") or ""
+    if header.lower().startswith("bearer "):
+        return header.split(" ", 1)[1].strip()
+    token = websocket.query_params.get("token")
+    return token.strip() if token else None
+
+
+def _authenticate_ws(websocket: WebSocket, db: Session) -> Optional[models.Gebruikers]:
+    if getattr(auth, "DISABLE_AUTH", False):
+        fallback = getattr(auth, "_dev_fallback_user", None)
+        return fallback(db) if callable(fallback) else db.query(models.Gebruikers).first()
+    token = _extract_ws_token(websocket)
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        return (
+            db.query(models.Gebruikers)
+            .filter(
+                models.Gebruikers.Gebruiker_ID == int(user_id),
+                models.Gebruikers.Is_Aktief.is_(True),
+            )
+            .first()
+        )
+    except (JWTError, TypeError, ValueError):
+        return None
+
+
+def _friend_chat_snapshot(viewer_id: int, friend_id: int) -> dict[str, Any]:
+    db = database.SessionLocal()
+    try:
+        _require_accepted_friend(db, viewer_id, friend_id)
+        messages = _private_messages(db, viewer_id, friend_id)
+        _mark_messages_read(db, messages, viewer_id)
+        return {
+            "tipe": "SAAMRY_CHAT",
+            "konteks": "VRIEND",
+            "boodskappe": [_message_dict(message, viewer_id) for message in messages],
+        }
+    finally:
+        db.close()
+
+
+def _group_chat_snapshot(viewer_id: int, group_id: int) -> dict[str, Any]:
+    db = database.SessionLocal()
+    try:
+        group = _get_group_or_404(db, group_id)
+        _require_group_member(group, viewer_id)
+        messages = _group_messages(db, group_id)
+        _mark_messages_read(db, messages, viewer_id)
+        return {
+            "tipe": "SAAMRY_CHAT",
+            "konteks": "GROEP",
+            "boodskappe": [_message_dict(message, viewer_id) for message in messages],
+        }
+    finally:
+        db.close()
+
+
+def _chat_signature(snapshot: dict[str, Any]) -> str:
+    return json.dumps(snapshot, sort_keys=True, ensure_ascii=False, default=str)
+
+
+async def _run_chat_socket(
+    websocket: WebSocket,
+    viewer_id: int,
+    snapshot_builder,
 ) -> None:
-    # auth.check_sekuriteit doen die werklike roltoets.
+    await websocket.accept()
+    last_signature: Optional[str] = None
+    try:
+        while True:
+            snapshot = await asyncio.to_thread(snapshot_builder)
+            signature = _chat_signature(snapshot)
+            if signature != last_signature:
+                await websocket.send_json(snapshot)
+                last_signature = signature
+            await asyncio.sleep(CHAT_WS_INTERVAL_SECONDS)
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        try:
+            await websocket.send_json({"tipe": "FOUT", "fout": str(exc)})
+        except Exception:
+            pass
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
+
+
+@router.websocket("/chat/ws/vriend/{friend_id}")
+async def friend_chat_ws(websocket: WebSocket, friend_id: int):
+    db = database.SessionLocal()
+    try:
+        user = _authenticate_ws(websocket, db)
+        if user is None:
+            await websocket.close(code=4401, reason="Ongeldige token")
+            return
+        try:
+            _require_saamry_user(db, user)
+            _require_accepted_friend(db, user.Gebruiker_ID, friend_id)
+        except Exception:
+            await websocket.close(code=4403, reason="Geen toegang tot hierdie chat nie")
+            return
+        viewer_id = user.Gebruiker_ID
+    finally:
+        db.close()
+    await _run_chat_socket(
+        websocket,
+        viewer_id,
+        lambda: _friend_chat_snapshot(viewer_id, friend_id),
+    )
+
+
+@router.websocket("/chat/ws/groep/{group_id}")
+async def group_chat_ws(websocket: WebSocket, group_id: int):
+    db = database.SessionLocal()
+    try:
+        user = _authenticate_ws(websocket, db)
+        if user is None:
+            await websocket.close(code=4401, reason="Ongeldige token")
+            return
+        try:
+            _require_saamry_user(db, user)
+            group = _get_group_or_404(db, group_id)
+            _require_group_member(group, user.Gebruiker_ID)
+        except Exception:
+            await websocket.close(code=4403, reason="Geen toegang tot hierdie groepchat nie")
+            return
+        viewer_id = user.Gebruiker_ID
+    finally:
+        db.close()
+    await _run_chat_socket(
+        websocket,
+        viewer_id,
+        lambda: _group_chat_snapshot(viewer_id, group_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sekuriteitshek — slegs 'n AKTIEWE EVENT word as Saamry behandel
+# ---------------------------------------------------------------------------
+
+def _require_security_guard(_allowed: bool = Depends(auth.check_sekuriteit)) -> None:
     return None
 
 
 def _campus_gate_location(db: Session, kampus_id: int) -> models.Lokasie:
-    kampus = (
-        db.query(models.Kampus)
-        .filter(models.Kampus.Kampus_ID == kampus_id)
-        .first()
-    )
+    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
     if not kampus:
         raise HTTPException(status_code=404, detail="Kampus is nie gevind nie")
 
@@ -751,7 +1384,6 @@ def _campus_gate_location(db: Session, kampus_id: int) -> models.Lokasie:
         .order_by(models.Lokasie.Lokasie_ID)
         .first()
     )
-
     if location is None:
         location = (
             db.query(models.Lokasie)
@@ -759,13 +1391,8 @@ def _campus_gate_location(db: Session, kampus_id: int) -> models.Lokasie:
             .order_by(models.Lokasie.Lokasie_ID)
             .first()
         )
-
     if location is None:
-        raise HTTPException(
-            status_code=409,
-            detail="Hierdie kampus het nog geen hek-lokasie nie",
-        )
-
+        raise HTTPException(status_code=409, detail="Hierdie kampus het nog geen hek-lokasie nie")
     return location
 
 
@@ -776,10 +1403,7 @@ def _latest_campus_log(
 ) -> Optional[models.ToegangsLogs]:
     return (
         db.query(models.ToegangsLogs)
-        .join(
-            models.Lokasie,
-            models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID,
-        )
+        .join(models.Lokasie, models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID)
         .filter(
             models.ToegangsLogs.Gebruiker_ID == gebruiker_id,
             models.Lokasie.Kampus_ID == kampus_id,
@@ -802,24 +1426,19 @@ def _user_is_on_campus(
     return (latest is not None and latest.TOE_Rigting == "IN", latest)
 
 
-def _accepted_gate_members(group: models.SaamryGroep) -> list[models.Gebruikers]:
-    members_by_id = {
-        member.gebruiker.Gebruiker_ID: member.gebruiker
-        for member in group.lede
-        if member.SAA_Status == "AANVAAR" and member.gebruiker is not None
-    }
-    members_by_id[group.Bestuurder_ID] = group.bestuurder
-
-    # Bestuurder eerste; daarna alfabeties vir 'n stabiele wag-skerm.
+def _event_gate_members(event: models.SaamryEvent) -> list[models.Gebruikers]:
+    users = [member.gebruiker for member in event.lede if member.gebruiker is not None]
+    by_id = {user.Gebruiker_ID: user for user in users}
+    if event.bestuurder is not None:
+        by_id[event.Bestuurder_ID] = event.bestuurder
+    driver = by_id.get(event.Bestuurder_ID)
+    if driver is None:
+        return []
     passengers = sorted(
-        (
-            user
-            for user_id, user in members_by_id.items()
-            if user_id != group.Bestuurder_ID
-        ),
-        key=lambda user: (user.GEB_Naam or "", user.GEB_Van or ""),
+        [user for user_id, user in by_id.items() if user_id != event.Bestuurder_ID],
+        key=lambda user: ((user.GEB_Naam or "").lower(), (user.GEB_Van or "").lower()),
     )
-    return [group.bestuurder, *passengers]
+    return [driver, *passengers]
 
 
 @router.post("/wagte/hek/preview")
@@ -832,53 +1451,62 @@ def gate_group_preview(
     rigting = payload.rigting.strip().upper()
     if rigting not in ("IN", "UIT"):
         raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
-
     _campus_gate_location(db, payload.kampus_id)
 
-    group = (
-        db.query(models.SaamryGroep)
-        .filter(
-            models.SaamryGroep.Bestuurder_ID == payload.bestuurder_id,
-            models.SaamryGroep.SAA_Status == "AKTIEF",
-        )
-        .order_by(models.SaamryGroep.Groep_ID.desc())
-        .first()
-    )
-
-    if group is None:
-        return schemas.APIResponse(
-            sukses=True,
-            data={"has_group": False, "rede": "Geen aktiewe groep vir bestuurder nie"},
-        )
-
-    members = _accepted_gate_members(group)
-    if len(members) <= 1:
+    event = _active_event_for_driver(db, payload.bestuurder_id)
+    if event is None:
+        passenger_event = _active_event_for_user(db, payload.bestuurder_id)
+        if passenger_event is not None and passenger_event.Bestuurder_ID != payload.bestuurder_id:
+            passenger_group = _get_group_or_404(db, passenger_event.Groep_ID)
+            return schemas.APIResponse(
+                sukses=True,
+                data={
+                    "has_group": False,
+                    "blocked_by_event": True,
+                    "event_id": passenger_event.Event_ID,
+                    "groep_id": passenger_group.Groep_ID,
+                    "groep_naam": passenger_group.SAA_Naam,
+                    "bestuurder_id": passenger_event.Bestuurder_ID,
+                    "rede": (
+                        "Hierdie persoon is 'n passasier in 'n aktiewe Saamry-event. "
+                        "Die Driver moet die voertuigscan voltooi. Daarna kan die persoon weer individueel scan."
+                    ),
+                },
+            )
         return schemas.APIResponse(
             sukses=True,
             data={
                 "has_group": False,
-                "rede": "Die groep het nog geen aanvaarde passasiers nie",
+                "blocked_by_event": False,
+                "rede": "Geen aktiewe Saamry-event vir hierdie Driver nie",
             },
+        )
+    group = _get_group_or_404(db, event.Groep_ID)
+    if group.SAA_Status != "AKTIEF" or group.Bestuurder_ID != payload.bestuurder_id:
+        return schemas.APIResponse(
+            sukses=True,
+            data={"has_group": False, "rede": "Die Saamry-event se Driver/Admin is nie meer geldig nie"},
+        )
+
+    members = _event_gate_members(event)
+    if len(members) <= 1:
+        return schemas.APIResponse(
+            sukses=True,
+            data={"has_group": False, "rede": "Die Saamry-event het geen passasiers nie"},
         )
 
     member_data = []
     for user in members:
-        op_kampus, latest = _user_is_on_campus(
-            db,
-            user.Gebruiker_ID,
-            payload.kampus_id,
-        )
+        op_kampus, latest = _user_is_on_campus(db, user.Gebruiker_ID, payload.kampus_id)
         user_data = _user_dict(user)
         user_data.update(
             {
-                "is_bestuurder": user.Gebruiker_ID == group.Bestuurder_ID,
+                "is_bestuurder": user.Gebruiker_ID == event.Bestuurder_ID,
                 "op_kampus": op_kampus,
                 "laaste_rigting": latest.TOE_Rigting if latest else None,
-                "laaste_tyd": (
-                    latest.TOE_Tydstempel.isoformat() if latest else None
-                ),
+                "laaste_tyd": latest.TOE_Tydstempel.isoformat() if latest else None,
                 "geselekteer": (
-                    user.Gebruiker_ID == group.Bestuurder_ID
+                    user.Gebruiker_ID == event.Bestuurder_ID
                     or (rigting == "IN" and not op_kampus)
                     or (rigting == "UIT" and op_kampus)
                 ),
@@ -890,9 +1518,11 @@ def gate_group_preview(
         sukses=True,
         data={
             "has_group": True,
+            "blocked_by_event": False,
+            "event_id": event.Event_ID,
             "groep_id": group.Groep_ID,
             "groep_naam": group.SAA_Naam,
-            "bestuurder_id": group.Bestuurder_ID,
+            "bestuurder_id": event.Bestuurder_ID,
             "rigting": rigting,
             "kampus_id": payload.kampus_id,
             "lede": member_data,
@@ -909,42 +1539,34 @@ def confirm_group_at_gate(
 ):
     rigting = payload.rigting.strip().upper()
     metode = payload.metode.strip().upper()
-
     if rigting not in ("IN", "UIT"):
         raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
     if metode not in ("QR", "NFC", "HANDMATIG"):
-        raise HTTPException(
-            status_code=400,
-            detail="Bestuurdermetode moet QR, NFC of HANDMATIG wees",
-        )
+        raise HTTPException(status_code=400, detail="Bestuurdermetode moet QR, NFC of HANDMATIG wees")
 
     group = _get_group_or_404(db, payload.groep_id)
     if group.SAA_Status != "AKTIEF":
-        raise HTTPException(status_code=409, detail="Die Saamrygroep is nie meer aktief nie")
+        raise HTTPException(status_code=409, detail="Die permanente Saamrygroep is nie meer aktief nie")
+    event = _active_event_for_group(db, group.Groep_ID)
+    if event is None:
+        raise HTTPException(status_code=409, detail="Hierdie groep het nie meer 'n aktiewe Saamry-event nie")
+    if payload.event_id is not None and payload.event_id != event.Event_ID:
+        raise HTTPException(status_code=409, detail="Die Saamry-event het intussen verander")
+    if event.Bestuurder_ID != group.Bestuurder_ID:
+        raise HTTPException(status_code=409, detail="Die event se Driver/Admin stem nie meer met die groep ooreen nie")
 
     gate_location = _campus_gate_location(db, payload.kampus_id)
-    accepted_users = _accepted_gate_members(group)
-    accepted_by_id = {user.Gebruiker_ID: user for user in accepted_users}
+    event_users = _event_gate_members(event)
+    accepted_by_id = {user.Gebruiker_ID: user for user in event_users}
 
     selected_ids = list(dict.fromkeys(payload.gebruiker_ids))
-    if group.Bestuurder_ID not in selected_ids:
-        raise HTTPException(
-            status_code=400,
-            detail="Die bestuurder moet altyd saam bevestig word",
-        )
-
+    if event.Bestuurder_ID not in selected_ids:
+        raise HTTPException(status_code=400, detail="Die Driver moet altyd saam bevestig word")
     invalid_ids = [user_id for user_id in selected_ids if user_id not in accepted_by_id]
     if invalid_ids:
-        raise HTTPException(
-            status_code=400,
-            detail="Een of meer gekose persone behoort nie aan hierdie groep nie",
-        )
+        raise HTTPException(status_code=400, detail="Een of meer gekose persone is nie deel van hierdie Saamry-event nie")
 
-    driver_on_campus, _ = _user_is_on_campus(
-        db,
-        group.Bestuurder_ID,
-        payload.kampus_id,
-    )
+    driver_on_campus, _ = _user_is_on_campus(db, event.Bestuurder_ID, payload.kampus_id)
     driver_already_matches = (rigting == "IN" and driver_on_campus) or (
         rigting == "UIT" and not driver_on_campus
     )
@@ -952,41 +1574,36 @@ def confirm_group_at_gate(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Die bestuurder is reeds op kampus"
+                "Die Driver is reeds op kampus"
                 if rigting == "IN"
-                else "Die bestuurder is reeds van kampus af"
+                else "Die Driver is reeds van kampus af"
             ),
         )
 
     processed = []
     skipped = []
     driver_log = None
-
-    # Bestuurder eerste sodat passasiers na sy log kan verwys.
-    ordered_ids = [group.Bestuurder_ID] + [
-        user_id for user_id in selected_ids if user_id != group.Bestuurder_ID
+    ordered_ids = [event.Bestuurder_ID] + [
+        user_id for user_id in selected_ids if user_id != event.Bestuurder_ID
     ]
 
     try:
         for user_id in ordered_ids:
-            op_kampus, latest = _user_is_on_campus(db, user_id, payload.kampus_id)
+            op_kampus, _latest = _user_is_on_campus(db, user_id, payload.kampus_id)
             state_matches = (rigting == "IN" and op_kampus) or (
                 rigting == "UIT" and not op_kampus
             )
-
             if state_matches:
                 skipped.append(
                     {
                         "gebruiker_id": user_id,
                         "volle_naam": _user_dict(accepted_by_id[user_id])["volle_naam"],
-                        "rede": (
-                            "Reeds op kampus" if rigting == "IN" else "Reeds van kampus af"
-                        ),
+                        "rede": "Reeds op kampus" if rigting == "IN" else "Reeds van kampus af",
                     }
                 )
                 continue
 
-            is_driver = user_id == group.Bestuurder_ID
+            is_driver = user_id == event.Bestuurder_ID
             log = models.ToegangsLogs(
                 Gebruiker_ID=user_id,
                 Lokasie_ID=gate_location.Lokasie_ID,
@@ -1001,7 +1618,6 @@ def confirm_group_at_gate(
             )
             db.add(log)
             db.flush()
-
             if is_driver:
                 driver_log = log
 
@@ -1016,6 +1632,19 @@ def confirm_group_at_gate(
                 }
             )
 
+        if driver_log is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Die Driver se scan is nie verwerk nie; die Saamry-event bly aktief",
+            )
+
+        # Kritieke reël: die event verdwyn eers nadat die Driver-log suksesvol geskryf is.
+        event.SAA_Status = "VOLTOOI"
+        event.Voltooi_Rigting = rigting
+        event.Voltooi_Kampus_ID = payload.kampus_id
+        event.Bestuurder_Log_ID = driver_log.Log_ID
+        event.Voltooi_Op = datetime.utcnow()
+        event.Gewysig_Op = datetime.utcnow()
         db.commit()
     except Exception:
         db.rollback()
@@ -1024,6 +1653,8 @@ def confirm_group_at_gate(
     return schemas.APIResponse(
         sukses=True,
         data={
+            "event_id": event.Event_ID,
+            "event_voltooi": True,
             "groep_id": group.Groep_ID,
             "rigting": rigting,
             "verwerk_count": len(processed),
@@ -1031,8 +1662,8 @@ def confirm_group_at_gate(
             "verwerk": processed,
             "oorgeslaan": skipped,
             "boodskap": (
-                f"{len(processed)} persoon/persone is as {rigting} bevestig"
+                f"{len(processed)} persoon/persone is as {rigting} bevestig; "
+                "Saamry-event is voltooi"
             ),
         },
     )
-

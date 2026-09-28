@@ -1023,3 +1023,116 @@ def run_migrations(engine):
             f"(Roosterlokaal mapping) het misluk: {_migrasie_fout}"
         )
 
+
+    # Migrasie 021: Permanente Saamrygroepe, eenmalige rit-events en chat
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_event (
+                    "Event_ID" SERIAL PRIMARY KEY,
+                    "Groep_ID" INT NOT NULL
+                        REFERENCES saamry_groep("Groep_ID") ON DELETE CASCADE,
+                    "Bestuurder_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "SAA_Status" VARCHAR(20) NOT NULL DEFAULT 'AKTIEF',
+                    "Voltooi_Rigting" VARCHAR(8),
+                    "Voltooi_Kampus_ID" INT
+                        REFERENCES kampus("Kampus_ID"),
+                    "Bestuurder_Log_ID" INT
+                        REFERENCES toegangs_logs("Log_ID"),
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Voltooi_Op" TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ck_saamry_event_status
+                        CHECK ("SAA_Status" IN ('AKTIEF', 'VOLTOOI', 'GEKANSELLEER')),
+                    CONSTRAINT ck_saamry_event_rigting
+                        CHECK ("Voltooi_Rigting" IS NULL OR "Voltooi_Rigting" IN ('IN', 'UIT'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_event_lid (
+                    "Event_ID" INT NOT NULL
+                        REFERENCES saamry_event("Event_ID") ON DELETE CASCADE,
+                    "Gebruiker_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY ("Event_ID", "Gebruiker_ID")
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_boodskap (
+                    "Boodskap_ID" SERIAL PRIMARY KEY,
+                    "Stuurder_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Ontvanger_ID" INT
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Groep_ID" INT
+                        REFERENCES saamry_groep("Groep_ID") ON DELETE CASCADE,
+                    "SAA_Boodskap" TEXT NOT NULL,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ck_saamry_boodskap_teiken CHECK (
+                        ("Groep_ID" IS NOT NULL AND "Ontvanger_ID" IS NULL)
+                        OR
+                        ("Groep_ID" IS NULL AND "Ontvanger_ID" IS NOT NULL)
+                    ),
+                    CONSTRAINT ck_saamry_boodskap_lengte CHECK (
+                        char_length(trim("SAA_Boodskap")) BETWEEN 1 AND 1000
+                    )
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_boodskap_gelees (
+                    "Boodskap_ID" INT NOT NULL
+                        REFERENCES saamry_boodskap("Boodskap_ID") ON DELETE CASCADE,
+                    "Gebruiker_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    "Gelees_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY ("Boodskap_ID", "Gebruiker_ID")
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_groep_status
+                ON saamry_event ("Groep_ID", "SAA_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_bestuurder_status
+                ON saamry_event ("Bestuurder_ID", "SAA_Status")
+            '''))
+            # Een permanente groep mag net een aktiewe rit op 'n slag hê.
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_saamry_event_aktief_groep
+                ON saamry_event ("Groep_ID")
+                WHERE "SAA_Status" = 'AKTIEF'
+            '''))
+            # 'n Driver kan nie gelyktydig die aktiewe bestuurder van twee ritte wees nie;
+            # die wag se hek-scan kan hom dus altyd ondubbelsinnig aan een event koppel.
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_saamry_event_aktief_bestuurder
+                ON saamry_event ("Bestuurder_ID")
+                WHERE "SAA_Status" = 'AKTIEF'
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_lid_gebruiker
+                ON saamry_event_lid ("Gebruiker_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_privaat
+                ON saamry_boodskap ("Stuurder_ID", "Ontvanger_ID", "Geskep_Op")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_groep
+                ON saamry_boodskap ("Groep_ID", "Geskep_Op")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_gelees_gebruiker
+                ON saamry_boodskap_gelees ("Gebruiker_ID")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 021 "
+            f"(Saamry permanente groepe/events/chat) het misluk: {_migrasie_fout}"
+        )

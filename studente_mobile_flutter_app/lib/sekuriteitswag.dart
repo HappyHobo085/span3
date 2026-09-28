@@ -590,6 +590,25 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
         if (!mounted) return;
 
+        if (saamryPreview.blockedByEvent) {
+          setState(() {
+            _loading = false;
+            _status = saamryPreview.rede ??
+                'Hierdie passasier moet saam met die Driver se aktiewe Saamry-event scan';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.orange.shade800,
+              content: Text(
+                saamryPreview.rede ??
+                    'Hierdie passasier is deel van ’n aktiewe Saamry-event. Scan die Driver.',
+              ),
+            ),
+          );
+          await _resumeAutomaticListening();
+          return;
+        }
+
         verifyPage = saamryPreview.hasGroup &&
                 saamryPreview.groepId != null &&
                 saamryPreview.lede.length > 1
@@ -1566,6 +1585,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
     try {
       final result = await MoonApi.wagteSaamryGateConfirm(
         groepId: widget.preview.groepId!,
+        eventId: widget.preview.eventId,
         kampusId: widget.kampusId,
         rigting: _rigting,
         metode: widget.metode,

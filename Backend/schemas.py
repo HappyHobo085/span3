@@ -750,15 +750,30 @@ class SaamryVriendVersoekCreate(BaseModel):
 
 
 class SaamryGroepCreate(BaseModel):
-    naam: Optional[str] = None
-    vertrekpunt: str
-    bestemming: str
-    vertrek_tyd: datetime
-    sitplekke: int = 1
+    # Nuwe permanente groep: slegs naam + kapasiteit is nodig.
+    naam: str
+    sitplekke: int = Field(default=4, ge=1, le=8)
+    # Legacy velde bly opsioneel sodat ouer kliënte nie onmiddellik breek nie.
+    vertrekpunt: Optional[str] = None
+    bestemming: Optional[str] = None
+    vertrek_tyd: Optional[datetime] = None
 
 
 class SaamryGroepNooiCreate(BaseModel):
     gebruiker_id: int
+
+
+class SaamryBestuurderOordragRequest(BaseModel):
+    nuwe_bestuurder_id: int
+
+
+class SaamryEventCreate(BaseModel):
+    groep_id: int
+    gebruiker_ids: List[int]
+
+
+class SaamryBoodskapCreate(BaseModel):
+    boodskap: str = Field(..., min_length=1, max_length=1000)
 
 
 class SaamryHekPreviewRequest(BaseModel):
@@ -773,6 +788,7 @@ class SaamryHekBevestigRequest(BaseModel):
     rigting: str
     metode: str
     gebruiker_ids: List[int]
+    event_id: Optional[int] = None
 
 
 # --- BESOEKER OTP SCHEMAS ---

@@ -350,520 +350,414 @@ class WagteProfileScanDto {
 /// =========================
 
 class SaamryUserDto {
-
   final int gebruikerId;
-
   final String naam;
-
   final String van;
-
   final String volleNaam;
-
   final String nommer;
-
   final String rol;
-
   final String? fotoUrl;
-
   final String? selfoon;
-
   final String? epos;
-
   final String? vriendskapStatus;
-
   final int? vriendskapId;
 
   SaamryUserDto({
-
     required this.gebruikerId,
-
     required this.naam,
-
     required this.van,
-
     required this.volleNaam,
-
     required this.nommer,
-
     required this.rol,
-
     this.fotoUrl,
-
     this.selfoon,
-
     this.epos,
-
     this.vriendskapStatus,
-
     this.vriendskapId,
-
   });
 
   factory SaamryUserDto.fromJson(Map<String, dynamic> json) {
-
     return SaamryUserDto(
-
       gebruikerId: (json['gebruiker_id'] as num).toInt(),
-
       naam: json['naam']?.toString() ?? '',
-
       van: json['van']?.toString() ?? '',
-
       volleNaam: json['volle_naam']?.toString() ??
-
           '${json['naam'] ?? ''} ${json['van'] ?? ''}'.trim(),
-
       nommer: json['nommer']?.toString() ?? '',
-
       rol: json['rol']?.toString() ?? '',
-
       fotoUrl: json['foto_url']?.toString(),
-
       selfoon: json['selfoon']?.toString(),
-
       epos: json['epos']?.toString(),
-
       vriendskapStatus: json['vriendskap_status']?.toString(),
-
-      vriendskapId: json['vriendskap_id'] == null
-
-          ? null
-
-          : (json['vriendskap_id'] as num).toInt(),
-
+      vriendskapId: (json['vriendskap_id'] as num?)?.toInt(),
     );
-
   }
-
 }
 
 class SaamryFriendItemDto {
-
   final int vriendskapId;
-
   final String status;
-
   final SaamryUserDto gebruiker;
+  final int ongelees;
 
   SaamryFriendItemDto({
-
     required this.vriendskapId,
-
     required this.status,
-
     required this.gebruiker,
-
+    required this.ongelees,
   });
 
   factory SaamryFriendItemDto.fromJson(Map<String, dynamic> json) {
-
     return SaamryFriendItemDto(
-
       vriendskapId: (json['vriendskap_id'] as num).toInt(),
-
       status: json['status']?.toString() ?? '',
-
       gebruiker: SaamryUserDto.fromJson(
-
         Map<String, dynamic>.from(json['gebruiker'] as Map),
-
       ),
-
+      ongelees: (json['ongelees'] as num?)?.toInt() ?? 0,
     );
-
   }
-
 }
 
 class SaamryGroupMemberDto {
-
   final String status;
-
   final bool isBestuurder;
-
   final SaamryUserDto gebruiker;
 
   SaamryGroupMemberDto({
-
     required this.status,
-
     required this.isBestuurder,
-
     required this.gebruiker,
-
   });
 
   factory SaamryGroupMemberDto.fromJson(Map<String, dynamic> json) {
-
     return SaamryGroupMemberDto(
-
       status: json['status']?.toString() ?? '',
-
       isBestuurder: json['is_bestuurder'] == true,
-
       gebruiker: SaamryUserDto.fromJson(
-
         Map<String, dynamic>.from(json['gebruiker'] as Map),
-
       ),
-
     );
-
   }
+}
 
+class SaamryEventMemberDto {
+  final bool isBestuurder;
+  final SaamryUserDto gebruiker;
+
+  SaamryEventMemberDto({
+    required this.isBestuurder,
+    required this.gebruiker,
+  });
+
+  factory SaamryEventMemberDto.fromJson(Map<String, dynamic> json) {
+    return SaamryEventMemberDto(
+      isBestuurder: json['is_bestuurder'] == true,
+      gebruiker: SaamryUserDto.fromJson(
+        Map<String, dynamic>.from(json['gebruiker'] as Map),
+      ),
+    );
+  }
+}
+
+class SaamryEventDto {
+  final int eventId;
+  final int groepId;
+  final int bestuurderId;
+  final String status;
+  final bool isBestuurder;
+  final DateTime? geskepOp;
+  final DateTime? voltooiOp;
+  final String? voltooiRigting;
+  final int? voltooiKampusId;
+  final List<SaamryEventMemberDto> lede;
+
+  SaamryEventDto({
+    required this.eventId,
+    required this.groepId,
+    required this.bestuurderId,
+    required this.status,
+    required this.isBestuurder,
+    this.geskepOp,
+    this.voltooiOp,
+    this.voltooiRigting,
+    this.voltooiKampusId,
+    required this.lede,
+  });
+
+  factory SaamryEventDto.fromJson(Map<String, dynamic> json) {
+    return SaamryEventDto(
+      eventId: (json['event_id'] as num).toInt(),
+      groepId: (json['groep_id'] as num).toInt(),
+      bestuurderId: (json['bestuurder_id'] as num).toInt(),
+      status: json['status']?.toString() ?? '',
+      isBestuurder: json['is_bestuurder'] == true,
+      geskepOp: json['geskep_op'] == null
+          ? null
+          : DateTime.tryParse(json['geskep_op'].toString()),
+      voltooiOp: json['voltooi_op'] == null
+          ? null
+          : DateTime.tryParse(json['voltooi_op'].toString()),
+      voltooiRigting: json['voltooi_rigting']?.toString(),
+      voltooiKampusId: (json['voltooi_kampus_id'] as num?)?.toInt(),
+      lede: ((json['lede'] as List?) ?? const [])
+          .map((e) => SaamryEventMemberDto.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
+          .toList(),
+    );
+  }
 }
 
 class SaamryGroupDto {
-
   final int groepId;
-
   final String naam;
-
-  final String vertrekpunt;
-
-  final String bestemming;
-
-  final DateTime vertrekTyd;
-
+  final String? vertrekpunt;
+  final String? bestemming;
+  final DateTime? vertrekTyd;
   final int sitplekke;
-
   final int beskikbareSitplekke;
-
   final String status;
-
   final bool isBestuurder;
-
   final String? myStatus;
-
   final SaamryUserDto bestuurder;
-
   final List<SaamryGroupMemberDto> lede;
+  final SaamryEventDto? aktieweEvent;
+  final int ongelees;
 
   SaamryGroupDto({
-
     required this.groepId,
-
     required this.naam,
-
-    required this.vertrekpunt,
-
-    required this.bestemming,
-
-    required this.vertrekTyd,
-
+    this.vertrekpunt,
+    this.bestemming,
+    this.vertrekTyd,
     required this.sitplekke,
-
     required this.beskikbareSitplekke,
-
     required this.status,
-
     required this.isBestuurder,
-
     required this.myStatus,
-
     required this.bestuurder,
-
     required this.lede,
-
+    this.aktieweEvent,
+    required this.ongelees,
   });
 
   factory SaamryGroupDto.fromJson(Map<String, dynamic> json) {
-
-    final rawMembers = (json['lede'] as List?) ?? const [];
-
     return SaamryGroupDto(
-
       groepId: (json['groep_id'] as num).toInt(),
-
       naam: json['naam']?.toString() ?? '',
-
-      vertrekpunt: json['vertrekpunt']?.toString() ?? '',
-
-      bestemming: json['bestemming']?.toString() ?? '',
-
-      vertrekTyd: DateTime.parse(json['vertrek_tyd'].toString()),
-
+      vertrekpunt: json['vertrekpunt']?.toString(),
+      bestemming: json['bestemming']?.toString(),
+      vertrekTyd: json['vertrek_tyd'] == null
+          ? null
+          : DateTime.tryParse(json['vertrek_tyd'].toString()),
       sitplekke: (json['sitplekke'] as num?)?.toInt() ?? 0,
-
       beskikbareSitplekke:
-
           (json['beskikbare_sitplekke'] as num?)?.toInt() ?? 0,
-
       status: json['status']?.toString() ?? '',
-
       isBestuurder: json['is_bestuurder'] == true,
-
       myStatus: json['my_status']?.toString(),
-
       bestuurder: SaamryUserDto.fromJson(
-
         Map<String, dynamic>.from(json['bestuurder'] as Map),
-
       ),
-
-      lede: rawMembers
-
+      lede: ((json['lede'] as List?) ?? const [])
           .map((e) => SaamryGroupMemberDto.fromJson(
-
                 Map<String, dynamic>.from(e as Map),
-
               ))
-
           .toList(),
-
+      aktieweEvent: json['aktiewe_event'] == null
+          ? null
+          : SaamryEventDto.fromJson(
+              Map<String, dynamic>.from(json['aktiewe_event'] as Map),
+            ),
+      ongelees: (json['ongelees'] as num?)?.toInt() ?? 0,
     );
-
   }
-
 }
 
 class SaamryStatusDto {
-
   final List<SaamryFriendItemDto> friends;
-
   final List<SaamryFriendItemDto> incomingRequests;
-
   final List<SaamryFriendItemDto> outgoingRequests;
-
   final List<SaamryGroupDto> groupInvites;
-
+  final List<SaamryGroupDto> groups;
   final SaamryGroupDto? myGroup;
 
   SaamryStatusDto({
-
     required this.friends,
-
     required this.incomingRequests,
-
     required this.outgoingRequests,
-
     required this.groupInvites,
-
+    required this.groups,
     required this.myGroup,
-
   });
 
   factory SaamryStatusDto.fromJson(Map<String, dynamic> json) {
+    List<SaamryFriendItemDto> parseFriends(dynamic raw) =>
+        ((raw as List?) ?? const [])
+            .map((e) => SaamryFriendItemDto.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ))
+            .toList();
+    List<SaamryGroupDto> parseGroups(dynamic raw) =>
+        ((raw as List?) ?? const [])
+            .map((e) => SaamryGroupDto.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ))
+            .toList();
 
-    List<SaamryFriendItemDto> parseFriends(dynamic raw) {
-
-      return ((raw as List?) ?? const [])
-
-          .map((e) => SaamryFriendItemDto.fromJson(
-
-                Map<String, dynamic>.from(e as Map),
-
-              ))
-
-          .toList();
-
-    }
-
+    final parsedGroups = parseGroups(json['groups']);
     return SaamryStatusDto(
-
       friends: parseFriends(json['friends']),
-
       incomingRequests: parseFriends(json['incoming_requests']),
-
       outgoingRequests: parseFriends(json['outgoing_requests']),
-
-      groupInvites: ((json['group_invites'] as List?) ?? const [])
-
-          .map((e) => SaamryGroupDto.fromJson(
-
-                Map<String, dynamic>.from(e as Map),
-
-              ))
-
-          .toList(),
-
+      groupInvites: parseGroups(json['group_invites']),
+      groups: parsedGroups,
       myGroup: json['my_group'] == null
-
-          ? null
-
+          ? (parsedGroups.isEmpty ? null : parsedGroups.first)
           : SaamryGroupDto.fromJson(
-
               Map<String, dynamic>.from(json['my_group'] as Map),
-
             ),
-
     );
-
   }
-
 }
 
+class SaamryMessageDto {
+  final int boodskapId;
+  final int stuurderId;
+  final int? ontvangerId;
+  final int? groepId;
+  final String boodskap;
+  final DateTime? geskepOp;
+  final bool isMyne;
+  final SaamryUserDto? stuurder;
 
+  SaamryMessageDto({
+    required this.boodskapId,
+    required this.stuurderId,
+    this.ontvangerId,
+    this.groepId,
+    required this.boodskap,
+    this.geskepOp,
+    required this.isMyne,
+    this.stuurder,
+  });
+
+  factory SaamryMessageDto.fromJson(Map<String, dynamic> json) {
+    return SaamryMessageDto(
+      boodskapId: (json['boodskap_id'] as num).toInt(),
+      stuurderId: (json['stuurder_id'] as num).toInt(),
+      ontvangerId: (json['ontvanger_id'] as num?)?.toInt(),
+      groepId: (json['groep_id'] as num?)?.toInt(),
+      boodskap: json['boodskap']?.toString() ?? '',
+      geskepOp: json['geskep_op'] == null
+          ? null
+          : DateTime.tryParse(json['geskep_op'].toString()),
+      isMyne: json['is_myne'] == true,
+      stuurder: json['stuurder'] is Map
+          ? SaamryUserDto.fromJson(
+              Map<String, dynamic>.from(json['stuurder'] as Map),
+            )
+          : null,
+    );
+  }
+}
 
 class SaamryGateMemberDto {
-
   final int gebruikerId;
-
   final String naam;
-
   final String van;
-
   final String volleNaam;
-
   final String nommer;
-
   final String rol;
-
   final String? fotoUrl;
-
   final bool isBestuurder;
-
   final bool opKampus;
-
   final String? laasteRigting;
-
   final DateTime? laasteTyd;
-
   final bool geselekteer;
 
   SaamryGateMemberDto({
-
     required this.gebruikerId,
-
     required this.naam,
-
     required this.van,
-
     required this.volleNaam,
-
     required this.nommer,
-
     required this.rol,
-
     this.fotoUrl,
-
     required this.isBestuurder,
-
     required this.opKampus,
-
     this.laasteRigting,
-
     this.laasteTyd,
-
     required this.geselekteer,
-
   });
 
   factory SaamryGateMemberDto.fromJson(Map<String, dynamic> json) {
-
     return SaamryGateMemberDto(
-
       gebruikerId: (json['gebruiker_id'] as num).toInt(),
-
       naam: json['naam']?.toString() ?? '',
-
       van: json['van']?.toString() ?? '',
-
       volleNaam: json['volle_naam']?.toString() ??
-
           '${json['naam'] ?? ''} ${json['van'] ?? ''}'.trim(),
-
       nommer: json['nommer']?.toString() ?? '',
-
       rol: json['rol']?.toString() ?? '',
-
       fotoUrl: json['foto_url']?.toString(),
-
       isBestuurder: json['is_bestuurder'] == true,
-
       opKampus: json['op_kampus'] == true,
-
       laasteRigting: json['laaste_rigting']?.toString(),
-
       laasteTyd: json['laaste_tyd'] == null
-
           ? null
-
           : DateTime.parse(json['laaste_tyd'].toString()).toLocal(),
-
       geselekteer: json['geselekteer'] == true,
-
     );
-
   }
-
 }
 
 class SaamryGatePreviewDto {
-
   final bool hasGroup;
-
+  final bool blockedByEvent;
   final String? rede;
-
+  final int? eventId;
   final int? groepId;
-
   final String? groepNaam;
-
   final int? bestuurderId;
-
   final String rigting;
-
   final int? kampusId;
-
   final List<SaamryGateMemberDto> lede;
 
   SaamryGatePreviewDto({
-
     required this.hasGroup,
-
+    required this.blockedByEvent,
     this.rede,
-
+    this.eventId,
     this.groepId,
-
     this.groepNaam,
-
     this.bestuurderId,
-
     required this.rigting,
-
     this.kampusId,
-
     required this.lede,
-
   });
 
   factory SaamryGatePreviewDto.fromJson(Map<String, dynamic> json) {
-
     return SaamryGatePreviewDto(
-
       hasGroup: json['has_group'] == true,
-
+      blockedByEvent: json['blocked_by_event'] == true,
       rede: json['rede']?.toString(),
-
+      eventId: (json['event_id'] as num?)?.toInt(),
       groepId: (json['groep_id'] as num?)?.toInt(),
-
       groepNaam: json['groep_naam']?.toString(),
-
       bestuurderId: (json['bestuurder_id'] as num?)?.toInt(),
-
       rigting: json['rigting']?.toString() ?? 'IN',
-
       kampusId: (json['kampus_id'] as num?)?.toInt(),
-
       lede: ((json['lede'] as List?) ?? const [])
-
-          .map(
-
-            (item) => SaamryGateMemberDto.fromJson(
-
-              Map<String, dynamic>.from(item as Map),
-
-            ),
-
-          )
-
+          .map((e) => SaamryGateMemberDto.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
           .toList(),
-
     );
-
   }
-
 }
+
 
 class BesoekerUitnodigingDto {
 
@@ -2869,369 +2763,285 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
   /// -------------------------
 
   static Map<String, String> _saamryHeaders({bool jsonBody = false}) {
-
     return {
-
       if (jsonBody) 'Content-Type': 'application/json',
-
       'Accept': 'application/json',
-
       if (bearerToken != null && bearerToken!.trim().isNotEmpty)
-
         'Authorization': 'Bearer ${bearerToken!.trim()}',
-
     };
-
   }
 
   static dynamic _decodeSaamryResponse(http.Response response) {
-
     dynamic decoded;
-
     try {
-
       decoded = jsonDecode(response.body);
-
     } catch (_) {
-
       throw Exception(
-
         'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
-
       );
-
     }
-
     if (response.statusCode < 200 ||
-
         response.statusCode >= 300 ||
-
         decoded is! Map ||
-
         decoded['sukses'] != true) {
-
       final message = decoded is Map
-
           ? (decoded['fout'] ?? decoded['detail'] ?? 'Saamry-versoek het misluk')
-
           : 'Saamry-versoek het misluk';
-
       throw Exception(message.toString());
-
     }
-
     return decoded['data'];
-
   }
 
   static Future<SaamryStatusDto> fetchSaamryStatus() async {
-
     final response = await http.get(
-
       Uri.parse('$baseUrl/saamry/status'),
-
       headers: _saamryHeaders(),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return SaamryStatusDto.fromJson(Map<String, dynamic>.from(data as Map));
-
   }
 
   static Future<List<SaamryUserDto>> searchSaamryUsers(String query) async {
-
     final clean = query.trim();
-
     if (clean.length < 2) return [];
-
     final response = await http.get(
-
       Uri.parse(
-
         '$baseUrl/saamry/gebruikers/search?q=${Uri.encodeQueryComponent(clean)}',
-
       ),
-
       headers: _saamryHeaders(),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return ((data as List?) ?? const [])
-
         .map((e) => SaamryUserDto.fromJson(
-
               Map<String, dynamic>.from(e as Map),
-
             ))
-
         .toList();
-
   }
 
   static Future<void> sendSaamryFriendRequest(int ontvangerId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/vriende/versoek'),
-
       headers: _saamryHeaders(jsonBody: true),
-
       body: jsonEncode({'ontvanger_id': ontvangerId}),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<void> acceptSaamryFriendRequest(int vriendskapId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/vriende/$vriendskapId/aanvaar'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<void> declineSaamryFriendRequest(int vriendskapId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/vriende/$vriendskapId/weier'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<void> removeSaamryFriend(int vriendId) async {
-
     final response = await http.delete(
-
       Uri.parse('$baseUrl/saamry/vriende/$vriendId'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<SaamryGroupDto> createSaamryGroup({
-
-    String? naam,
-
-    required String vertrekpunt,
-
-    required String bestemming,
-
-    required DateTime vertrekTyd,
-
+    required String naam,
     required int sitplekke,
-
   }) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe'),
-
       headers: _saamryHeaders(jsonBody: true),
-
       body: jsonEncode({
-
-        'naam': naam?.trim().isEmpty == true ? null : naam?.trim(),
-
-        'vertrekpunt': vertrekpunt.trim(),
-
-        'bestemming': bestemming.trim(),
-
-        'vertrek_tyd': vertrekTyd.toIso8601String(),
-
+        'naam': naam.trim(),
         'sitplekke': sitplekke,
-
       }),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return SaamryGroupDto.fromJson(Map<String, dynamic>.from(data as Map));
-
   }
 
   static Future<void> inviteSaamryFriend({
-
     required int groepId,
-
     required int gebruikerId,
-
   }) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe/$groepId/nooi'),
-
       headers: _saamryHeaders(jsonBody: true),
-
       body: jsonEncode({'gebruiker_id': gebruikerId}),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<SaamryGroupDto> acceptSaamryGroupInvite(int groepId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe/$groepId/aanvaar'),
-
       headers: _saamryHeaders(),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return SaamryGroupDto.fromJson(Map<String, dynamic>.from(data as Map));
-
   }
 
   static Future<void> declineSaamryGroupInvite(int groepId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe/$groepId/weier'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<void> closeSaamryGroup(int groepId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe/$groepId/sluit'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
   static Future<void> leaveSaamryGroup(int groepId) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/groepe/$groepId/verlaat'),
-
       headers: _saamryHeaders(),
-
     );
-
     _decodeSaamryResponse(response);
-
   }
 
+  static Future<void> transferSaamryDriver({
+    required int groepId,
+    required int nuweBestuurderId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/groepe/$groepId/bestuurder'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({'nuwe_bestuurder_id': nuweBestuurderId}),
+    );
+    _decodeSaamryResponse(response);
+  }
 
+  static Future<SaamryEventDto> createSaamryEvent({
+    required int groepId,
+    required List<int> gebruikerIds,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/events'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({
+        'groep_id': groepId,
+        'gebruiker_ids': gebruikerIds,
+      }),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryEventDto.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  static Future<void> cancelSaamryEvent(int eventId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/events/$eventId/kanselleer'),
+      headers: _saamryHeaders(),
+    );
+    _decodeSaamryResponse(response);
+  }
+
+  static Future<List<SaamryMessageDto>> fetchSaamryFriendChat(int friendId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/saamry/chat/vriend/$friendId'),
+      headers: _saamryHeaders(),
+    );
+    final data = Map<String, dynamic>.from(_decodeSaamryResponse(response) as Map);
+    return ((data['boodskappe'] as List?) ?? const [])
+        .map((e) => SaamryMessageDto.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ))
+        .toList();
+  }
+
+  static Future<SaamryMessageDto> sendSaamryFriendMessage({
+    required int friendId,
+    required String boodskap,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/chat/vriend/$friendId'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({'boodskap': boodskap.trim()}),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryMessageDto.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  static Future<List<SaamryMessageDto>> fetchSaamryGroupChat(int groepId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/saamry/chat/groep/$groepId'),
+      headers: _saamryHeaders(),
+    );
+    final data = Map<String, dynamic>.from(_decodeSaamryResponse(response) as Map);
+    return ((data['boodskappe'] as List?) ?? const [])
+        .map((e) => SaamryMessageDto.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ))
+        .toList();
+  }
+
+  static Future<SaamryMessageDto> sendSaamryGroupMessage({
+    required int groepId,
+    required String boodskap,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/saamry/chat/groep/$groepId'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({'boodskap': boodskap.trim()}),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryMessageDto.fromJson(Map<String, dynamic>.from(data as Map));
+  }
 
   static Future<SaamryGatePreviewDto> wagteSaamryGatePreview({
-
     required int bestuurderId,
-
     required int kampusId,
-
     required String rigting,
-
   }) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/wagte/hek/preview'),
-
       headers: _saamryHeaders(jsonBody: true),
-
       body: jsonEncode({
-
         'bestuurder_id': bestuurderId,
-
         'kampus_id': kampusId,
-
         'rigting': rigting.trim().toUpperCase(),
-
       }),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return SaamryGatePreviewDto.fromJson(
-
       Map<String, dynamic>.from(data as Map),
-
     );
-
   }
 
   static Future<Map<String, dynamic>> wagteSaamryGateConfirm({
-
     required int groepId,
-
+    int? eventId,
     required int kampusId,
-
     required String rigting,
-
     required String metode,
-
     required List<int> gebruikerIds,
-
   }) async {
-
     final response = await http.post(
-
       Uri.parse('$baseUrl/saamry/wagte/hek/bevestig'),
-
       headers: _saamryHeaders(jsonBody: true),
-
       body: jsonEncode({
-
         'groep_id': groepId,
-
+        if (eventId != null) 'event_id': eventId,
         'kampus_id': kampusId,
-
         'rigting': rigting.trim().toUpperCase(),
-
         'metode': metode.trim().toUpperCase(),
-
         'gebruiker_ids': gebruikerIds,
-
       }),
-
     );
-
     final data = _decodeSaamryResponse(response);
-
     return Map<String, dynamic>.from(data as Map);
-
   }
 
   /// -------------------------

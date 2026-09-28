@@ -465,6 +465,16 @@ class SaamryGroep(Base):
         back_populates='groep',
         cascade='all, delete-orphan',
     )
+    events = relationship(
+        'SaamryEvent',
+        back_populates='groep',
+        cascade='all, delete-orphan',
+    )
+    boodskappe = relationship(
+        'SaamryBoodskap',
+        back_populates='groep',
+        cascade='all, delete-orphan',
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -499,6 +509,106 @@ class SaamryGroepLid(Base):
         ),
     )
 
+
+
+
+class SaamryEvent(Base):
+    """Eenmalige Saamry-rit wat uit 'n permanente groep geskep word.
+
+    Die event het geen tydvenster nodig nie. Dit bly AKTIEF totdat die huidige
+    bestuurder suksesvol by 'n kampushek as IN of UIT bevestig is.
+    """
+
+    __tablename__ = 'saamry_event'
+
+    Event_ID = Column(Integer, primary_key=True, index=True)
+    Groep_ID = Column(Integer, ForeignKey('saamry_groep.Groep_ID', ondelete='CASCADE'), nullable=False, index=True)
+    Bestuurder_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False, index=True)
+    SAA_Status = Column(String(20), nullable=False, default='AKTIEF')
+    Voltooi_Rigting = Column(String(8), nullable=True)
+    Voltooi_Kampus_ID = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=True)
+    Bestuurder_Log_ID = Column(Integer, ForeignKey('toegangs_logs.Log_ID'), nullable=True)
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Voltooi_Op = Column(DateTime, nullable=True)
+    Gewysig_Op = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    groep = relationship('SaamryGroep', back_populates='events')
+    bestuurder = relationship('Gebruikers', foreign_keys=[Bestuurder_ID], lazy='selectin')
+    lede = relationship(
+        'SaamryEventLid',
+        back_populates='event',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+    voltooi_kampus = relationship('Kampus', foreign_keys=[Voltooi_Kampus_ID])
+    bestuurder_log = relationship('ToegangsLogs', foreign_keys=[Bestuurder_Log_ID])
+
+    __table_args__ = (
+        CheckConstraint(
+            '"SAA_Status" IN (\'AKTIEF\', \'VOLTOOI\', \'GEKANSELLEER\')',
+            name='ck_saamry_event_status',
+        ),
+        CheckConstraint(
+            '"Voltooi_Rigting" IS NULL OR "Voltooi_Rigting" IN (\'IN\', \'UIT\')',
+            name='ck_saamry_event_rigting',
+        ),
+    )
+
+
+class SaamryEventLid(Base):
+    __tablename__ = 'saamry_event_lid'
+
+    Event_ID = Column(Integer, ForeignKey('saamry_event.Event_ID', ondelete='CASCADE'), primary_key=True)
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    event = relationship('SaamryEvent', back_populates='lede')
+    gebruiker = relationship('Gebruikers', foreign_keys=[Gebruiker_ID], lazy='selectin')
+
+
+class SaamryBoodskap(Base):
+    """Privaat vriend-boodskap of permanente Saamrygroep-boodskap."""
+
+    __tablename__ = 'saamry_boodskap'
+
+    Boodskap_ID = Column(Integer, primary_key=True, index=True)
+    Stuurder_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False, index=True)
+    Ontvanger_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=True, index=True)
+    Groep_ID = Column(Integer, ForeignKey('saamry_groep.Groep_ID', ondelete='CASCADE'), nullable=True, index=True)
+    SAA_Boodskap = Column(Text, nullable=False)
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    stuurder = relationship('Gebruikers', foreign_keys=[Stuurder_ID], lazy='selectin')
+    ontvanger = relationship('Gebruikers', foreign_keys=[Ontvanger_ID], lazy='selectin')
+    groep = relationship('SaamryGroep', back_populates='boodskappe')
+    gelees_deur = relationship(
+        'SaamryBoodskapGelees',
+        back_populates='boodskap',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            '(("Groep_ID" IS NOT NULL AND "Ontvanger_ID" IS NULL) OR '
+            '("Groep_ID" IS NULL AND "Ontvanger_ID" IS NOT NULL))',
+            name='ck_saamry_boodskap_teiken',
+        ),
+        CheckConstraint(
+            'char_length(trim("SAA_Boodskap")) BETWEEN 1 AND 1000',
+            name='ck_saamry_boodskap_lengte',
+        ),
+    )
+
+
+class SaamryBoodskapGelees(Base):
+    __tablename__ = 'saamry_boodskap_gelees'
+
+    Boodskap_ID = Column(Integer, ForeignKey('saamry_boodskap.Boodskap_ID', ondelete='CASCADE'), primary_key=True)
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID', ondelete='CASCADE'), primary_key=True)
+    Gelees_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    boodskap = relationship('SaamryBoodskap', back_populates='gelees_deur')
+    gebruiker = relationship('Gebruikers', foreign_keys=[Gebruiker_ID])
 
 
 # --- BESOEKER OTP UITNODIGINGS ---
