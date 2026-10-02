@@ -538,11 +538,45 @@ def cancel_event(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+
+    # Wanneer 'n Event gekanselleer word, moet geen aktiewe RSVP daarvan
+    # oorbly nie. Dit maak ook eksterne QR-kodes onmiddellik ongeldig omdat
+    # die wag se Event-scan slegs RSVP_Status == "GAAN" aanvaar.
+    now = datetime.utcnow()
+
+    db.query(models.FunksieRSVP).filter(
+        models.FunksieRSVP.Funksie_ID == event_id,
+        models.FunksieRSVP.RSVP_Status == "GAAN",
+    ).update(
+        {
+            models.FunksieRSVP.RSVP_Status: "GEKANSELLEER",
+            models.FunksieRSVP.Gewysig_Op: now,
+        },
+        synchronize_session="fetch",
+    )
+
+    db.query(models.FunksiePubliekRSVP).filter(
+        models.FunksiePubliekRSVP.Funksie_ID == event_id,
+        models.FunksiePubliekRSVP.RSVP_Status == "GAAN",
+    ).update(
+        {
+            models.FunksiePubliekRSVP.RSVP_Status: "GEKANSELLEER",
+            models.FunksiePubliekRSVP.Gewysig_Op: now,
+        },
+        synchronize_session="fetch",
+    )
+
     event.FUN_Status = "GEKANSELLEER"
     event.FUN_Is_Aktief = False
-    event.Gewysig_Op = datetime.utcnow()
+    event.Gewysig_Op = now
+
     db.commit()
+
+    # _event_dict tel uit die relationship-collections. Expire hulle sodat
+    # die response onmiddellik die gekanselleerde RSVP-statusse reflekteer.
+    db.expire(event, ["rsvps", "publieke_rsvps"])
     db.refresh(event)
+
     return {"sukses": True, "data": _event_dict(db, event, current_user.Gebruiker_ID), "fout": None}
 
 

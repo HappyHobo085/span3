@@ -51,6 +51,12 @@ class UserBase(BaseModel):
     Is_Aktief: bool = True
 
 class UserCreate(UserBase):
+    # Die admin-blad stuur Rol_IDs (multi-rol) sonder Rol_ID, en die roete
+    # genereer self 'n GEB_ID_Nommer as geen verskaf word nie — albei geërfde
+    # velde moet dus hier opsioneel wees. Die roete vereis steeds ten minste
+    # een rol (Rol_IDs óf Rol_ID).
+    Rol_ID: Optional[int] = None
+    GEB_ID_Nommer: Optional[str] = None
     Rol_IDs: Optional[List[int]] = None
     GEB_Wagwoord: str = Field(..., min_length=8)
     STU_Nommer: Optional[str] = None
@@ -269,6 +275,10 @@ class Lokasie(LokasieBase):
     class Config:
         from_attributes = True
 
+class LokasieNFCTagUpdate(BaseModel):
+    """Body vir PUT /lokasies/{id}/nfc-tag: die nuwe fisiese tag-UID."""
+    NFC_UID: str
+
 # --- Klas Skep (Lokasie + NFC in een stap) ---
 class KlasSkep(BaseModel):
     """Data om 'n nuwe klas (lokasie + NFC vir die saal) in een stap te skep."""
@@ -316,6 +326,7 @@ class KlasBase(BaseModel):
     KLA_Dag: str
     KLA_Begin_Tyd: str
     KLA_Eind_Tyd: str
+    Lokasie_ID: Optional[int] = None
 
 class KlasCreate(KlasBase):
     pass
@@ -325,6 +336,14 @@ class Klas(KlasBase):
 
     class Config:
         from_attributes = True
+
+class KlasLokasieAssign(BaseModel):
+    Lokasie_ID: int = Field(..., gt=0)
+
+class RoosterLokaalKoppelingUpdate(BaseModel):
+    KLA_Lokaal: str = Field(..., min_length=1, max_length=100)
+    Lokasie_ID: Optional[int] = Field(default=None, gt=0)
+
 
 class KlasGroepAssign(BaseModel):
     Groep_ID: int
@@ -704,16 +723,24 @@ class WagteStudentScanRequest(BaseModel):
 
 class WagteProfileScanRequest(BaseModel):
     scan_kode: str
+    # Nuwe Step 13-konteks. Opsioneel gehou sodat ou kliënte nie onmiddellik breek nie.
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
 
 class WagteProfileVerifyRequest(BaseModel):
     gebruiker_id: int
-    kampus_id: int
+    # kampus_id bly opsioneel vir backwards compatibility.
+    kampus_id: Optional[int] = None
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
     rigting: str
     metode: str
 
 class WagteProfileDeclineRequest(BaseModel):
     gebruiker_id: int
-    kampus_id: int
+    kampus_id: Optional[int] = None
+    lokasie_id: Optional[int] = None
+    koshuis_id: Optional[int] = None
     metode: str = "QR"
 
 # --- SAAMRY SCHEMAS ---
@@ -723,15 +750,30 @@ class SaamryVriendVersoekCreate(BaseModel):
 
 
 class SaamryGroepCreate(BaseModel):
-    naam: Optional[str] = None
-    vertrekpunt: str
-    bestemming: str
-    vertrek_tyd: datetime
-    sitplekke: int = 1
+    # Nuwe permanente groep: slegs naam + kapasiteit is nodig.
+    naam: str
+    sitplekke: int = Field(default=4, ge=1, le=8)
+    # Legacy velde bly opsioneel sodat ouer kliënte nie onmiddellik breek nie.
+    vertrekpunt: Optional[str] = None
+    bestemming: Optional[str] = None
+    vertrek_tyd: Optional[datetime] = None
 
 
 class SaamryGroepNooiCreate(BaseModel):
     gebruiker_id: int
+
+
+class SaamryBestuurderOordragRequest(BaseModel):
+    nuwe_bestuurder_id: int
+
+
+class SaamryEventCreate(BaseModel):
+    groep_id: int
+    gebruiker_ids: List[int]
+
+
+class SaamryBoodskapCreate(BaseModel):
+    boodskap: str = Field(..., min_length=1, max_length=1000)
 
 
 class SaamryHekPreviewRequest(BaseModel):
@@ -746,6 +788,7 @@ class SaamryHekBevestigRequest(BaseModel):
     rigting: str
     metode: str
     gebruiker_ids: List[int]
+    event_id: Optional[int] = None
 
 
 class SaamryProfielUpdate(BaseModel):
@@ -841,3 +884,46 @@ class WagteEventGuestDeclineRequest(BaseModel):
     publiek_rsvp_id: int
     kampus_id: int
     metode: str = "QR"
+
+# --- NOODGEVAL SCHEMAS ---
+class NoodgevalMqttToetsRequest(BaseModel):
+    kampus_id: int = Field(..., gt=0)
+    titel: str = Field(default="MQTT TOETS", min_length=1, max_length=150)
+    boodskap: str = Field(default="MOON MQTT toets", min_length=1, max_length=1000)
+
+
+class NoodgevalCreateRequest(BaseModel):
+    kampus_id: int = Field(..., gt=0)
+    tipe: str = Field(default="NOODGEVAL", min_length=1, max_length=50)
+    titel: str = Field(..., min_length=1, max_length=150)
+    boodskap: str = Field(..., min_length=1, max_length=2000)
+
+
+class NoodgevalRead(BaseModel):
+    Noodgeval_ID: int
+    Kampus_ID: int
+    Geskep_Deur_ID: int
+    Gesluit_Deur_ID: Optional[int] = None
+    NOO_Tipe: str
+    NOO_Titel: str
+    NOO_Boodskap: str
+    NOO_Status: str
+    NOO_Boodskap_ID: str
+    NOO_Begin_Op: datetime
+    NOO_Mqtt_Gestuur_Op: Optional[datetime] = None
+    NOO_Gesluit_Op: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NoodgevalKennisnameRead(BaseModel):
+    Kennisname_ID: int
+    Noodgeval_ID: int
+    Gebruiker_ID: int
+    NOK_Status: str
+    NOK_Ontvang_Op: Optional[datetime] = None
+    NOK_Kennis_Geneem_Op: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

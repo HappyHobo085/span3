@@ -12,7 +12,7 @@
   <title>MOON — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260903d">
+  <link rel="stylesheet" href="styles.css?v=20260915">
   <script src="theme.js?v=20260819"></script>
 </head>
 <body>
@@ -125,6 +125,21 @@
         </div>
         <p id="rooster-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
       </article>
+      <!-- Roosterlokaal mapping: koppel elke Lantiv-lokaal eenmalig aan 'n fisiese MOON-klaskamer/NFC-tag. -->
+      <article class="glass-card panel" aria-label="Roosterlokaal Koppeling">
+        <h2>Roosterlokale Koppeling</h2>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:10px">
+          Koppel elke lokaalnaam uit die Lantiv-rooster aan die werklike MOON-klaskamer.
+          Die koppeling word onthou en weer gebruik wanneer 'n nuwe rooster ingevoer word.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn-outline btn-sm" id="refresh-rooster-lokale-btn" type="button">Verfris Lokale</button>
+          <span id="rooster-lokale-opsomming" style="font-size:11px;color:var(--text-2)">--</span>
+        </div>
+        <div id="rooster-lokale-status" class="modal-status" aria-live="polite"></div>
+        <div id="rooster-lokale-list" class="admin-list" aria-label="Lantiv na MOON lokaal koppelings"></div>
+      </article>
+
       <!-- Paneel 6: Studente en hul groepe/modules. Bepaal wie op 'n klas se
            register (personeel.html) verskyn: groep -> klasse, module -> klasse. -->
       <article class="glass-card panel" aria-label="Studente en Groepe">
@@ -259,6 +274,13 @@
         <label for="new-user-koshuis">Koshuis</label>
         <select class="glass-select" id="new-user-koshuis">
           <option value="">Kies koshuis...</option>
+        </select>
+      </div>
+      <!-- Slegs vir Opsigters: die kampus waarvoor hulle verantwoordelik is -->
+      <div class="field" id="opsigter-kampus-field" style="display:none">
+        <label for="new-user-kampus">Kampus</label>
+        <select class="glass-select" id="new-user-kampus">
+          <option value="">Kies kampus...</option>
         </select>
       </div>
       <div class="field">
@@ -448,6 +470,10 @@
           <option value="">Kies kampus...</option>
         </select>
       </div>
+      <div class="field">
+        <label for="class-tag-uid">NFC-tag UID (bv. L4)</label>
+        <input id="class-tag-uid" type="text" placeholder="Los leeg om outomaties te genereer">
+      </div>
       <div class="class-modal-actions">
         <button class="btn-outline btn-danger" id="delete-lokaal-btn" type="button"
                 style="display:none;margin-right:auto">Verwyder</button>
@@ -459,8 +485,8 @@
 
   <!-- Skripte: website_api_calls.js praat met die bediener, main.js is
        gedeelde kode, en admin.js beheer hierdie spesifieke bladsy -->
-  <script src="website_api_calls.js?v=20260902"></script>
-  <script src="main.js?v=20260902"></script>
-  <script src="admin.js?v=20260902"></script>
+  <script src="website_api_calls.js?v=20260916fix181"></script>
+  <script src="main.js?v=20260915"></script>
+  <script src="admin.js?v=20260916c"></script>
 </body>
 </html>

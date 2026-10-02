@@ -18,44 +18,55 @@ class SekuriteitswagHomePage extends StatefulWidget {
 }
 
 class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
-  KampusDto? _gekoseKampus;
-  List<KampusDto> _kampusse = [];
-  bool _kampusseLoading = true;
+  SkandeerPlekDto? _gekosePlek;
+  List<SkandeerPlekDto> _skandeerPlekke = [];
+  bool _plekkeLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadKampusse();
+    _loadSkandeerPlekke();
   }
 
-  Future<void> _loadKampusse() async {
+  Future<void> _loadSkandeerPlekke() async {
     try {
-      final kampusse = await MoonApi.fetchWagteKampusse();
+      final plekke = await MoonApi.fetchWagteSkandeerPlekke();
 
       if (!mounted) return;
 
       setState(() {
-        _kampusse = kampusse;
-        _gekoseKampus = kampusse.isNotEmpty ? kampusse.first : null;
-        _kampusseLoading = false;
+        _skandeerPlekke = plekke;
+        _gekosePlek = plekke.isNotEmpty ? plekke.first : null;
+        _plekkeLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _kampusseLoading = false;
+        _plekkeLoading = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kon nie kampusse laai nie: $e')),
+        SnackBar(content: Text('Kon nie skandeerplekke laai nie: $e')),
       );
     }
   }
 
-  void _openKampusScan() {
-    if (_gekoseKampus == null || _gekoseKampus!.kampusId == null) {
+  void _openScan() {
+    final plek = _gekosePlek;
+
+    if (plek == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kies eers ’n kampus')),
+        const SnackBar(content: Text('Kies eers ’n skandeerplek')),
+      );
+      return;
+    }
+
+    if (plek.kampusId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hierdie skandeerplek het nie ’n geldige kampuskoppeling nie'),
+        ),
       );
       return;
     }
@@ -64,8 +75,11 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
       context,
       MaterialPageRoute(
         builder: (_) => KampusSkandeerPage(
-          kampusId: _gekoseKampus!.kampusId!,
-          kampusNaam: _gekoseKampus!.naam,
+          kampusId: plek.kampusId!,
+          kampusNaam: plek.naam,
+          lokasieId: plek.lokasieId,
+          koshuisId: plek.koshuisId,
+          scanPlekTipe: plek.tipe,
         ),
       ),
     );
@@ -73,6 +87,10 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final plek = _gekosePlek;
+    final scanLabel =
+        plek?.isKoshuis == true ? 'KOSHUIS SKANDEER' : 'KAMPUS SKANDEER';
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -86,7 +104,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: GlassCard(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: _kampusseLoading
+                child: _plekkeLoading
                     ? const Padding(
                         padding: EdgeInsets.all(14),
                         child: Center(child: CircularProgressIndicator()),
@@ -94,16 +112,38 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                     : InkWell(
                         borderRadius: BorderRadius.circular(14),
                         onTap: () async {
-                          final selected = await showMenu<KampusDto>(
+                          final selected = await showMenu<SkandeerPlekDto>(
                             context: context,
                             position: const RelativeRect.fromLTRB(16, 130, 16, 0),
                             color: kBg,
-                            items: _kampusse.map((kampus) {
-                              return PopupMenuItem<KampusDto>(
-                                value: kampus,
-                                child: Text(
-                                  kampus.naam,
-                                  style: GoogleFonts.inter(color: kText1),
+                            items: _skandeerPlekke.map((plek) {
+                              return PopupMenuItem<SkandeerPlekDto>(
+                                value: plek,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      plek.isKoshuis
+                                          ? Icons.apartment_rounded
+                                          : Icons.location_on_rounded,
+                                      color: kAccent,
+                                      size: 19,
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        plek.naam,
+                                        style: GoogleFonts.inter(color: kText1),
+                                      ),
+                                    ),
+                                    Text(
+                                      plek.isKoshuis ? 'KOSHUIS' : 'KAMPUS',
+                                      style: GoogleFonts.inter(
+                                        color: kTextMuted,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             }).toList(),
@@ -111,7 +151,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
 
                           if (selected != null) {
                             setState(() {
-                              _gekoseKampus = selected;
+                              _gekosePlek = selected;
                             });
                           }
                         },
@@ -122,8 +162,10 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.location_on_rounded,
+                              Icon(
+                                plek?.isKoshuis == true
+                                    ? Icons.apartment_rounded
+                                    : Icons.location_on_rounded,
                                 color: kAccent,
                                 size: 22,
                               ),
@@ -133,7 +175,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'KIES KAMPUS',
+                                      'KIES SKANPLEK',
                                       style: GoogleFonts.inter(
                                         color: kTextMuted,
                                         fontSize: 9,
@@ -143,7 +185,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      _gekoseKampus?.naam ?? 'Kies kampus',
+                                      plek?.naam ?? 'Kies skandeerplek',
                                       style: GoogleFonts.inter(
                                         color: kText1,
                                         fontSize: 14,
@@ -173,10 +215,10 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                       width: double.infinity,
                       height: 190,
                       child: GlassTapPanel(
-                        label: 'KAMPUS SKANDEER',
+                        label: scanLabel,
                         subtitle: 'QR • NFC • Handmatig',
-                        icon: '🚪',
-                        onTap: _openKampusScan,
+                        icon: plek?.isKoshuis == true ? '🏠' : '🚪',
+                        onTap: _openScan,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -187,15 +229,19 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                           Expanded(
                             child: GlassTapPanel(
                               label: 'BESOEKERS',
-                              subtitle: 'OTP verifieer',
+                              subtitle: 'OTP IN • UIT',
                               icon: '👤',
                               borderColor: const Color(0x3300C2FF),
                               onTap: () {
-                                if (_gekoseKampus == null ||
-                                    _gekoseKampus!.kampusId == null) {
+                                final selected = _gekosePlek;
+                                if (selected == null ||
+                                    !selected.isKampus ||
+                                    selected.kampusId == null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Kies eers ’n kampus'),
+                                      content: Text(
+                                        'Kies ’n kampus as skandeerplek vir besoekers',
+                                      ),
                                     ),
                                   );
                                   return;
@@ -205,8 +251,8 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => VisitorVerifyPage(
-                                      kampusId: _gekoseKampus!.kampusId!,
-                                      kampusNaam: _gekoseKampus!.naam,
+                                      kampusId: selected.kampusId!,
+                                      kampusNaam: selected.naam,
                                     ),
                                   ),
                                 );
@@ -219,7 +265,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                               label: 'ONVERWAGTE\nBESOEKER',
                               subtitle: 'Lisensie & rede',
                               icon: '📷',
-                              borderColor: Colors.orangeAccent.withOpacity(0.35),
+                              borderColor: Colors.orangeAccent.withValues(alpha: 0.35),
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -242,18 +288,28 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
       ),
     );
   }
-
 }
 
 class KampusSkandeerPage extends StatefulWidget {
+  // kampusId bly die administratiewe kampuskoppeling.
+  // lokasieId bepaal waar die toegang werklik gelog word.
   final int kampusId;
   final String kampusNaam;
+  final int lokasieId;
+  final int? koshuisId;
+  final String scanPlekTipe;
 
   const KampusSkandeerPage({
     super.key,
     required this.kampusId,
     required this.kampusNaam,
+    required this.lokasieId,
+    required this.koshuisId,
+    required this.scanPlekTipe,
   });
+
+  bool get isKoshuis => scanPlekTipe.toUpperCase() == 'KOSHUIS';
+  bool get isKampus => scanPlekTipe.toUpperCase() == 'KAMPUS';
 
   @override
   State<KampusSkandeerPage> createState() => _KampusSkandeerPageState();
@@ -446,10 +502,15 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
     });
 
     try {
-      // Publieke Event QR's gebruik dieselfde normale Kampus Skandeer-knoppie.
-      // Moenie dit deur die gewone Student/Personeel profielsoektog stuur nie.
+      // Event QR's is net 'n KAMPUS-funksie.
       if (metode == 'QR' &&
           cleanNommer.toUpperCase().startsWith('MOON-EVENT:')) {
+        if (!widget.isKampus) {
+          throw Exception(
+            'Event QR kan net by ’n kampus-skandeerplek gebruik word',
+          );
+        }
+
         final preview = await MoonApi.wagteEventGuestPreview(
           scanKode: cleanNommer,
           kampusId: widget.kampusId,
@@ -483,7 +544,11 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         return;
       }
 
-      final profile = await MoonApi.wagteProfileScan(cleanNommer);
+      final profile = await MoonApi.wagteProfileScan(
+        cleanNommer,
+        lokasieId: widget.lokasieId,
+        koshuisId: widget.koshuisId,
+      );
 
       if (!mounted) return;
 
@@ -503,33 +568,70 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         _status = 'Profiel gevind via $metode';
       });
 
-      final saamryPreview = await MoonApi.wagteSaamryGatePreview(
-        bestuurderId: profile.gebruikerId,
-        kampusId: widget.kampusId,
-        rigting: profile.voorgesteldeRigting,
-      );
+      Widget verifyPage;
 
-      if (!mounted) return;
+      if (widget.isKoshuis) {
+        // Koshuis: geen Saamry/event-vloei nie; slegs die individuele inwoner.
+        verifyPage = WagteVerifyPage(
+          profile: profile,
+          kampusId: widget.kampusId,
+          kampusNaam: widget.kampusNaam,
+          lokasieId: widget.lokasieId,
+          koshuisId: widget.koshuisId,
+          scanPlekTipe: widget.scanPlekTipe,
+          metode: metode,
+        );
+      } else {
+        final saamryPreview = await MoonApi.wagteSaamryGatePreview(
+          bestuurderId: profile.gebruikerId,
+          kampusId: widget.kampusId,
+          rigting: profile.voorgesteldeRigting,
+        );
+
+        if (!mounted) return;
+
+        if (saamryPreview.blockedByEvent) {
+          setState(() {
+            _loading = false;
+            _status = saamryPreview.rede ??
+                'Hierdie passasier moet saam met die Driver se aktiewe Saamry-event scan';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.orange.shade800,
+              content: Text(
+                saamryPreview.rede ??
+                    'Hierdie passasier is deel van ’n aktiewe Saamry-event. Scan die Driver.',
+              ),
+            ),
+          );
+          await _resumeAutomaticListening();
+          return;
+        }
+
+        verifyPage = saamryPreview.hasGroup &&
+                saamryPreview.groepId != null &&
+                saamryPreview.lede.length > 1
+            ? WagteSaamryVerifyPage(
+                preview: saamryPreview,
+                kampusId: widget.kampusId,
+                kampusNaam: widget.kampusNaam,
+                metode: metode,
+              )
+            : WagteVerifyPage(
+                profile: profile,
+                kampusId: widget.kampusId,
+                kampusNaam: widget.kampusNaam,
+                lokasieId: widget.lokasieId,
+                koshuisId: widget.koshuisId,
+                scanPlekTipe: widget.scanPlekTipe,
+                metode: metode,
+              );
+      }
 
       final verified = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(
-          builder: (_) => saamryPreview.hasGroup &&
-                  saamryPreview.groepId != null &&
-                  saamryPreview.lede.length > 1
-              ? WagteSaamryVerifyPage(
-                  preview: saamryPreview,
-                  kampusId: widget.kampusId,
-                  kampusNaam: widget.kampusNaam,
-                  metode: metode,
-                )
-              : WagteVerifyPage(
-                  profile: profile,
-                  kampusId: widget.kampusId,
-                  kampusNaam: widget.kampusNaam,
-                  metode: metode,
-                ),
-        ),
+        MaterialPageRoute(builder: (_) => verifyPage),
       );
 
       if (!mounted) return;
@@ -669,8 +771,12 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
     if (clean.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tik eers ’n student-, personeel- of ID-nommer in'),
+        SnackBar(
+          content: Text(
+            widget.isKoshuis
+                ? 'Tik eers ’n student- of ID-nommer in'
+                : 'Tik eers ’n student-, personeel- of ID-nommer in',
+          ),
         ),
       );
       _manualFocusNode.requestFocus();
@@ -703,7 +809,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Kampus Skandeer',
+              title: widget.isKoshuis ? 'Koshuis Skandeer' : 'Kampus Skandeer',
               subtitle: widget.kampusNaam,
               showBack: true,
               trailing: const NfcStatusBadge(),
@@ -793,7 +899,9 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
                               width: 1.8,
                             ),
                           ),
-                          hintText: 'Tik student-, personeel- of ID-nommer...',
+                          hintText: widget.isKoshuis
+                              ? 'Tik student- of ID-nommer...'
+                              : 'Tik student-, personeel- of ID-nommer...',
                           hintStyle: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
                           helperText: _manualController.text.trim().isEmpty
                               ? null
@@ -934,10 +1042,10 @@ class _AutoScanBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: active ? Colors.green.withOpacity(0.12) : Colors.white10,
+        color: active ? Colors.green.withValues(alpha: 0.12) : Colors.white10,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: active ? Colors.green.withOpacity(0.45) : Colors.white24,
+          color: active ? Colors.green.withValues(alpha: 0.45) : Colors.white24,
         ),
       ),
       child: Row(
@@ -1105,10 +1213,10 @@ class _WagteEventGuestVerifyPageState
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.14),
+                        color: Colors.green.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: Colors.green.withOpacity(0.7),
+                          color: Colors.green.withValues(alpha: 0.7),
                           width: 1.3,
                         ),
                       ),
@@ -1161,10 +1269,10 @@ class _WagteEventGuestVerifyPageState
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: kAccent.withOpacity(0.13),
+                              color: kAccent.withValues(alpha: 0.13),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: kAccent.withOpacity(0.5),
+                                color: kAccent.withValues(alpha: 0.5),
                               ),
                             ),
                             child: Text(
@@ -1238,13 +1346,13 @@ class _WagteEventGuestVerifyPageState
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: isIn
-                            ? Colors.green.withOpacity(0.13)
-                            : kAccent.withOpacity(0.12),
+                            ? Colors.green.withValues(alpha: 0.13)
+                            : kAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isIn
-                              ? Colors.green.withOpacity(0.65)
-                              : kAccent.withOpacity(0.6),
+                              ? Colors.green.withValues(alpha: 0.65)
+                              : kAccent.withValues(alpha: 0.6),
                         ),
                       ),
                       child: Column(
@@ -1477,6 +1585,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
     try {
       final result = await MoonApi.wagteSaamryGateConfirm(
         groepId: widget.preview.groepId!,
+        eventId: widget.preview.eventId,
         kampusId: widget.kampusId,
         rigting: _rigting,
         metode: widget.metode,
@@ -1575,8 +1684,8 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
           duration: const Duration(milliseconds: 160),
           decoration: BoxDecoration(
             color: selected
-                ? Colors.green.withOpacity(0.08)
-                : Colors.white.withOpacity(0.035),
+                ? Colors.green.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.035),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selectionColor,
@@ -1655,7 +1764,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.92),
+                            color: Colors.green.withValues(alpha: 0.92),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -1794,8 +1903,8 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: _rigting == 'IN'
-                                      ? Colors.green.withOpacity(0.13)
-                                      : Colors.red.withOpacity(0.13),
+                                      ? Colors.green.withValues(alpha: 0.13)
+                                      : Colors.red.withValues(alpha: 0.13),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: _rigting == 'IN'
@@ -1873,7 +1982,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.14),
+                        color: Colors.green.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.green),
                       ),
@@ -1937,6 +2046,9 @@ class WagteVerifyPage extends StatefulWidget {
   final WagteProfileScanDto profile;
   final int kampusId;
   final String kampusNaam;
+  final int lokasieId;
+  final int? koshuisId;
+  final String scanPlekTipe;
   final String metode;
 
   const WagteVerifyPage({
@@ -1944,6 +2056,9 @@ class WagteVerifyPage extends StatefulWidget {
     required this.profile,
     required this.kampusId,
     required this.kampusNaam,
+    required this.lokasieId,
+    required this.koshuisId,
+    required this.scanPlekTipe,
     required this.metode,
   });
 
@@ -1978,6 +2093,8 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
       await MoonApi.wagteProfileVerify(
         gebruikerId: widget.profile.gebruikerId,
         kampusId: widget.kampusId,
+        lokasieId: widget.lokasieId,
+        koshuisId: widget.koshuisId,
         rigting: _rigting,
         metode: widget.metode,
       );
@@ -2045,6 +2162,8 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
       await MoonApi.wagteProfileDecline(
         gebruikerId: widget.profile.gebruikerId,
         kampusId: widget.kampusId,
+        lokasieId: widget.lokasieId,
+        koshuisId: widget.koshuisId,
         metode: widget.metode,
       );
 
@@ -2548,10 +2667,10 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     if (invite == null || _decisionLoading) return;
 
     final confirmed = await _confirmDecision(
-      title: 'Laat Toegang Toe',
+      title: 'Skandeer Besoeker IN',
       message:
-          'Laat ${invite.volleNaam} toegang toe by ${widget.kampusNaam}?',
-      action: 'Laat Toe',
+          'Skandeer ${invite.volleNaam} IN by ${widget.kampusNaam}?',
+      action: 'SKANDEER IN',
       actionColor: Colors.green,
     );
     if (!confirmed) return;
@@ -2559,7 +2678,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     setState(() => _decisionLoading = true);
 
     try {
-      final updated = await MoonApi.allowVisitorEntry(
+      await MoonApi.allowVisitorEntry(
         uitnodigingId: invite.uitnodigingId,
         kampusId: widget.kampusId,
       );
@@ -2568,13 +2687,68 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
 
       setState(() {
         _decisionLoading = false;
-        _invite = updated;
+        _invite = null;
+        _error = null;
+        _otpController.clear();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
-          content: Text('Besoekertoegang toegestaan'),
+          content: Text(
+            'Besoeker IN geskandeer. Gebruik dieselfde OTP om later UIT te skandeer.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _decisionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exitVisitor() async {
+    final invite = _invite;
+    if (invite == null || _decisionLoading) return;
+
+    final confirmed = await _confirmDecision(
+      title: 'Skandeer Besoeker UIT',
+      message:
+          'Skandeer ${invite.volleNaam} UIT by ${widget.kampusNaam}? Daarna kan hierdie OTP nie weer gebruik word nie.',
+      action: 'SKANDEER UIT',
+      actionColor: Colors.orangeAccent,
+    );
+    if (!confirmed) return;
+
+    setState(() => _decisionLoading = true);
+
+    try {
+      await MoonApi.exitVisitor(
+        uitnodigingId: invite.uitnodigingId,
+        kampusId: widget.kampusId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _decisionLoading = false;
+        _invite = null;
+        _error = null;
+        _otpController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text(
+            'Besoeker UIT geskandeer. Hierdie OTP is nou klaar gebruik.',
+          ),
         ),
       );
     } catch (e) {
@@ -2649,6 +2823,8 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
     switch (status) {
       case 'TOEGELAAT':
         return Colors.green;
+      case 'UIT':
+        return Colors.orangeAccent;
       case 'GEWEIER':
         return Colors.red;
       case 'VERVAL':
@@ -2663,6 +2839,8 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
   Widget build(BuildContext context) {
     final invite = _invite;
     final pending = invite?.status == 'HANGEND';
+    final checkedIn = invite?.status == 'TOEGELAAT';
+    final checkedOut = invite?.status == 'UIT';
 
     return Scaffold(
       backgroundColor: kBg,
@@ -2720,9 +2898,9 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.12),
+                          color: Colors.red.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.red.withOpacity(0.6)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.6)),
                         ),
                         child: Column(
                           children: [
@@ -2752,7 +2930,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: _statusColor(invite.status).withOpacity(0.12),
+                          color: _statusColor(invite.status).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: _statusColor(invite.status),
@@ -2764,17 +2942,23 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                             Icon(
                               pending
                                   ? Icons.verified_user_outlined
-                                  : invite.status == 'TOEGELAAT'
-                                      ? Icons.check_circle_rounded
-                                      : Icons.cancel_rounded,
+                                  : checkedIn
+                                      ? Icons.login_rounded
+                                      : checkedOut
+                                          ? Icons.logout_rounded
+                                          : Icons.cancel_rounded,
                               color: _statusColor(invite.status),
                               size: 58,
                             ),
                             const SizedBox(height: 12),
                             Text(
                               pending
-                                  ? 'GELDIGE BESOEKER'
-                                  : invite.status,
+                                  ? 'GELDIGE OTP — SKANDEER IN'
+                                  : checkedIn
+                                      ? 'BESOEKER IS IN — SKANDEER UIT'
+                                      : checkedOut
+                                          ? 'BESOEKER UIT'
+                                          : invite.status,
                               style: GoogleFonts.inter(
                                 color: _statusColor(invite.status),
                                 fontSize: 13,
@@ -2845,7 +3029,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                     child: GradientActionButton(
                                       label: _decisionLoading
                                           ? 'BESIG...'
-                                          : 'LAAT TOE',
+                                          : 'SKANDEER IN',
                                       onTap: _decisionLoading
                                           ? () {}
                                           : _allowEntry,
@@ -2865,6 +3049,19 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                                     ),
                                   ),
                                 ],
+                              )
+                            else if (checkedIn)
+                              SizedBox(
+                                width: double.infinity,
+                                child: GradientActionButton(
+                                  label: _decisionLoading
+                                      ? 'BESIG...'
+                                      : 'SKANDEER UIT',
+                                  onTap: _decisionLoading
+                                      ? () {}
+                                      : _exitVisitor,
+                                  height: 48,
+                                ),
                               )
                             else
                               OutlineActionButton(

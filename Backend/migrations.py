@@ -187,7 +187,7 @@ def run_migrations(engine):
                     CONSTRAINT ck_besoeker_uitnodiging_status
                         CHECK ("BES_Status" IN (
                             'HANGEND', 'TOEGELAAT', 'GEWEIER',
-                            'GEKANSELLEER', 'VERVAL'
+                            'GEKANSELLEER', 'VERVAL', 'UIT'
                         ))
                 )
             """))
@@ -790,35 +790,349 @@ def run_migrations(engine):
             f"(Performance indexes) het misluk: {_migrasie_fout}"
         )
 
-    # Migrasie 016: Skep saamry_profiel tabel en indekse indien dit nie bestaan nie
+
+    # Migrasie 016: Noodgeval + ontvang/kennisname persistence
     try:
-        with engine.connect() as _conn:
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS saamry_profiel (
-                    "Profiel_ID" SERIAL PRIMARY KEY,
-                    "Gebruiker_ID" INTEGER NOT NULL UNIQUE REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
-                    "Rol_Tipe" VARCHAR(20) NOT NULL DEFAULT 'BEIDE',
-                    "Voorstad" VARCHAR(120),
-                    "Sone_Kode" VARCHAR(50),
-                    "Kampus_ID" INTEGER REFERENCES kampus("Kampus_ID") ON DELETE SET NULL,
-                    "Geslag" VARCHAR(20),
-                    "Geslag_Voorkeur" VARCHAR(20) NOT NULL DEFAULT 'ENIGE',
-                    "Maks_Ompad_Minute" INTEGER NOT NULL DEFAULT 15,
-                    "Is_Aktief_Saamryer" BOOLEAN NOT NULL DEFAULT TRUE,
-                    "Geskep_Op" TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc') NOT NULL,
-                    "Gewysig_Op" TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc') NOT NULL,
-                    CONSTRAINT ck_saamry_profiel_rol CHECK ("Rol_Tipe" IN ('BESTUURDER', 'PASSASIER', 'BEIDE')),
-                    CONSTRAINT ck_saamry_profiel_geslag_voorkeur CHECK ("Geslag_Voorkeur" IN ('ENIGE', 'DIESELFDE'))
-                );
-                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_gebruiker ON saamry_profiel ("Gebruiker_ID");
-                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_kampus ON saamry_profiel ("Kampus_ID");
-                CREATE INDEX IF NOT EXISTS ix_saamry_profiel_aktief ON saamry_profiel ("Is_Aktief_Saamryer");
-            """))
-            _conn.commit()
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval (
+                    "Noodgeval_ID" SERIAL PRIMARY KEY,
+                    "Kampus_ID" INT NOT NULL,
+                    "Geskep_Deur_ID" INT NOT NULL,
+                    "Gesluit_Deur_ID" INT,
+                    "NOO_Tipe" VARCHAR(50) NOT NULL DEFAULT 'NOODGEVAL',
+                    "NOO_Titel" VARCHAR(150) NOT NULL,
+                    "NOO_Boodskap" TEXT NOT NULL,
+                    "NOO_Status" VARCHAR(20) NOT NULL DEFAULT 'AKTIEF',
+                    "NOO_Boodskap_ID" VARCHAR(64) NOT NULL UNIQUE,
+                    "NOO_Begin_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "NOO_Mqtt_Gestuur_Op" TIMESTAMP,
+                    "NOO_Gesluit_Op" TIMESTAMP,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_noodgeval_kampus
+                        FOREIGN KEY ("Kampus_ID") REFERENCES kampus("Kampus_ID"),
+                    CONSTRAINT fk_noodgeval_geskep_deur
+                        FOREIGN KEY ("Geskep_Deur_ID") REFERENCES gebruikers("Gebruiker_ID"),
+                    CONSTRAINT fk_noodgeval_gesluit_deur
+                        FOREIGN KEY ("Gesluit_Deur_ID") REFERENCES gebruikers("Gebruiker_ID"),
+                    CONSTRAINT ck_noodgeval_status
+                        CHECK ("NOO_Status" IN ('AKTIEF', 'GESLUIT'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval_kennisname (
+                    "Kennisname_ID" SERIAL PRIMARY KEY,
+                    "Noodgeval_ID" INT NOT NULL,
+                    "Gebruiker_ID" INT NOT NULL,
+                    "NOK_Status" VARCHAR(20) NOT NULL DEFAULT 'ONTVANG',
+                    "NOK_Ontvang_Op" TIMESTAMP,
+                    "NOK_Kennis_Geneem_Op" TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_noodgeval_kennisname_noodgeval
+                        FOREIGN KEY ("Noodgeval_ID")
+                        REFERENCES noodgeval("Noodgeval_ID") ON DELETE CASCADE,
+                    CONSTRAINT fk_noodgeval_kennisname_gebruiker
+                        FOREIGN KEY ("Gebruiker_ID")
+                        REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    CONSTRAINT uq_noodgeval_kennisname_gebruiker
+                        UNIQUE ("Noodgeval_ID", "Gebruiker_ID"),
+                    CONSTRAINT ck_noodgeval_kennisname_status
+                        CHECK ("NOK_Status" IN ('ONTVANG', 'KENNIS_GENEEM'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kampus_status_begin
+                ON noodgeval ("Kampus_ID", "NOO_Status", "NOO_Begin_Op" DESC)
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kennisname_noodgeval_status
+                ON noodgeval_kennisname ("Noodgeval_ID", "NOK_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_kennisname_gebruiker
+                ON noodgeval_kennisname ("Gebruiker_ID")
+            '''))
     except Exception as _migrasie_fout:
         print(
             "Waarskuwing: migrasie 016 "
-            f"(saamry_profiel tabel) het misluk: {_migrasie_fout}"
+            f"(Noodgeval persistence) het misluk: {_migrasie_fout}"
         )
 
 
+    # Migrasie 017: Besoeker OTP kan een keer IN en daarna een keer UIT skandeer
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                ALTER TABLE besoeker_uitnodiging
+                DROP CONSTRAINT IF EXISTS ck_besoeker_uitnodiging_status
+            """))
+            _conn.execute(text("""
+                ALTER TABLE besoeker_uitnodiging
+                ADD CONSTRAINT ck_besoeker_uitnodiging_status
+                CHECK ("BES_Status" IN (
+                    'HANGEND', 'TOEGELAAT', 'GEWEIER',
+                    'GEKANSELLEER', 'VERVAL', 'UIT'
+                ))
+            """))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 017 "
+            f"(Besoeker OTP IN/UIT) het misluk: {_migrasie_fout}"
+        )
+
+
+
+    # Migrasie 018: Noodgeval roll-call vir eksterne Event-gaste
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS noodgeval_event_gas_kontrole (
+                    "Kontrole_ID" SERIAL PRIMARY KEY,
+                    "Noodgeval_ID" INTEGER NOT NULL
+                        REFERENCES noodgeval("Noodgeval_ID") ON DELETE CASCADE,
+                    "Publiek_RSVP_ID" INTEGER NOT NULL
+                        REFERENCES funksie_publiek_rsvp("Publiek_RSVP_ID") ON DELETE CASCADE,
+                    "Gemerk_Deur_ID" INTEGER NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "NKK_Status" VARCHAR(20) NOT NULL,
+                    "NKK_Gemerk_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_noodgeval_event_gas_kontrole
+                        UNIQUE ("Noodgeval_ID", "Publiek_RSVP_ID"),
+                    CONSTRAINT ck_noodgeval_event_gas_kontrole_status
+                        CHECK ("NKK_Status" IN ('DAAR', 'NIE_DAAR'))
+                )
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_event_gas_kontrole_nood_status
+                ON noodgeval_event_gas_kontrole ("Noodgeval_ID", "NKK_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_noodgeval_event_gas_kontrole_rsvp
+                ON noodgeval_event_gas_kontrole ("Publiek_RSVP_ID")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 018 "
+            f"(Noodgeval eksterne Event-gaste) het misluk: {_migrasie_fout}"
+        )
+
+    # Migrasie 019: Koppel rooster-klas aan fisiese Klaskamer/NFC-lokasie
+    # 018 is doelbewus oorgeslaan hier omdat dit deur die Nood/Event-gaste stap
+    # gebruik kan word. Hierdie migrasie is idempotent en nie-destruktief.
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                ALTER TABLE klas
+                ADD COLUMN IF NOT EXISTS "Lokasie_ID" INT NULL
+            '''))
+            _conn.execute(text('''
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'fk_klas_lokasie'
+                          AND conrelid = 'klas'::regclass
+                    ) THEN
+                        ALTER TABLE klas
+                        ADD CONSTRAINT fk_klas_lokasie
+                        FOREIGN KEY ("Lokasie_ID")
+                        REFERENCES lokasie("Lokasie_ID")
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_klas_lokasie_id
+                ON klas ("Lokasie_ID")
+            '''))
+            # Veilige eerste backfill: presiese lokaalnaam-match op Klaskamer.
+            _conn.execute(text('''
+                UPDATE klas k
+                SET "Lokasie_ID" = l."Lokasie_ID"
+                FROM lokasie l
+                WHERE k."Lokasie_ID" IS NULL
+                  AND lower(trim(k."KLA_Lokaal")) = lower(trim(l."LOK_Naam"))
+                  AND lower(trim(l."LOK_Tipe")) = 'klaskamer'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM lokasie l2
+                      WHERE lower(trim(l2."LOK_Naam")) = lower(trim(k."KLA_Lokaal"))
+                        AND lower(trim(l2."LOK_Tipe")) = 'klaskamer'
+                        AND l2."Lokasie_ID" <> l."Lokasie_ID"
+                  )
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 019 "
+            f"(Rooster-klas -> Klaskamer/NFC-lokasie) het misluk: {_migrasie_fout}"
+        )
+
+    # Migrasie 020: Permanente Lantiv-roosterlokaal -> MOON-klaskamer mapping
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS rooster_lokaal_koppeling (
+                    "Koppeling_ID" SERIAL PRIMARY KEY,
+                    "KLA_Lokaal" VARCHAR(100) NOT NULL UNIQUE,
+                    "Lokasie_ID" INT NOT NULL,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_rooster_lokaal_koppeling_lokasie
+                        FOREIGN KEY ("Lokasie_ID")
+                        REFERENCES lokasie("Lokasie_ID")
+                        ON DELETE CASCADE
+                )
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_rooster_lokaal_koppeling_lokasie
+                ON rooster_lokaal_koppeling ("Lokasie_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_rooster_lokaal_koppeling_lantiv
+                ON rooster_lokaal_koppeling ("KLA_Lokaal")
+            '''))
+
+            # Bewaar veilige bestaande Step 16-koppelings as permanente mappings,
+            # maar slegs waar dieselfde Lantiv-lokaal reeds oral dieselfde mapping het.
+            _conn.execute(text('''
+                INSERT INTO rooster_lokaal_koppeling ("KLA_Lokaal", "Lokasie_ID")
+                SELECT k."KLA_Lokaal", MIN(k."Lokasie_ID")
+                FROM klas k
+                WHERE k."KLA_Lokaal" IS NOT NULL
+                  AND k."Lokasie_ID" IS NOT NULL
+                GROUP BY k."KLA_Lokaal"
+                HAVING COUNT(DISTINCT k."Lokasie_ID") = 1
+                ON CONFLICT ("KLA_Lokaal") DO NOTHING
+            '''))
+
+            # Pas enige reeds-gestoorde mappings konsekwent op bestaande klasse toe.
+            _conn.execute(text('''
+                UPDATE klas k
+                SET "Lokasie_ID" = m."Lokasie_ID"
+                FROM rooster_lokaal_koppeling m
+                WHERE k."KLA_Lokaal" = m."KLA_Lokaal"
+                  AND k."Lokasie_ID" IS DISTINCT FROM m."Lokasie_ID"
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 020 "
+            f"(Roosterlokaal mapping) het misluk: {_migrasie_fout}"
+        )
+
+
+    # Migrasie 021: Permanente Saamrygroepe, eenmalige rit-events en chat
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_event (
+                    "Event_ID" SERIAL PRIMARY KEY,
+                    "Groep_ID" INT NOT NULL
+                        REFERENCES saamry_groep("Groep_ID") ON DELETE CASCADE,
+                    "Bestuurder_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "SAA_Status" VARCHAR(20) NOT NULL DEFAULT 'AKTIEF',
+                    "Voltooi_Rigting" VARCHAR(8),
+                    "Voltooi_Kampus_ID" INT
+                        REFERENCES kampus("Kampus_ID"),
+                    "Bestuurder_Log_ID" INT
+                        REFERENCES toegangs_logs("Log_ID"),
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Voltooi_Op" TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ck_saamry_event_status
+                        CHECK ("SAA_Status" IN ('AKTIEF', 'VOLTOOI', 'GEKANSELLEER')),
+                    CONSTRAINT ck_saamry_event_rigting
+                        CHECK ("Voltooi_Rigting" IS NULL OR "Voltooi_Rigting" IN ('IN', 'UIT'))
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_event_lid (
+                    "Event_ID" INT NOT NULL
+                        REFERENCES saamry_event("Event_ID") ON DELETE CASCADE,
+                    "Gebruiker_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY ("Event_ID", "Gebruiker_ID")
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_boodskap (
+                    "Boodskap_ID" SERIAL PRIMARY KEY,
+                    "Stuurder_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Ontvanger_ID" INT
+                        REFERENCES gebruikers("Gebruiker_ID"),
+                    "Groep_ID" INT
+                        REFERENCES saamry_groep("Groep_ID") ON DELETE CASCADE,
+                    "SAA_Boodskap" TEXT NOT NULL,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT ck_saamry_boodskap_teiken CHECK (
+                        ("Groep_ID" IS NOT NULL AND "Ontvanger_ID" IS NULL)
+                        OR
+                        ("Groep_ID" IS NULL AND "Ontvanger_ID" IS NOT NULL)
+                    ),
+                    CONSTRAINT ck_saamry_boodskap_lengte CHECK (
+                        char_length(trim("SAA_Boodskap")) BETWEEN 1 AND 1000
+                    )
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS saamry_boodskap_gelees (
+                    "Boodskap_ID" INT NOT NULL
+                        REFERENCES saamry_boodskap("Boodskap_ID") ON DELETE CASCADE,
+                    "Gebruiker_ID" INT NOT NULL
+                        REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    "Gelees_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY ("Boodskap_ID", "Gebruiker_ID")
+                )
+            '''))
+
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_groep_status
+                ON saamry_event ("Groep_ID", "SAA_Status")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_bestuurder_status
+                ON saamry_event ("Bestuurder_ID", "SAA_Status")
+            '''))
+            # Een permanente groep mag net een aktiewe rit op 'n slag hê.
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_saamry_event_aktief_groep
+                ON saamry_event ("Groep_ID")
+                WHERE "SAA_Status" = 'AKTIEF'
+            '''))
+            # 'n Driver kan nie gelyktydig die aktiewe bestuurder van twee ritte wees nie;
+            # die wag se hek-scan kan hom dus altyd ondubbelsinnig aan een event koppel.
+            _conn.execute(text('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_saamry_event_aktief_bestuurder
+                ON saamry_event ("Bestuurder_ID")
+                WHERE "SAA_Status" = 'AKTIEF'
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_lid_gebruiker
+                ON saamry_event_lid ("Gebruiker_ID")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_privaat
+                ON saamry_boodskap ("Stuurder_ID", "Ontvanger_ID", "Geskep_Op")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_groep
+                ON saamry_boodskap ("Groep_ID", "Geskep_Op")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_boodskap_gelees_gebruiker
+                ON saamry_boodskap_gelees ("Gebruiker_ID")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 021 "
+            f"(Saamry permanente groepe/events/chat) het misluk: {_migrasie_fout}"
+        )

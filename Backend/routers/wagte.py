@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from datetime import datetime, timedelta, timezone
 
@@ -33,6 +34,212 @@ def wagte_kampusse(
             for k in kampusse
         ],
     )
+
+
+def _ensure_kampus_lokasie(db: Session, kampus):
+    """Kry (of skep eenmalig) die fisiese kampushek-lokasie."""
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(
+            models.Lokasie.Kampus_ID == kampus.Kampus_ID,
+            func.lower(models.Lokasie.LOK_Tipe) == "kampus",
+        )
+        .first()
+    )
+    created = False
+    if lokasie is None:
+        lokasie = models.Lokasie(
+            LOK_Naam=kampus.KAM_Naam,
+            LOK_Tipe="Kampus",
+            Kampus_ID=kampus.Kampus_ID,
+        )
+        db.add(lokasie)
+        db.flush()
+        created = True
+    return lokasie, created
+
+
+def _ensure_koshuis_lokasie(db: Session, koshuis):
+    """
+    Elke koshuis kry sy eie Lokasie met LOK_Tipe='Koshuis'.
+    Dit laat ToegangsLogs die koshuis onafhanklik van die kampus log.
+    """
+    if koshuis.Kampus_ID is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Koshuis '{koshuis.KOS_Naam}' het nog nie 'n Kampus_ID nie",
+        )
+
+    lokasie = (
+        db.query(models.Lokasie)
+        .filter(
+            models.Lokasie.Kampus_ID == koshuis.Kampus_ID,
+            func.lower(models.Lokasie.LOK_Tipe) == "koshuis",
+            models.Lokasie.LOK_Naam == koshuis.KOS_Naam,
+        )
+        .first()
+    )
+    created = False
+    if lokasie is None:
+        lokasie = models.Lokasie(
+            LOK_Naam=koshuis.KOS_Naam,
+            LOK_Tipe="Koshuis",
+            Kampus_ID=koshuis.Kampus_ID,
+        )
+        db.add(lokasie)
+        db.flush()
+        created = True
+    return lokasie, created
+
+
+@router.get("/wagte/skandeerplekke", response_model=schemas.APIResponse[List[dict]])
+def wagte_skandeerplekke(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_authorized: bool = Depends(auth.check_sekuriteit),
+):
+    """
+    Een vlak vir die wag:
+      - KAMPUS
+      - KOSHUIS
+
+    Die onderliggende koshuis-lokasie is steeds 'n aparte Lokasie_ID,
+    daarom verander 'n koshuis scan nooit die kampus se eie IN/UIT log nie.
+    """
+    data = []
+    created_any = False
+
+    for kampus in db.query(models.Kampus).order_by(models.Kampus.KAM_Naam.asc()).all():
+        lokasie, created = _ensure_kampus_lokasie(db, kampus)
+        created_any = created_any or created
+        data.append({
+            "tipe": "KAMPUS",
+            "naam": kampus.KAM_Naam,
+            "adres": kampus.KAM_Adres,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "kampus_id": kampus.Kampus_ID,
+            "koshuis_id": None,
+        })
+
+    for koshuis in db.query(models.Koshuis).order_by(models.Koshuis.KOS_Naam.asc()).all():
+        lokasie, created = _ensure_koshuis_lokasie(db, koshuis)
+        created_any = created_any or created
+        data.append({
+            "tipe": "KOSHUIS",
+            "naam": koshuis.KOS_Naam,
+            "adres": koshuis.KOS_Adres,
+            "lokasie_id": lokasie.Lokasie_ID,
+            "kampus_id": koshuis.Kampus_ID,
+            "koshuis_id": koshuis.Koshuis_ID,
+        })
+
+    if created_any:
+        db.commit()
+
+    data.sort(key=lambda x: (0 if x["tipe"] == "KAMPUS" else 1, (x["naam"] or "").lower()))
+    return schemas.APIResponse(sukses=True, data=data)
+
+
+def _resolve_wagte_scanplek(
+    db: Session,
+    *,
+    lokasie_id=None,
+    kampus_id=None,
+    koshuis_id=None,
+):
+    """
+    Resolveer die gekose scanplek server-side.
+    Ou kampus-kliënte kan nog net kampus_id stuur.
+    """
+    if lokasie_id is None:
+        if kampus_id is None:
+            raise HTTPException(status_code=400, detail="Geen scanplek/lokasie is gekies nie")
+
+        kampus = db.query(models.Kampus).filter(
+            models.Kampus.Kampus_ID == kampus_id
+        ).first()
+        if kampus is None:
+            raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+
+        lokasie = (
+            db.query(models.Lokasie)
+            .filter(
+                models.Lokasie.Kampus_ID == kampus_id,
+                func.lower(models.Lokasie.LOK_Tipe) == "kampus",
+            )
+            .first()
+        )
+        if lokasie is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Geen kampus-lokasie vir hierdie kampus gevind nie",
+            )
+        return lokasie, kampus, None, "KAMPUS"
+
+    lokasie = db.query(models.Lokasie).filter(
+        models.Lokasie.Lokasie_ID == lokasie_id
+    ).first()
+    if lokasie is None:
+        raise HTTPException(status_code=404, detail="Scanplek-lokasie nie gevind nie")
+
+    tipe = (lokasie.LOK_Tipe or "").strip().upper()
+    if tipe == "KAMPUS":
+        kampus = db.query(models.Kampus).filter(
+            models.Kampus.Kampus_ID == lokasie.Kampus_ID
+        ).first()
+        if kampus is None:
+            raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+        return lokasie, kampus, None, "KAMPUS"
+
+    if tipe == "KOSHUIS":
+        query = db.query(models.Koshuis)
+        if koshuis_id is not None:
+            query = query.filter(models.Koshuis.Koshuis_ID == koshuis_id)
+        else:
+            query = query.filter(
+                models.Koshuis.Kampus_ID == lokasie.Kampus_ID,
+                models.Koshuis.KOS_Naam == lokasie.LOK_Naam,
+            )
+
+        koshuis = query.first()
+        if koshuis is None:
+            raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")
+
+        if (
+            koshuis.Kampus_ID != lokasie.Kampus_ID
+            or koshuis.KOS_Naam != lokasie.LOK_Naam
+        ):
+            raise HTTPException(status_code=400, detail="Koshuis en scanplek stem nie ooreen nie")
+
+        kampus = db.query(models.Kampus).filter(
+            models.Kampus.Kampus_ID == lokasie.Kampus_ID
+        ).first()
+        return lokasie, kampus, koshuis, "KOSHUIS"
+
+    raise HTTPException(
+        status_code=400,
+        detail="Hierdie lokasie is nie 'n geldige Kampus- of Koshuis-scanplek nie",
+    )
+
+
+def _validate_koshuis_inwoner(db: Session, gebruiker_id: int, koshuis):
+    student = db.query(models.Student).filter(
+        models.Student.Gebruiker_ID == gebruiker_id
+    ).first()
+
+    if student is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Koshuis-skandering is net vir studente",
+        )
+
+    if not student.STU_Is_Koshuis or student.Koshuis_ID != koshuis.Koshuis_ID:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Toegang geweier - student is nie 'n inwoner van {koshuis.KOS_Naam} nie",
+        )
+
+    return student
 
 
 @router.get("/wagte/nommer/check")
@@ -140,9 +347,8 @@ def opsigter_kampus_besoekers(
     )
 
     data = []
-    for item in besoekers:
-        # Gebruik eager-loaded gasheer relationship (geen ekstra query nodig nie)
-        gasheer = item.gasheer
+    # Elke ry is 'n Row van (BesoekerUitnodiging, Gebruikers) — pak uit
+    for item, gasheer in besoekers:
         gasheer_naam = ""
         if gasheer:
             gasheer_naam = f"{gasheer.GEB_Naam or ''} {gasheer.GEB_Van or ''}".strip()
@@ -176,15 +382,23 @@ def wagte_profile_scan(
 
     student = db.query(models.Student).filter(models.Student.STU_Nommer == scan).first()
     if student:
-        gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID).first()
+        gebruiker = db.query(models.Gebruikers).filter(
+            models.Gebruikers.Gebruiker_ID == student.Gebruiker_ID
+        ).first()
 
     if not gebruiker:
-        personeel = db.query(models.Personeel).filter(models.Personeel.PER_Nommer == scan).first()
+        personeel = db.query(models.Personeel).filter(
+            models.Personeel.PER_Nommer == scan
+        ).first()
         if personeel:
-            gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.Gebruiker_ID == personeel.Gebruiker_ID).first()
+            gebruiker = db.query(models.Gebruikers).filter(
+                models.Gebruikers.Gebruiker_ID == personeel.Gebruiker_ID
+            ).first()
 
     if not gebruiker:
-        gebruiker = db.query(models.Gebruikers).filter(models.Gebruikers.GEB_ID_Nommer == scan).first()
+        gebruiker = db.query(models.Gebruikers).filter(
+            models.Gebruikers.GEB_ID_Nommer == scan
+        ).first()
 
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
@@ -192,19 +406,53 @@ def wagte_profile_scan(
     if not gebruiker.Is_Aktief:
         raise HTTPException(status_code=403, detail="Gebruiker is gedeaktiveer en mag nie scan nie")
 
-    laaste_log = (
-        db.query(models.ToegangsLogs)
-        .filter(models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID)
-        .order_by(models.ToegangsLogs.TOE_Tydstempel.desc())
-        .first()
-    )
+    lokasie = None
+    koshuis = None
+    scanplek_tipe = None
 
-    if laaste_log is None:
-        voorgestelde_rigting = "IN"
-    elif laaste_log.TOE_Rigting == "IN":
-        voorgestelde_rigting = "UIT"
+    if data.lokasie_id is not None:
+        lokasie, _kampus, koshuis, scanplek_tipe = _resolve_wagte_scanplek(
+            db,
+            lokasie_id=data.lokasie_id,
+            koshuis_id=data.koshuis_id,
+        )
+
+        if scanplek_tipe == "KOSHUIS":
+            _validate_koshuis_inwoner(db, gebruiker.Gebruiker_ID, koshuis)
+
+        # IN/UIT is PER GEKOSE PLEK. 'n Koshuis log kan dus nie die kampus
+        # se voorgestelde rigting verander nie, en andersom.
+        laaste_log = (
+            db.query(models.ToegangsLogs)
+            .filter(
+                models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID,
+                models.ToegangsLogs.Lokasie_ID == lokasie.Lokasie_ID,
+                models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+            )
+            .order_by(
+                models.ToegangsLogs.TOE_Tydstempel.desc(),
+                models.ToegangsLogs.Log_ID.desc(),
+            )
+            .first()
+        )
     else:
-        voorgestelde_rigting = "IN"
+        # Backwards compatibility vir 'n ou kliënt wat nog geen lokasie_id stuur nie.
+        laaste_log = (
+            db.query(models.ToegangsLogs)
+            .filter(
+                models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID,
+                models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+            )
+            .order_by(
+                models.ToegangsLogs.TOE_Tydstempel.desc(),
+                models.ToegangsLogs.Log_ID.desc(),
+            )
+            .first()
+        )
+
+    voorgestelde_rigting = (
+        "UIT" if laaste_log is not None and laaste_log.TOE_Rigting == "IN" else "IN"
+    )
 
     return schemas.APIResponse(
         sukses=True,
@@ -215,6 +463,9 @@ def wagte_profile_scan(
             "id_nommer": gebruiker.GEB_ID_Nommer,
             "foto_url": gebruiker.GEB_Profiel_Foto,
             "voorgestelde_rigting": voorgestelde_rigting,
+            "scanplek_tipe": scanplek_tipe,
+            "lokasie_id": lokasie.Lokasie_ID if lokasie else None,
+            "koshuis_id": koshuis.Koshuis_ID if koshuis else None,
         },
     )
 
@@ -238,16 +489,15 @@ def wagte_profile_verify(
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind of nie aktief nie")
 
-    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == data.kampus_id).first()
-    if not kampus:
-        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+    lokasie, kampus, koshuis, scanplek_tipe = _resolve_wagte_scanplek(
+        db,
+        lokasie_id=data.lokasie_id,
+        kampus_id=data.kampus_id,
+        koshuis_id=data.koshuis_id,
+    )
 
-    lokasie = db.query(models.Lokasie).filter(
-        models.Lokasie.Kampus_ID == data.kampus_id,
-        models.Lokasie.LOK_Tipe == "Kampus",
-    ).first()
-    if not lokasie:
-        raise HTTPException(status_code=404, detail="Geen kampus-lokasie vir hierdie kampus gevind nie")
+    if scanplek_tipe == "KOSHUIS":
+        _validate_koshuis_inwoner(db, gebruiker.Gebruiker_ID, koshuis)
 
     log = models.ToegangsLogs(
         Gebruiker_ID=data.gebruiker_id,
@@ -270,8 +520,11 @@ def wagte_profile_verify(
             "van": gebruiker.GEB_Van,
             "rigting": log.TOE_Rigting,
             "metode": log.TOE_Metode,
-            "kampus_id": kampus.Kampus_ID,
-            "kampus": kampus.KAM_Naam,
+            "scanplek_tipe": scanplek_tipe,
+            "kampus_id": kampus.Kampus_ID if kampus else None,
+            "kampus": kampus.KAM_Naam if kampus else None,
+            "koshuis_id": koshuis.Koshuis_ID if koshuis else None,
+            "koshuis": koshuis.KOS_Naam if koshuis else None,
             "lokasie_id": lokasie.Lokasie_ID,
             "lokasie": lokasie.LOK_Naam,
             "tyd": log.TOE_Tydstempel.isoformat(),
@@ -296,16 +549,16 @@ def decline_profile_access(
     if not gebruiker:
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind of nie aktief nie")
 
-    kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == data.kampus_id).first()
-    if not kampus:
-        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+    lokasie, kampus, koshuis, scanplek_tipe = _resolve_wagte_scanplek(
+        db,
+        lokasie_id=data.lokasie_id,
+        kampus_id=data.kampus_id,
+        koshuis_id=data.koshuis_id,
+    )
 
-    lokasie = db.query(models.Lokasie).filter(
-        models.Lokasie.Kampus_ID == data.kampus_id,
-        models.Lokasie.LOK_Tipe == "Kampus",
-    ).first()
-    if not lokasie:
-        raise HTTPException(status_code=404, detail="Geen kampus-lokasie vir hierdie kampus gevind nie")
+    # Selfs 'n WEIER by 'n koshuis word teen DIE KOSHUIS se lokasie gelog.
+    if scanplek_tipe == "KOSHUIS":
+        _validate_koshuis_inwoner(db, gebruiker.Gebruiker_ID, koshuis)
 
     log = models.ToegangsLogs(
         Gebruiker_ID=data.gebruiker_id,
@@ -329,8 +582,11 @@ def decline_profile_access(
             "van": gebruiker.GEB_Van,
             "rigting": log.TOE_Rigting,
             "metode": log.TOE_Metode,
-            "kampus_id": kampus.Kampus_ID,
-            "kampus": kampus.KAM_Naam,
+            "scanplek_tipe": scanplek_tipe,
+            "kampus_id": kampus.Kampus_ID if kampus else None,
+            "kampus": kampus.KAM_Naam if kampus else None,
+            "koshuis_id": koshuis.Koshuis_ID if koshuis else None,
+            "koshuis": koshuis.KOS_Naam if koshuis else None,
             "lokasie_id": lokasie.Lokasie_ID,
             "lokasie": lokasie.LOK_Naam,
             "tyd": log.TOE_Tydstempel.isoformat(),

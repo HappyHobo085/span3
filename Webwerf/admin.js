@@ -37,6 +37,7 @@
   const createClassBtn = document.getElementById('create-class-button');
   const classRoomName = document.getElementById('class-room-name');
   const classKampus = document.getElementById('class-kampus');
+  const classTagUid = document.getElementById('class-tag-uid');
   const classModalTitle = document.getElementById('class-modal-title');
   const deleteLokaalBtn = document.getElementById('delete-lokaal-btn');
 
@@ -101,6 +102,8 @@
   const studentIsKoshuisField = document.getElementById('student-is-koshuis-field');
   const newUserKoshuis = document.getElementById('new-user-koshuis');
   const studentKoshuisField = document.getElementById('student-koshuis-field');
+  const newUserKampus = document.getElementById('new-user-kampus');
+  const opsigterKampusField = document.getElementById('opsigter-kampus-field');
   const newUserPassword = document.getElementById('new-user-password');
   const newUserRoles = document.getElementById('new-user-roles');
   const userModalTitle = document.getElementById('create-user-title');
@@ -113,6 +116,7 @@
   let editingUserId = null;
   let editingKampusId = null;
   let editingLokaalId = null;
+  let editingLokaalOldUid = '';
   let editingKoshuisId = null;
 
   // ===== LOOKUP MAPS =====
@@ -535,6 +539,8 @@
     classModalOverlay.setAttribute('aria-hidden', 'true');
     if (classRoomName) classRoomName.value = '';
     if (classKampus) classKampus.value = '';
+    if (classTagUid) classTagUid.value = '';
+    editingLokaalOldUid = '';
     // Return the shared modal to create mode after closing.
     editingLokaalId = null;
     if (classModalTitle) classModalTitle.textContent = 'Skep nuwe klas';
@@ -550,6 +556,8 @@
     const nameSpan = row.querySelector('.admin-venue-name');
     if (classRoomName) classRoomName.value = nameSpan ? nameSpan.textContent : '';
     if (classKampus) classKampus.value = row.dataset.kampusId || '';
+    if (classTagUid) classTagUid.value = row.dataset.nfcUid || '';
+    editingLokaalOldUid = row.dataset.nfcUid || '';
     if (classModalTitle) classModalTitle.textContent = 'Wysig Lokaal';
     if (createClassBtn) createClassBtn.textContent = 'Stoor Veranderinge';
     if (deleteLokaalBtn) deleteLokaalBtn.style.display = '';
@@ -633,6 +641,19 @@
         opt.textContent = k.KAM_Naam;
         newKoshuisKampus.appendChild(opt);
       });
+    }
+
+    // Vul die kampus-keuselys in die gebruiker-venster (slegs vir Opsigters).
+    if (newUserKampus) {
+      const huidige = newUserKampus.value;
+      newUserKampus.innerHTML = '<option value="">Kies kampus...</option>';
+      json.data.forEach(function (k) {
+        const opt = document.createElement('option');
+        opt.value = String(k.Kampus_ID);
+        opt.textContent = k.KAM_Naam;
+        newUserKampus.appendChild(opt);
+      });
+      newUserKampus.value = huidige;
     }
 
     // Onthou elke kampus se naam sodat ander lyste dit kan wys.
@@ -806,13 +827,13 @@
     venueList.innerHTML = '';
     if (gateList) gateList.innerHTML = '';
     json.data.forEach(function (lok) {
-      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID, lok.LOK_Tipe);
+      addVenueRow(lok.Lokasie_ID, lok.LOK_Naam, lok.Kampus_ID, lok.LOK_Tipe, lok.NFC_UID);
     });
   }
 
   // Hierdie funksie voeg een lokaal-ry by die lys: naam,
   // kampus-etiket en 'n "Wysig"-knoppie.
-  function addVenueRow(lokasieId, name, kampusId, lokasieType) {
+  function addVenueRow(lokasieId, name, kampusId, lokasieType, nfcUid) {
     const targetList = lokasieType === 'Kampus' ? gateList : venueList;
     if (!targetList) return;
 
@@ -827,6 +848,10 @@
     badge.className = 'campus-badge';
     badge.textContent = kampusMap[String(kampusId)] || 'Onbekend';
 
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'campus-badge tag-badge';
+    tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'btn-outline btn-sm';
@@ -835,9 +860,11 @@
 
     row.dataset.lokasieId = String(lokasieId);
     row.dataset.kampusId = String(kampusId);
+    row.dataset.nfcUid = nfcUid || '';
     row.dataset.name = name.toLowerCase();
     row.appendChild(nameSpan);
     row.appendChild(badge);
+    row.appendChild(tagBadge);
     row.appendChild(editBtn);
     targetList.appendChild(row);
   }
@@ -845,7 +872,7 @@
   /** Update an existing venue row in place with fresh data. */
   // Hierdie funksie werk 'n bestaande lokaal-ry se naam en kampus by
   // sonder om die hele lys oor te bou.
-  function updateVenueRow(lokasieId, name, kampusId) {
+  function updateVenueRow(lokasieId, name, kampusId, nfcUid) {
     if (!venueList) return;
 
     const row = document.querySelector('.admin-venue-row[data-lokasie-id="' + lokasieId + '"]');
@@ -859,6 +886,9 @@
 
     row.dataset.kampusId = String(kampusId);
     row.dataset.name = name.toLowerCase();
+    const tagBadge = row.querySelector('.tag-badge');
+    if (tagBadge) tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+    row.dataset.nfcUid = nfcUid || '';
   }
 
  // Hierdie funksie wys net die lokale wat by die soekwoord en die
@@ -902,14 +932,28 @@
         Kampus_ID: kampusId
       });
 
-      if (json && json.sukses) {
-        alert('Lokaal suksesvol opgedateer.');
-        closeClassModal();
-        updateVenueRow(lokasieId, roomName, kampusId);
-        applyVenueFilter();
-      } else {
+      if (!json || !json.sukses) {
         alert((json && json.fout) || (json && json.detail) || 'Kon nie lokaal opdateer nie.');
+        return;
       }
+
+      // Koppel/hernoem die NFC-tag as die UID verander het. Die venster bly
+      // oop by 'n fout (bv. UID reeds in gebruik) sodat die admin kan regmaak.
+      const nuweUid = classTagUid ? classTagUid.value.trim() : '';
+      let finaleUid = editingLokaalOldUid;
+      if (nuweUid && nuweUid !== editingLokaalOldUid) {
+        const tagJson = await window.MoonApi.updateLokasieTag(lokasieId, nuweUid);
+        if (!tagJson || !tagJson.sukses) {
+          alert(foutBoodskap(tagJson, 'Kon nie die NFC-tag opdateer nie.'));
+          return;
+        }
+        finaleUid = nuweUid;
+      }
+
+      alert('Lokaal suksesvol opgedateer.');
+      closeClassModal();
+      updateVenueRow(lokasieId, roomName, kampusId, finaleUid);
+      applyVenueFilter();
       return;
     }
 
@@ -919,7 +963,7 @@
       LOK_Naam: roomName,
       LOK_Tipe: 'Klaskamer',
       Kampus_ID: kampusId,
-      NFC_UID: 'TEMP',
+      NFC_UID: (classTagUid && classTagUid.value.trim()) || 'TEMP',
       NFC_Tipe: 'Lokasie'
     });
 
@@ -927,10 +971,11 @@
       alert('Lokaal suksesvol geskep.');
       closeClassModal();
       const nuweId = json.data && json.data.lokasie ? json.data.lokasie.Lokasie_ID : '';
-      addVenueRow(nuweId, roomName, kampusId, 'Klaskamer');
+      const nuweUid = json.data && json.data.nfc_tag ? json.data.nfc_tag.NFC_UID : '';
+      addVenueRow(nuweId, roomName, kampusId, 'Klaskamer', nuweUid);
       capListHeight(venueList, '.admin-venue-row', 6);
     } else {
-      alert((json && json.fout) || 'Kon nie lokaal skep nie.');
+      alert(foutBoodskap(json, 'Kon nie lokaal skep nie.'));
     }
   }
 
@@ -1199,6 +1244,8 @@
     if (studentNumberField) studentNumberField.style.display = 'none';
     if (studentIsKoshuisField) studentIsKoshuisField.style.display = 'none';
     if (studentKoshuisField) studentKoshuisField.style.display = 'none';
+    if (newUserKampus) newUserKampus.value = '';
+    if (opsigterKampusField) opsigterKampusField.style.display = 'none';
     if (userActiveRow) userActiveRow.style.display = 'none';
     if (newUserActive) newUserActive.checked = true;
 
@@ -1249,6 +1296,10 @@
     toggleStudentField();
     if (newUserStudentNr) newUserStudentNr.value = user.STU_Nommer || '';
     if (newUserKoshuis) newUserKoshuis.value = user.Koshuis_ID != null ? String(user.Koshuis_ID) : '';
+
+    // Opsigters: wys en vul die kampus-keuselys in.
+    toggleOpsigterField();
+    if (newUserKampus) newUserKampus.value = user.Kampus_ID != null ? String(user.Kampus_ID) : '';
 
     if (userModalTitle) userModalTitle.textContent = 'Wysig Gebruiker';
     if (createUserBtn) createUserBtn.textContent = 'Stoor Veranderinge';
@@ -1325,7 +1376,7 @@
       // 'n Leë Rol_IDs-lys is "truthy" — val net terug na die legacy Rol_ID
       // as daar werklik geen rolle in die nuwe stelsel nie.
       const gebruikerRolIds = Array.isArray(user.Rol_IDs) && user.Rol_IDs.length ? user.Rol_IDs : [user.Rol_ID];
-      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, gebruikerRolIds, isAktief);
+      addUserRow(user.Gebruiker_ID, user.GEB_Naam, user.GEB_Van, user.GEB_Epos, gebruikerRolIds, isAktief, user.Kampus_ID);
     });
   }
 
@@ -1347,7 +1398,26 @@
   /** Create a user row in the list. */
   // Hierdie funksie voeg een gebruiker-ry by die lys: naam, e-pos,
   // status, rol-etiket en 'n "Wysig"-knoppie.
-  function addUserRow(userId, naam, van, epos, rolIds, isAktief) {
+  /** Show (or remove) the "Kampus: X" line under an opsigter's roles. */
+  // Hierdie funksie wys onder 'n Opsigter se rolle aan watter kampus
+  // hy/sy gekoppel is, of haal die reël weg as daar geen kampus is nie.
+  function setUserRowKampus(row, kampusId) {
+    const rolesDiv = row.querySelector('.admin-user-roles');
+    if (!rolesDiv) return;
+    let kampusDiv = rolesDiv.querySelector('.admin-user-kampus');
+    if (kampusId == null || kampusId === '') {
+      if (kampusDiv) kampusDiv.remove();
+      return;
+    }
+    if (!kampusDiv) {
+      kampusDiv = document.createElement('div');
+      kampusDiv.className = 'admin-user-email admin-user-kampus';
+      rolesDiv.appendChild(kampusDiv);
+    }
+    kampusDiv.textContent = 'Kampus: ' + (kampusMap[String(kampusId)] || ('#' + kampusId));
+  }
+
+  function addUserRow(userId, naam, van, epos, rolIds, isAktief, kampusId) {
     if (!userList) return;
 
     var roleIdsArr = Array.isArray(rolIds) ? rolIds : (rolIds ? [rolIds] : []);
@@ -1405,6 +1475,7 @@
     row.appendChild(infoDiv);
     row.appendChild(rolesDiv);
     row.appendChild(actionsDiv);
+    setUserRowKampus(row, kampusId);
     userList.appendChild(row);
   }
 
@@ -1464,6 +1535,22 @@
     if (!wys && newUserKoshuis) newUserKoshuis.value = '';
   }
 
+  /** Is the Opsigter role ticked in the create/edit user modal? */
+  // Hierdie funksie kyk of die "Opsigter"-rol in die venster gemerk is.
+  function isOpsigterGekies() {
+    return !!(newUserRoles && newUserRoles.querySelector('input[data-rol-naam="Kampus_Opsigter"]:checked'));
+  }
+
+  /** Show the kampus dropdown only while the Opsigter role is ticked. */
+  // Hierdie funksie wys die kampus-keuselys net vir Opsigters, want
+  // 'n Opsigter moet aan 'n kampus gekoppel wees om dit te kan bestuur.
+  function toggleOpsigterField() {
+    if (!opsigterKampusField) return;
+    const wys = isOpsigterGekies();
+    opsigterKampusField.style.display = wys ? 'block' : 'none';
+    if (!wys && newUserKampus) newUserKampus.value = '';
+  }
+
   /** Submit new user to the backend. */
   // Hierdie funksie stoor die gebruiker-venster se inligting:
   // dit skep 'n nuwe gebruiker, of stuur wysigings aan na submitEditUser.
@@ -1477,11 +1564,13 @@
 
     // Use studentenommer as ID_Nommer if student, otherwise use email as fallback
     const isStudent = newUserRoles ? newUserRoles.querySelector('input[data-rol-naam="Student"]:checked') !== null : false;
+    const isOpsigter = isOpsigterGekies();
+    const kampusId = newUserKampus && newUserKampus.value ? Number(newUserKampus.value) : null;
 
     // ===== EDIT MODE =====
     // As ons besig is om 'n bestaande gebruiker te wysig, gaan na submitEditUser.
     if (editingUserId !== null) {
-      await submitEditUser({ naam, van, epos, wagwoord, rolIds, studentNr, isStudent });
+      await submitEditUser({ naam, van, epos, wagwoord, rolIds, studentNr, isStudent, isOpsigter, kampusId });
       return;
     }
 
@@ -1535,6 +1624,16 @@ else {
   payload.GEB_ID_Nommer = Date.now().toString().slice(-13);
 }
 
+// 'n Opsigter MOET aan 'n kampus gekoppel wees, anders kan hy/sy geen
+// kampus-bladsye gebruik nie.
+if (isOpsigter) {
+  if (!kampusId) {
+    alert('Kies asseblief die kampus waarvoor die Opsigter verantwoordelik is.');
+    return;
+  }
+  payload.Kampus_ID = kampusId;
+}
+
 // Stuur die nuwe gebruiker se inligting na die bediener.
 const json = await window.MoonApi.createGebruiker(payload);
 
@@ -1544,10 +1643,10 @@ const json = await window.MoonApi.createGebruiker(payload);
       closeUserModal(); // also resets the form back to create mode
 
       // Add new user to the list immediately (nog geen NFC-tag → Nie-Aktief)
-      addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief);
+      addUserRow(nuweId, naam, van, epos, rolIds, payload.Is_Aktief, payload.Kampus_ID);
       capListHeight(userList, '.admin-user-row');
     } else {
-      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker skep nie.');
+      alert(foutBoodskap(json, 'Kon nie gebruiker skep nie.'));
     }
   }
 
@@ -1555,7 +1654,7 @@ const json = await window.MoonApi.createGebruiker(payload);
   // Hierdie funksie stuur die wysigings van 'n bestaande gebruiker
   // na die bediener en werk dan die ry in die lys by.
   async function submitEditUser(fields) {
-    const { naam, van, epos, wagwoord, rolIds, studentNr, isStudent } = fields;
+    const { naam, van, epos, wagwoord, rolIds, studentNr, isStudent, isOpsigter, kampusId } = fields;
 
     // Kyk dat al die verpligte velde ingevul is.
     if (!naam || !van || !epos || rolIds.length === 0) {
@@ -1593,6 +1692,18 @@ const json = await window.MoonApi.createGebruiker(payload);
       payload.Koshuis_ID = isKoshuis ? Number(newUserKoshuis.value) : null;
     }
 
+    // Opsigter: kampus is verpligtend. As die Opsigter-rol verwyder is,
+    // stuur null sodat die ou kampus-koppeling ook verwyder word.
+    if (isOpsigter) {
+      if (!kampusId) {
+        alert('Kies asseblief die kampus waarvoor die Opsigter verantwoordelik is.');
+        return;
+      }
+      payload.Kampus_ID = kampusId;
+    } else {
+      payload.Kampus_ID = null;
+    }
+
     // Stuur die wysigings na die bediener.
     const json = await window.MoonApi.updateGebruiker(editingUserId, payload);
 
@@ -1605,10 +1716,11 @@ const json = await window.MoonApi.createGebruiker(payload);
         epos: data.GEB_Epos || epos,
         rolIds: data.Rol_IDs || rolIds,
         isAktief: data.Is_Aktief ?? payload.Is_Aktief,
+        kampusId: isOpsigter ? (data.Kampus_ID ?? payload.Kampus_ID) : null,
     });
       closeUserModal(); // resets the form back to create mode
     } else {
-      alert((json && json.fout) || (json && json.detail) || 'Kon nie gebruiker opdateer nie.');
+      alert(foutBoodskap(json, 'Kon nie gebruiker opdateer nie.'));
     }
   }
 
@@ -1646,6 +1758,8 @@ const json = await window.MoonApi.createGebruiker(payload);
     if (oldBadge) {
         oldBadge.replaceWith(buildStatusBadge(info.isAktief !== false));
     }
+
+    setUserRowKampus(row, info.kampusId);
 
     row.dataset.rolIds = JSON.stringify(info.rolIds || []);
     row.dataset.search = `${info.naam} ${info.van} ${info.epos}`.toLowerCase();
@@ -1827,6 +1941,7 @@ const json = await window.MoonApi.createGebruiker(payload);
   // As die rol verander, wys of versteek die student-velde.
   if (newUserRoles) {
     newUserRoles.addEventListener('change', toggleStudentField);
+    newUserRoles.addEventListener('change', toggleOpsigterField);
   }
   // As die koshuis-blokkie gemerk word, wys of versteek die koshuis-keuselys.
   if (newUserIsKoshuis) {
@@ -1966,8 +2081,21 @@ async function refreshDashboard() {
   }
 
   // Hierdie funksie gee die foutboodskap uit 'n bediener-antwoord.
+  // FastAPI se validasiefoute (422) kom as 'n lys objekte in `detail` —
+  // anders wys die alert net "[object Object]".
   function foutBoodskap(json, verstek) {
+    if (json && typeof json.fout === 'string') return json.fout;
     if (json && typeof json.detail === 'string') return json.detail;
+    if (json && Array.isArray(json.detail)) {
+      const boodskappe = json.detail
+        .map(function (d) {
+          if (!d || !d.msg) return '';
+          const veld = Array.isArray(d.loc) && d.loc.length > 1 ? d.loc[d.loc.length - 1] + ': ' : '';
+          return veld + d.msg.replace(/^Value error, /, '');
+        })
+        .filter(Boolean);
+      if (boodskappe.length) return boodskappe.join('\n');
+    }
     if (json && typeof json.boodskap === 'string') return json.boodskap;
     return verstek;
   }
@@ -2272,6 +2400,7 @@ async function refreshDashboard() {
         (d.groepe_geskep || 0) + ' nuwe groepe, ' + (d.klasse_geskep || 0) + ' klasse.';
       if (foute.length) boodskap += ' ' + foute.length + ' ry(e) oorgeslaan: ' + foute.slice(0, 3).join('; ') + (foute.length > 3 ? ' …' : '');
       await loadRoosterPaneel();
+      await loadRoosterLokaalKoppelings();
       await loadStudentPaneel();
       setStatusBox(roosterStatus, boodskap, foute.length && !d.klasse_geskep ? 'error' : 'success');
     } catch (err) {
@@ -2294,6 +2423,143 @@ async function refreshDashboard() {
     moduleModal.addEventListener('click', function (ev) {
       if (ev.target === moduleModal) closeModuleModal();
     });
+  }
+
+  // =====================================================================
+  //  ROOSTERLOKALE KOPPELING (Lantiv -> MOON Klaskamer/NFC)
+  // =====================================================================
+
+  const roosterLokaleList = document.getElementById('rooster-lokale-list');
+  const roosterLokaleStatus = document.getElementById('rooster-lokale-status');
+  const roosterLokaleOpsomming = document.getElementById('rooster-lokale-opsomming');
+  const refreshRoosterLokaleBtn = document.getElementById('refresh-rooster-lokale-btn');
+
+  let roosterLokaalKoppelings = [];
+  let roosterMoonKlaskamers = [];
+
+  function roosterLokaalOpsieLabel(lok) {
+    const kampus = kampusMap[String(lok.Kampus_ID)] || 'Onbekende kampus';
+    const nfc = lok.NFC_UID ? ' · NFC ' + lok.NFC_UID : ' · geen NFC';
+    return (lok.LOK_Naam || 'Onbekende lokaal') + ' — ' + kampus + nfc;
+  }
+
+  function renderRoosterLokaalKoppelings() {
+    if (!roosterLokaleList) return;
+    roosterLokaleList.innerHTML = '';
+
+    if (!roosterLokaalKoppelings.length) {
+      const leeg = document.createElement('div');
+      leeg.className = 'admin-venue-row';
+      leeg.textContent = 'Geen roosterlokale gevind nie. Laai eers die Lantiv-rooster op.';
+      roosterLokaleList.appendChild(leeg);
+      if (roosterLokaleOpsomming) roosterLokaleOpsomming.textContent = '0 roosterlokale';
+      return;
+    }
+
+    let gekoppel = 0;
+    roosterLokaalKoppelings.forEach(function (item) {
+      if (item.Gekoppel) gekoppel += 1;
+
+      const row = document.createElement('div');
+      row.className = 'admin-venue-row';
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = 'minmax(170px,1fr) minmax(240px,1.4fr)';
+      row.style.gap = '12px';
+      row.style.alignItems = 'center';
+
+      const info = document.createElement('div');
+      const naam = document.createElement('div');
+      naam.className = 'admin-venue-name';
+      naam.textContent = item.KLA_Lokaal || 'Onbekende Lantiv-lokaal';
+      const meta = document.createElement('div');
+      meta.className = 'admin-user-email';
+      meta.textContent = (item.Klas_Aantal || 0) + ' klas' + ((item.Klas_Aantal || 0) === 1 ? '' : 'se') +
+        (item.Gekoppel ? ' · gekoppel' : ' · NIE GEKOPPEL NIE');
+      info.appendChild(naam);
+      info.appendChild(meta);
+
+      const select = document.createElement('select');
+      select.className = 'glass-select';
+      select.setAttribute('aria-label', 'Koppel ' + (item.KLA_Lokaal || '') + ' aan MOON lokaal');
+
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = '— Nie gekoppel nie —';
+      select.appendChild(none);
+
+      roosterMoonKlaskamers.forEach(function (lok) {
+        const opt = document.createElement('option');
+        opt.value = String(lok.Lokasie_ID);
+        opt.textContent = roosterLokaalOpsieLabel(lok);
+        select.appendChild(opt);
+      });
+
+      select.value = item.Lokasie_ID == null ? '' : String(item.Lokasie_ID);
+      select.addEventListener('change', async function () {
+        const nuweId = select.value ? Number(select.value) : null;
+        select.disabled = true;
+        setStatusBox(roosterLokaleStatus, 'Stoor koppeling vir ' + item.KLA_Lokaal + '...', 'success');
+        try {
+          const json = await window.MoonApi.saveRoosterLokaalKoppeling(item.KLA_Lokaal, nuweId);
+          if (!isOk(json)) throw new Error(foutBoodskap(json, 'Kon nie lokaal-koppeling stoor nie.'));
+          const d = json.data || {};
+          setStatusBox(
+            roosterLokaleStatus,
+            nuweId == null
+              ? item.KLA_Lokaal + ' is ontkoppel.'
+              : item.KLA_Lokaal + ' is gekoppel aan ' + (d.LOK_Naam || 'die gekose MOON-lokaal') +
+                '. ' + (d.Klasse_Bygewerk || 0) + ' klas(se) bygewerk.',
+            'success'
+          );
+          await loadRoosterLokaalKoppelings();
+          await loadRoosterPaneel();
+        } catch (err) {
+          setStatusBox(roosterLokaleStatus, 'Kon nie koppeling stoor nie: ' + err.message, 'error');
+          select.value = item.Lokasie_ID == null ? '' : String(item.Lokasie_ID);
+        } finally {
+          select.disabled = false;
+        }
+      });
+
+      row.appendChild(info);
+      row.appendChild(select);
+      roosterLokaleList.appendChild(row);
+    });
+
+    if (roosterLokaleOpsomming) {
+      roosterLokaleOpsomming.textContent = gekoppel + '/' + roosterLokaalKoppelings.length + ' roosterlokale gekoppel';
+    }
+    capListHeight(roosterLokaleList, '.admin-venue-row', 8);
+  }
+
+  async function loadRoosterLokaalKoppelings() {
+    if (!roosterLokaleList || !window.MoonApi) return;
+    try {
+      const resultate = await Promise.all([
+        window.MoonApi.fetchRoosterLokaalKoppelings(),
+        window.MoonApi.fetchLokasies(),
+      ]);
+      const mapJson = resultate[0];
+      const lokJson = resultate[1];
+      if (!isOk(mapJson)) throw new Error(foutBoodskap(mapJson, 'Kon nie roosterlokale laai nie.'));
+      if (!isOk(lokJson)) throw new Error(foutBoodskap(lokJson, 'Kon nie MOON-lokale laai nie.'));
+
+      roosterLokaalKoppelings = Array.isArray(mapJson.data) ? mapJson.data : [];
+      roosterMoonKlaskamers = (Array.isArray(lokJson.data) ? lokJson.data : [])
+        .filter(function (lok) { return String(lok.LOK_Tipe || '').toLowerCase() === 'klaskamer'; })
+        .sort(function (a, b) {
+          const ka = kampusMap[String(a.Kampus_ID)] || '';
+          const kb = kampusMap[String(b.Kampus_ID)] || '';
+          return (ka + ' ' + (a.LOK_Naam || '')).localeCompare(kb + ' ' + (b.LOK_Naam || ''));
+        });
+      renderRoosterLokaalKoppelings();
+    } catch (err) {
+      setStatusBox(roosterLokaleStatus, 'Kon nie roosterlokale laai nie: ' + err.message, 'error');
+    }
+  }
+
+  if (refreshRoosterLokaleBtn) {
+    refreshRoosterLokaleBtn.addEventListener('click', loadRoosterLokaalKoppelings);
   }
 
   // =====================================================================
@@ -2729,6 +2995,7 @@ async function refreshDashboard() {
   await loadCsvTableOptions();
 
   toggleStudentField();
+  toggleOpsigterField();
 
   await loadLokale();
   applyVenueFilter();
@@ -2739,6 +3006,7 @@ async function refreshDashboard() {
   applyUserFilter();
 
   await loadRoosterPaneel();
+  await loadRoosterLokaalKoppelings();
   await loadStudentPaneel();
 
   await loadAutoUitcheckTydstip();

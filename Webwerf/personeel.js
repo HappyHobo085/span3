@@ -13,18 +13,17 @@
  *   - Die klasregister (regterpaneel) kom van
  *       GET /rooster/klasse/{id}/studente     (groep + module + direk, gededupeer).
  *
- * NOG DEMO: die bywoning (ingeskandeer / nie ingeskandeer) word steeds
- * deterministies gegenereer (seed = module + datum) oor die REGTE klasregister,
- * omdat skanderings nog nie aan 'n klassessie gekoppel word nie. Dieselfde
- * dag wys dus altyd dieselfde resultaat, sonder enige stoor. Elke weeksdag
- * (Ma–Vr) tel as 'n klasdag, soos in die oorspronklike ontwerp, sodat die
- * linkerpaneel se lyste en grafiek altyd gevul is.
+ * REGTE NFC-BYWONING:
+ *   - GET /rooster/klasse/{id}/bywoning?datum=YYYY-MM-DD
+ *   - die backend filter op die roosterklas se Lokasie_ID, NFC-metode en
+ *     presiese geskeduleerde begin/eindtyd.
+ *   - 'n gewone browser refresh laai die nuutste skanderings uit die databasis.
  *
  * Depends on:
  *   - main.js (login gate + Personeel gate; laai website_api_calls.js → MoonApi;
  *     verskaf hasRole())
  *   - styles.css (.kalender* klasse)
- *   - HTML ids: klas-select, dash-datum, dash-in-count, dash-out-count,
+ *   - HTML ids: module-select, dag-select, dash-datum, dash-in-count, dash-out-count,
  *     dash-total-count, dash-percent-count,
  *     module-student-list, module-student-titel, module-student-caption,
  *     kal-title, kal-prev, kal-next, kal-grid, roster-search, roster-list,
@@ -40,12 +39,13 @@
   // eind, lokaal, label }. Die klasregister word apart per klas gelaai en
   // in `studenteKas` gehou sodat ons dit net een keer per klas afhaal.
   var klasse = [];
-  var studenteKas = {}; // klasId -> [{ id, naam, van, nommer }]
+  var studenteKas = {}; // klasId -> studente vir die tans gekose datum
 
   // ----- Cached DOM nodes (null-safe checks before use) -----
   // Kry al die dele van die bladsy (keuselys, lyste, knoppies, ens.)
   // een keer, sodat ons hulle later maklik kan gebruik.
-  var klasSelect = document.getElementById('klas-select');
+  var moduleSelect = document.getElementById('module-select');
+  var dagSelect = document.getElementById('dag-select');
   var dashDatum = document.getElementById('dash-datum');
   var dashInCount = document.getElementById('dash-in-count');
   var dashOutCount = document.getElementById('dash-out-count');
@@ -77,8 +77,16 @@
   var selectedStudent = null;  // student wat in die klasregister gekies is
   var selectedDate = new Date(vandag);
 
+  // ----- LIVE klasbywoning -----
+  // Wanneer die personeel vandag se klas oop het, haal ons elke 3 sekondes
+  // die jongste NFC-bywoning uit die databasis. Historiese datums word nie
+  // gepoll nie, sodat ons nie onnodige versoeke na die backend stuur nie.
+  var LIVE_REFRESH_MS = 3000;
+  var liveRefreshTimer = null;
+  var liveRefreshBusy = false;
+
   // Oor hoeveel klasdae die gekose student se bywoning bereken word.
-  var STUDENT_STAT_DAE = 30;
+  var STUDENT_STAT_DAE = 10;
   var displayYear = vandag.getFullYear();
   var displayMonth = vandag.getMonth();
 
@@ -117,6 +125,11 @@
     if (wanneer) label += ' — ' + wanneer;
     if (k.KLA_Lokaal) label += ' · ' + k.KLA_Lokaal;
 
+    // Etiket vir die dag-keuselys, bv. "Maandag 8:00–9:00 · GH117 A (50)"
+    var dagLabel = wanneer;
+    if (k.KLA_Lokaal) dagLabel = wanneer ? wanneer + ' · ' + k.KLA_Lokaal : k.KLA_Lokaal;
+    if (!dagLabel) dagLabel = 'Tyd onbekend';
+
     return {
       id: String(k.Klas_ID),
       klasId: k.Klas_ID,
@@ -127,7 +140,8 @@
       begin: k.KLA_Begin_Tyd || '',
       eind: k.KLA_Eind_Tyd || '',
       lokaal: k.KLA_Lokaal || '',
-      label: label
+      label: label,
+      dagLabel: dagLabel
     };
   }
 
@@ -137,8 +151,25 @@
       id: s.Gebruiker_ID,
       naam: s.GEB_Naam || '',
       van: s.GEB_Van || '',
-      nommer: s.STU_Nommer || ('#' + s.Gebruiker_ID)
+      nommer: s.STU_Nommer || ('#' + s.Gebruiker_ID),
+      teenwoordig: s.Teenwoordig === true,
+      ingescanTyd: s.Ingescan_Tyd || null,
+      laasteRigting: s.Laaste_Rigting || null,
+      laasteSkandering: s.Laaste_Skandering || null
     };
+  }
+
+  // Hierdie funksie formateer 'n student se laaste inskandering, bv.
+  // "Bitterbessie · 09:14" (plaaslike tyd), of 'n verstek-boodskap.
+  function formatSkandering(sk) {
+    if (!sk || !sk.tyd) return 'Geen NFC-skandering vir hierdie klas';
+    var d = new Date(sk.tyd);
+    var tyd = '';
+    if (!isNaN(d.getTime())) {
+      tyd = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' +
+            (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+    }
+    return [sk.lokaal, tyd, sk.rigting].filter(Boolean).join(' · ') || 'Geen NFC-skandering vir hierdie klas';
   }
 
   // Sorteer klasse op dag, dan begintyd, dan modulekode sodat die keuselys
@@ -201,44 +232,15 @@
     });
   }
 
-  // Hierdie funksie laai (en kas) die klasregister van 'n klas.
-  function laaiStudente(klas) {
-    if (studenteKas[klas.klasId]) return Promise.resolve(studenteKas[klas.klasId]);
-    return MoonApi.fetchKlasStudente(klas.klasId).then(function (res) {
-      if (!res || !res.sukses) {
-        throw new Error(foutVanAntwoord(res, 'Kon nie die klasregister laai nie.'));
-      }
-      var lys = (res.data || []).map(studentVanApi);
-      studenteKas[klas.klasId] = lys;
-      return lys;
+  // Laai die klasregister + regte NFC-status vir die gekose datum.
+  // Die /bywoning endpoint gee Present en Absent in een antwoord terug.
+  function laaiStudente(klas, datum, force) {
+    return laaiBywoning(klas, datum || selectedDate, force === true).then(function () {
+      return studenteVir(klas);
     });
   }
 
-  // ----- Deterministiese "random" (seed = klas + datum) -----
-
-  // Hierdie funksie verander 'n stuk teks in 'n vaste getal.
-  // Dieselfde teks gee altyd dieselfde getal.
-  /** djb2-agtige string hash → 32-bit unsigned int. */
-  function hashString(str) {
-    var h = 5381;
-    for (var i = 0; i < str.length; i++) {
-      h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
-    }
-    return h;
-  }
-
-  // Hierdie funksie maak 'n "toevalsgetal-maker" wat vir dieselfde
-  // begingetal altyd dieselfde reeks getalle gee.
-  /** mulberry32 PRNG — klein, vinnig, deterministies vir 'n gegewe seed. */
-  function mulberry32(seed) {
-    return function () {
-      seed |= 0;
-      seed = (seed + 0x6D2B79F5) | 0;
-      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
+  // ----- Regte NFC-bywoning per roosterklas + datum -----
 
   // Hierdie funksie skryf 'n datum as teks in die vorm JJJJ-MM-DD.
   function isoDate(d) {
@@ -254,65 +256,148 @@
     return d.getDate() + ' ' + MAANDE[d.getMonth()] + ' ' + d.getFullYear();
   }
 
-  // Hierdie funksie kyk of 'n dag 'n klasdag is: Maandag tot Vrydag,
-  // en nie 'n dag in die toekoms nie. (Soos die oorspronklike ontwerp: elke
-  // weeksdag wys bywoning, ongeag op watter dag die klas op die rooster staan,
-  // sodat die linkerpaneel altyd data het om te wys.)
-  /** Klasdae: weeksdae (Ma–Vr) wat nie in die toekoms lê nie. */
+  function isRoosterDag(klas, d) {
+    if (!klas) return false;
+    if (d.getTime() > vandag.getTime()) return false;
+    if (klas.dagIndeks === null || klas.dagIndeks === undefined) {
+      var weekdag = d.getDay();
+      return weekdag >= 1 && weekdag <= 5;
+    }
+    return d.getDay() === klas.dagIndeks;
+  }
+
+  // Kalender/grafiek gebruik die tans gekose roosterklas se werklike weekdag.
   function isKlasdag(d) {
-    var dag = d.getDay(); // 0 = Sondag ... 6 = Saterdag
+    if (currentKlas) return isRoosterDag(currentKlas, d);
+    var dag = d.getDay();
     return dag >= 1 && dag <= 5 && d.getTime() <= vandag.getTime();
   }
 
-  /**
-   * Deterministiese bywoning vir 'n klas op 'n datum.
-   * Return null as daar geen klasdata is nie (nie 'n klasdag / toekoms),
-   * anders { ingeskandeer: [{ student, tyd }], nieIngeskandeer: [student] }.
-   */
-  // Hierdie funksie werk uit watter studente op 'n dag ingeskandeer het
-  // en watter nie (voorbeeld-data oor die regte klasregister; nie regte
-  // skanderings nie).
-  // Die bywoning per klas+dag word onthou sodat die studentelys (wat elke
-  // student oor 30 klasdae nagaan) nie dieselfde dag herhaaldelik bereken nie.
-  var bywoningKas = {};
-
-  function kryBywoning(klas, datum) {
-    if (!klas || !isKlasdag(datum)) return null;
-    var sleutel = klas.kode + '|' + isoDate(datum);
-    if (Object.prototype.hasOwnProperty.call(bywoningKas, sleutel)) return bywoningKas[sleutel];
-    var resultaat = berekenBywoning(klas, datum);
-    bywoningKas[sleutel] = resultaat;
-    return resultaat;
+  // Kies vandag as die klas vandag plaasvind; anders die mees onlangse
+  // voorkoms van hierdie roosterklas.
+  function meesOnlangseKlasDatum(klas) {
+    var d = new Date(vandag);
+    if (!klas || klas.dagIndeks === null || klas.dagIndeks === undefined) return d;
+    var guard = 0;
+    while (d.getDay() !== klas.dagIndeks && guard < 7) {
+      d.setDate(d.getDate() - 1);
+      guard++;
+    }
+    return d;
   }
 
-  // Die seed is die MODULE-kode + datum: al die klassessies van een module
-  // deel dus dieselfde bywoningsrekord, sodat die balk "bywoning per module" is.
-  function berekenBywoning(klas, datum) {
-    var rand = mulberry32(hashString(klas.kode + '|' + isoDate(datum)));
-    var ingeskandeer = [];
-    var nieIngeskandeer = [];
+  var bywoningKas = {}; // "Klas_ID|YYYY-MM-DD" -> genormaliseerde regte data
 
-    // Die klas se begintyd (bv. "8:00") bepaal die skandeertyd; anders 08:00.
-    var beginMinute = tydNaMinute(klas.begin);
-    if (beginMinute > 24 * 60) beginMinute = 8 * 60;
+  function bywoningSleutel(klas, datum) {
+    return String(klas.klasId) + '|' + isoDate(datum);
+  }
 
-    // Vir elke student: omtrent 78% kans dat hy/sy ingeskandeer het,
-    // met 'n tyd kort na die klas se begintyd; anders op die afwesig-lys.
-    studenteVir(klas).forEach(function (s) {
-      if (rand() < 0.78) {
-        var totaalMinute = beginMinute + Math.floor(rand() * 25);
-        var uur = Math.floor(totaalMinute / 60) % 24;
-        var minuut = totaalMinute % 60;
-        ingeskandeer.push({
-          student: s,
-          tyd: (uur < 10 ? '0' : '') + uur + ':' + (minuut < 10 ? '0' : '') + minuut
-        });
-      } else {
-        nieIngeskandeer.push(s);
-      }
+  function scanTydKort(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' +
+           (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+
+  function normaliseerBywoning(data) {
+    data = data || {};
+    var present = (data.Present || []).map(studentVanApi);
+    var absent = (data.Absent || []).map(studentVanApi);
+    var almal = present.concat(absent);
+
+    // Sorteer die register stabiel op van/naam.
+    almal.sort(function (a, b) {
+      return (a.van + ' ' + a.naam).localeCompare(b.van + ' ' + b.naam);
     });
 
-    return { ingeskandeer: ingeskandeer, nieIngeskandeer: nieIngeskandeer };
+    var result = {
+      ingeskandeer: present.map(function (s) {
+        return { student: s, tyd: scanTydKort(s.ingescanTyd) };
+      }),
+      nieIngeskandeer: absent,
+      totaal: Number(data.Total_Students || almal.length || 0),
+      lokasieGekoppel: data.Lokasie_Gekoppel === true,
+      scanVenster: data.Scan_Venster || null,
+      roosterDagMatch: !data.Scan_Venster || data.Scan_Venster.rooster_dag_match !== false
+    };
+
+    return { result: result, studente: almal };
+  }
+
+  function kryBywoning(klas, datum) {
+    if (!klas) return null;
+    var item = bywoningKas[bywoningSleutel(klas, datum)];
+    if (!item || item.roosterDagMatch === false) return null;
+    return item;
+  }
+
+  function laaiBywoning(klas, datum, force) {
+    if (!klas || !window.MoonApi || typeof MoonApi.fetchKlasBywoning !== 'function') {
+      return Promise.reject(new Error('fetchKlasBywoning is nie in website_api_calls.js beskikbaar nie.'));
+    }
+
+    var sleutel = bywoningSleutel(klas, datum);
+    if (!force && Object.prototype.hasOwnProperty.call(bywoningKas, sleutel)) {
+      return Promise.resolve(bywoningKas[sleutel]);
+    }
+
+    return MoonApi.fetchKlasBywoning(klas.klasId, isoDate(datum)).then(function (res) {
+      if (!res || !res.sukses) {
+        throw new Error(foutVanAntwoord(res, 'Kon nie klasbywoning laai nie.'));
+      }
+
+      var norm = normaliseerBywoning(res.data || {});
+      bywoningKas[sleutel] = norm.result;
+
+      // Slegs die tans gekose datum se register moet die sigbare klaslys vervang.
+      if (currentKlas === klas && sameDay(datum, selectedDate)) {
+        studenteKas[klas.klasId] = norm.studente;
+      }
+      return norm.result;
+    });
+  }
+
+  // Laai die historiese klasdae wat die grafiek/studentstatistiek gebruik.
+  function laaiBywoningReeks(klas) {
+    var dae = kryLaasteKlasdae(STUDENT_STAT_DAE);
+    return Promise.all(dae.map(function (d) {
+      return laaiBywoning(klas, d, false).catch(function () { return null; });
+    }));
+  }
+
+  function isVandag(datum) {
+    return sameDay(datum, new Date());
+  }
+
+  // Haal stilweg die jongste bywoning vir die oop klas.
+  // Geen foutboodskap word oor die UI geskryf as een poll tydelik misluk nie;
+  // die volgende poll probeer weer en die gebruiker se huidige lys bly sigbaar.
+  function liveRefreshBywoning() {
+    if (document.hidden || liveRefreshBusy || !currentKlas || !isVandag(selectedDate)) {
+      return;
+    }
+
+    liveRefreshBusy = true;
+    var klasToeGestuur = currentKlas;
+    var datumToeGestuur = new Date(selectedDate);
+
+    laaiBywoning(klasToeGestuur, datumToeGestuur, true).then(function () {
+      // Ignoreer 'n laat antwoord as die gebruiker intussen klas/datum verander het.
+      if (currentKlas !== klasToeGestuur || !sameDay(selectedDate, datumToeGestuur)) return;
+      renderDashboard();
+      renderRoster();
+      renderStudentStats();
+    }).catch(function (err) {
+      console.warn('LIVE klasbywoning kon nie herlaai nie:', err);
+    }).finally(function () {
+      liveRefreshBusy = false;
+    });
+  }
+
+  function beginLiveRefresh() {
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+    liveRefreshTimer = setInterval(liveRefreshBywoning, LIVE_REFRESH_MS);
   }
 
   // ----- Kaartjies (selfde markup as kampus.js user cards) -----
@@ -419,13 +504,13 @@
 
   // ----- Statistieke: bywoning oor die laaste klasdae -----
 
-  // Hierdie funksie gee die laaste `n` klasdae (Ma–Vr, tot en met vandag),
+  // Hierdie funksie gee die laaste `n` werklike roosterdae vir die gekose klas,
   // met die oudste dag eerste.
   function kryLaasteKlasdae(n) {
     var dae = [];
     var d = new Date(vandag);
     var guard = 0; // keer dat die lus ooit vashaak
-    var maxGuard = n * 2 + 10; // genoeg kalenderdae vir n weeksdae (plus naweke)
+    var maxGuard = n * 8 + 14; // genoeg dae wanneer 'n klas net een keer per week plaasvind
     while (dae.length < n && guard < maxGuard) {
       if (isKlasdag(d)) dae.unshift(new Date(d));
       d.setDate(d.getDate() - 1);
@@ -479,7 +564,12 @@
         displayYear = selectedDate.getFullYear();
         displayMonth = selectedDate.getMonth();
         renderKalender();
-        renderDashboard();
+        laaiBywoning(currentKlas, selectedDate, true).then(function () {
+          renderDashboard();
+          renderRoster();
+        }).catch(function () {
+          renderDashboardLeeg();
+        });
       }
     });
 
@@ -541,8 +631,10 @@
         (currentKlas.moduleNaam ? ' · ' + currentKlas.moduleNaam : '');
     }
     if (moduleCaption) {
+      var gekoseByw = kryBywoning(currentKlas, selectedDate);
+      var nfcTeks = gekoseByw && gekoseByw.lokasieGekoppel ? ' · NFC-lokaal gekoppel' : ' · NFC-lokaal NIE gekoppel nie';
       moduleCaption.textContent = studente.length + ' student' + (studente.length === 1 ? '' : 'e') +
-        ' · bywoning oor die laaste ' + dae.length + ' klasdae';
+        ' · bywoning oor die laaste ' + dae.length + ' roosterdae' + nfcTeks;
     }
     if (studente.length === 0) {
       renderLeegBoodskap(moduleList, 'Geen studente is aan hierdie module gekoppel nie.');
@@ -622,7 +714,7 @@
 
   /**
    * Hierdie funksie tel hoeveel keer 'n student oor die laaste `nDae` klasdae
-   * die klas bygewoon en gemis het (dieselfde deterministiese data as die
+   * die klas bygewoon en gemis het (dieselfde regte NFC-data as die
    * dashboard, so die syfers stem ooreen met die dag-vir-dag lyste).
    */
   function kryStudentBywoning(klas, student, nDae) {
@@ -753,7 +845,18 @@
         cell.addEventListener('click', function () {
           selectedDate = datum;
           renderKalender();
-          renderDashboard();
+          if (!currentKlas) {
+            renderDashboard();
+            return;
+          }
+          renderLeegBoodskap(rosterList, 'Laai klasbywoning...');
+          laaiBywoning(currentKlas, selectedDate, true).then(function () {
+            renderDashboard();
+            renderRoster();
+          }).catch(function (err) {
+            renderDashboardLeeg();
+            renderLeegBoodskap(rosterList, 'Kon nie klasbywoning laai nie: ' + err.message);
+          });
         });
 
         kalGrid.appendChild(cell);
@@ -783,7 +886,7 @@
     }
 
     studente.forEach(function (s) {
-      var card = createStudentCard(s, s.nommer);
+      var card = createStudentCard(s, s.nommer + ' · ' + formatSkandering(s.laasteSkandering));
       card.classList.add('user-card--klikbaar');
       card.dataset.id = String(s.id);
       card.setAttribute('role', 'button');
@@ -819,33 +922,79 @@
     });
   }
 
-  // ----- Klas dropdown -----
-  // Hierdie funksie vul die "Kies Klas" keuselys met al die gelaaide klasse
-  // (of 'n enkele gedeaktiveerde boodskap as daar niks is nie).
-  function populateKlasSelect(boodskap) {
-    if (!klasSelect) return;
-    klasSelect.innerHTML = '';
+  // ----- Module- en dag-dropdowns -----
+  // Unieke modulekodes uit die gelaaide klasse, in rooster-volgorde.
+  function moduleKodes() {
+    var kodes = [];
+    klasse.forEach(function (k) {
+      if (kodes.indexOf(k.kode) === -1) kodes.push(k.kode);
+    });
+    return kodes;
+  }
 
-    if (klasse.length === 0) {
+  // Al die klas-sessies van een module, in dag/tyd-volgorde (klasse is
+  // reeds so gesorteer).
+  function sessiesVirModule(kode) {
+    return klasse.filter(function (k) { return k.kode === kode; });
+  }
+
+  // Hierdie funksie vul die "Kies Module"-keuselys (of wys 'n enkele
+  // gedeaktiveerde boodskap as daar niks is nie) en vul dan die dag-lys.
+  function populateModuleSelect(boodskap) {
+    if (!moduleSelect) return;
+    moduleSelect.innerHTML = '';
+
+    var kodes = moduleKodes();
+    if (kodes.length === 0) {
       var leeg = document.createElement('option');
       leeg.value = '';
       leeg.textContent = boodskap || 'Geen klasse toegewys nie';
       leeg.disabled = true;
       leeg.selected = true;
-      klasSelect.appendChild(leeg);
-      klasSelect.disabled = true;
+      moduleSelect.appendChild(leeg);
+      moduleSelect.disabled = true;
+      populateDagSelect(null, boodskap || 'Geen klasse toegewys nie');
       return;
     }
 
-    klasSelect.disabled = false;
-    klasse.forEach(function (k) {
+    moduleSelect.disabled = false;
+    kodes.forEach(function (kode) {
+      var opt = document.createElement('option');
+      opt.value = kode;
+      var naam = sessiesVirModule(kode)[0].moduleNaam;
+      opt.textContent = naam ? kode + ' — ' + naam : kode;
+      moduleSelect.appendChild(opt);
+    });
+    if (currentKlas) moduleSelect.value = currentKlas.kode;
+    populateDagSelect(moduleSelect.value);
+  }
+
+  // Hierdie funksie vul die "Kies Dag"-keuselys met die gekose module se
+  // sessies.
+  function populateDagSelect(kode, boodskap) {
+    if (!dagSelect) return;
+    dagSelect.innerHTML = '';
+
+    var sessies = kode ? sessiesVirModule(kode) : [];
+    if (sessies.length === 0) {
+      var leeg = document.createElement('option');
+      leeg.value = '';
+      leeg.textContent = boodskap || 'Geen dae nie';
+      leeg.disabled = true;
+      leeg.selected = true;
+      dagSelect.appendChild(leeg);
+      dagSelect.disabled = true;
+      return;
+    }
+
+    dagSelect.disabled = false;
+    sessies.forEach(function (k) {
       var opt = document.createElement('option');
       opt.value = k.id;
-      opt.textContent = k.label;
-      if (k.moduleNaam) opt.title = k.moduleNaam;
-      klasSelect.appendChild(opt);
+      opt.textContent = k.dagLabel;
+      dagSelect.appendChild(opt);
     });
-    if (currentKlas) klasSelect.value = currentKlas.id;
+    if (currentKlas && currentKlas.kode === kode) dagSelect.value = currentKlas.id;
   }
 
   // Hierdie funksie maak 'n klas die huidige een, laai sy klasregister van
@@ -853,31 +1002,56 @@
   // klas kies, word die ou antwoord geïgnoreer.
   function kiesKlas(klas) {
     currentKlas = klas;
-    bywoningKas = {}; // ander register = ander bywoning
-    // 'n Ander klas het 'n ander klasregister: maak die keuse skoon.
+    studenteKas[klas.klasId] = [];
     selectedStudent = null;
-    renderStudentStats();
-    renderDashboard();
-    renderLeegBoodskap(rosterList, 'Laai klasregister...');
 
-    return laaiStudente(klas).then(function () {
+    // Begin op vandag indien hierdie klas vandag plaasvind, anders op sy
+    // mees onlangse roosterdatum.
+    selectedDate = meesOnlangseKlasDatum(klas);
+    displayYear = selectedDate.getFullYear();
+    displayMonth = selectedDate.getMonth();
+
+    renderKalender();
+    renderStudentStats();
+    renderDashboardLeeg();
+    renderLeegBoodskap(rosterList, 'Laai regte NFC-klasbywoning...');
+
+    // Force=true is belangrik: 'n gewone page refresh / klas-herkeuse moet
+    // die jongste databasis-skanderings kry.
+    return laaiStudente(klas, selectedDate, true).then(function () {
       if (currentKlas !== klas) return;
-      bywoningKas = {}; // die register is nou gelaai: bereken oor
       renderDashboard();
       renderRoster();
+
+      // Laai die laaste roosterdae vir die grafiek en studentstatistiek.
+      return laaiBywoningReeks(klas).then(function () {
+        if (currentKlas !== klas) return;
+        renderDashboard();
+        renderRoster();
+        renderStudentStats();
+      });
     }).catch(function (err) {
       if (currentKlas !== klas) return;
       renderDashboardLeeg();
-      renderLeegBoodskap(rosterList, 'Kon nie die klasregister laai nie: ' + err.message);
+      renderLeegBoodskap(rosterList, 'Kon nie die klasbywoning laai nie: ' + err.message);
     });
   }
 
   // ----- Event wiring -----
-  // As die gebruiker 'n ander klas kies, wys die nuwe klas se data.
-  if (klasSelect) {
-    klasSelect.addEventListener('change', function () {
+  // As die gebruiker 'n ander module kies, wys sy eerste sessie se data.
+  if (moduleSelect) {
+    moduleSelect.addEventListener('change', function () {
+      populateDagSelect(moduleSelect.value);
+      var eerste = sessiesVirModule(moduleSelect.value)[0];
+      if (eerste) kiesKlas(eerste);
+    });
+  }
+
+  // As die gebruiker 'n ander dag/sessie kies, wys daardie sessie se data.
+  if (dagSelect) {
+    dagSelect.addEventListener('change', function () {
       var gekies = klasse.filter(function (k) {
-        return k.id === klasSelect.value;
+        return k.id === dagSelect.value;
       })[0];
       if (gekies) kiesKlas(gekies);
     });
@@ -922,15 +1096,21 @@
   // ----- Bootstrap -----
   // Sodra die bladsy klaar gelaai het, teken ons die leë raamwerk, laai dan
   // die klasse van die bediener en kies die eerste een.
+  window.addEventListener('beforeunload', function () {
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+  });
+
   document.addEventListener('DOMContentLoaded', function () {
     renderKalender();
     renderDashboard();
-    populateKlasSelect('Laai klasse...');
+    populateModuleSelect('Laai klasse...');
     renderLeegBoodskap(rosterList, 'Laai klasse...');
+
+    beginLiveRefresh();
 
     laaiKlasse().then(function (lys) {
       klasse = lys;
-      populateKlasSelect();
+      populateModuleSelect();
       if (klasse.length === 0) {
         renderDashboardLeeg();
         renderLeegBoodskap(rosterList,
@@ -941,7 +1121,7 @@
       return kiesKlas(klasse[0]);
     }).catch(function (err) {
       klasse = [];
-      populateKlasSelect('Kon nie klasse laai nie');
+      populateModuleSelect('Kon nie klasse laai nie');
       renderDashboardLeeg();
       renderLeegBoodskap(rosterList, 'Kon nie klasse laai nie: ' + err.message);
     });

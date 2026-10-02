@@ -402,6 +402,8 @@ img,svg,video{max-width:100%}
 .admin-user-name{font-size:13px;font-weight:600;color:var(--text-1)}
 .admin-user-email{font-size:10.5px;color:var(--text-muted);margin-top:2px}
 .admin-user-roles{display:flex;flex-wrap:wrap;gap:4px;margin:0 10px}
+/* 'n Opsigter se kampus wys op sy eie reël onder die rol-etikette */
+.admin-user-kampus{flex-basis:100%;margin-top:0}
 .admin-user-actions{display:flex;gap:6px;flex-shrink:0}
 .admin-venue-name{flex:1;font-size:13px;font-weight:600;color:var(--text-1)}
 

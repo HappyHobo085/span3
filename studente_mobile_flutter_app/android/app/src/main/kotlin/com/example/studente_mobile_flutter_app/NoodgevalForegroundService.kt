@@ -1,0 +1,1290 @@
+package com.example.studente_mobile_flutter_app
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.os.Build
+import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.provider.Settings
+import android.util.Log
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
+import org.eclipse.paho.client.mqttv3.MqttClient
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+
+class NoodgevalForegroundService : Service() {
+    companion object {
+        const val EXTRA_MQTT_HOST = "mqtt_host"
+        const val EXTRA_MQTT_PORT = "mqtt_port"
+        const val EXTRA_MQTT_USERNAME = "mqtt_username"
+        const val EXTRA_MQTT_PASSWORD = "mqtt_password"
+        const val EXTRA_KAMPUS_ID = "kampus_id"
+        const val EXTRA_API_BASE_URL = "api_base_url"
+        const val EXTRA_BEARER_TOKEN = "bearer_token"
+        const val EXTRA_COMMAND = "command"
+        const val EXTRA_NOODGEVAL_ID = "noodgeval_id"
+
+        const val COMMAND_ACK = "ACK"
+
+        private const val PREFS = "moon_noodgeval_service"
+        private const val PREF_HOST = "host"
+        private const val PREF_PORT = "port"
+        private const val PREF_MQTT_USERNAME = "mqtt_username"
+        private const val PREF_MQTT_PASSWORD = "mqtt_password"
+        private const val PREF_KAMPUS_ID = "kampus_id"
+        private const val PREF_API_BASE_URL = "api_base_url"
+        private const val PREF_BEARER_TOKEN = "bearer_token"
+        private const val PREF_DEVICE_TOKEN = "device_token"
+        private const val PREF_PENDING_ACK_ID = "pending_ack_id"
+
+        private const val SERVICE_CHANNEL_ID = "moon_noodgeval_service_native"
+        private const val ALERT_CHANNEL_ID = "moon_noodgeval_alarm_native_v2"
+        private const val SERVICE_NOTIFICATION_ID = 7001
+        private const val ALERT_NOTIFICATION_ID = 8001
+        private const val CAMPUS_REFRESH_SECONDS = 60L
+        private const val TAG = "MOON-NoodgevalService"
+    }
+
+    private val mqttExecutor = Executors.newSingleThreadExecutor()
+    private val apiExecutor = Executors.newSingleThreadExecutor()
+    private val campusRefreshExecutor = Executors.newSingleThreadScheduledExecutor()
+
+    @Volatile
+    private var campusRefreshFuture: ScheduledFuture<*>? = null
+
+    @Volatile
+    private var mqttClient: MqttClient? = null
+
+    @Volatile
+    private var mqttHost: String = "127.0.0.1"
+
+    @Volatile
+    private var mqttPort: Int = 1883
+
+    @Volatile
+    private var mqttUsername: String = "moon_mobile"
+
+    @Volatile
+    private var mqttPassword: String = ""
+
+    @Volatile
+    private var kampusId: Int = 1
+
+    @Volatile
+    private var apiBaseUrl: String = ""
+
+    @Volatile
+    private var bearerToken: String = ""
+
+    @Volatile
+    private var deviceToken: String = ""
+
+    @Volatile
+    private var subscribedTopic: String? = null
+
+    private var activeNoodgevalId: String? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannels()
+        startAsForeground("MOON luister vir kampus-noodgevalle.")
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+
+        mqttHost = intent?.getStringExtra(EXTRA_MQTT_HOST)
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_HOST, "127.0.0.1")
+            ?: "127.0.0.1"
+
+        mqttPort = if (intent?.hasExtra(EXTRA_MQTT_PORT) == true) {
+            intent.getIntExtra(EXTRA_MQTT_PORT, 1883)
+        } else {
+            prefs.getInt(PREF_PORT, 1883)
+        }
+
+        mqttUsername = intent?.getStringExtra(EXTRA_MQTT_USERNAME)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_MQTT_USERNAME, "moon_mobile")
+            ?: "moon_mobile"
+
+        mqttPassword = intent?.getStringExtra(EXTRA_MQTT_PASSWORD)
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_MQTT_PASSWORD, "")
+            ?: ""
+
+        kampusId = if (intent?.hasExtra(EXTRA_KAMPUS_ID) == true) {
+            intent.getIntExtra(EXTRA_KAMPUS_ID, 1)
+        } else {
+            prefs.getInt(PREF_KAMPUS_ID, 1)
+        }
+
+        apiBaseUrl = intent?.getStringExtra(EXTRA_API_BASE_URL)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_API_BASE_URL, "")
+            ?: ""
+
+        bearerToken = intent?.getStringExtra(EXTRA_BEARER_TOKEN)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(PREF_BEARER_TOKEN, "")
+            ?: ""
+
+        deviceToken = prefs.getString(PREF_DEVICE_TOKEN, "")
+            ?.trim()
+            .orEmpty()
+
+        prefs.edit()
+            .putString(PREF_HOST, mqttHost)
+            .putInt(PREF_PORT, mqttPort)
+            .putString(PREF_MQTT_USERNAME, mqttUsername)
+            .putString(PREF_MQTT_PASSWORD, mqttPassword)
+            .putInt(PREF_KAMPUS_ID, kampusId)
+            .putString(PREF_API_BASE_URL, apiBaseUrl)
+            .putString(PREF_BEARER_TOKEN, bearerToken)
+            .apply()
+
+        if (intent?.getStringExtra(EXTRA_COMMAND) == COMMAND_ACK) {
+            val id = intent.getStringExtra(EXTRA_NOODGEVAL_ID)
+            acknowledgeLocally(id)
+            return START_STICKY
+        }
+
+        // Elke suksesvolle Flutter-login gee vir die service 'n vars gewone JWT.
+        // Gebruik dit om 'n LANGERLEWENDE, BEPERKTE device token te registreer.
+        // Daardie token mag slegs nood-ONTVANG/KENNISNAME rapporteer.
+        if (bearerToken.isNotBlank()) {
+            registerDeviceCredentialAsync()
+        }
+
+        connectMqttAsync()
+        retryPendingAcknowledgementIfNeeded()
+        startCampusRefreshLoopIfNeeded()
+        return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.i(TAG, "Flutter task verwyder; native noodgevaldiens bly aktief.")
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onDestroy() {
+        stopAlarmAndVibration()
+
+        try {
+            mqttClient?.let { client ->
+                if (client.isConnected) {
+                    client.disconnectForcibly(1000, 1000)
+                }
+                client.close()
+            }
+        } catch (_: Exception) {
+        }
+
+        mqttClient = null
+        campusRefreshFuture?.cancel(true)
+        campusRefreshFuture = null
+        campusRefreshExecutor.shutdownNow()
+        mqttExecutor.shutdownNow()
+        apiExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    // STEP 12D:
+    // Die native foreground service herlees die gebruiker se huidige kampus periodiek.
+    // Dit werk onafhanklik van die Flutter UI, dus ook wanneer Flutter in die
+    // agtergrond is of uit Recent Apps verwyder is.
+    private fun startCampusRefreshLoopIfNeeded() {
+        if (apiBaseUrl.isBlank()) {
+            Log.w(TAG, "Kampus refresh nie begin nie: API URL ontbreek.")
+            return
+        }
+
+        synchronized(this) {
+            val existing = campusRefreshFuture
+            if (existing != null && !existing.isCancelled && !existing.isDone) {
+                return
+            }
+
+            campusRefreshFuture = campusRefreshExecutor.scheduleWithFixedDelay(
+                {
+                    try {
+                        refreshCampusFromBackend()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Kampus refresh het onverwags misluk.", e)
+                    }
+                },
+                5L,
+                CAMPUS_REFRESH_SECONDS,
+                TimeUnit.SECONDS,
+            )
+
+            Log.i(
+                TAG,
+                "STEP 12D kampus refresh aktief: elke $CAMPUS_REFRESH_SECONDS sekondes."
+            )
+        }
+    }
+
+    private data class CampusPresence(
+        val kampusId: Int,
+        val opKampus: Boolean,
+        val kampusNaam: String?,
+    )
+
+    private fun refreshCampusFromBackend() {
+        val base = apiBaseUrl.trim().trimEnd('/')
+        if (base.isBlank()) return
+
+        // 1) Voorkeur: langerlewende scoped device credential.
+        // Die endpoint is doelbewus apart van die gewone JWT endpoint sodat die
+        // foreground service kan aanhou werk nadat die Flutter-login JWT verval het.
+        val scoped = deviceToken.trim().ifBlank {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_DEVICE_TOKEN, "")
+                ?.trim()
+                .orEmpty()
+        }
+
+        if (scoped.isNotBlank()) {
+            val result = performGet(
+                "$base/noodgeval/device/my-campus",
+                "X-MOON-Device-Token",
+                scoped,
+            )
+
+            if (result.code in 200..299) {
+                val presence = parseCampusPresence(result.body)
+                if (presence != null) {
+                    applyCampusPresence(presence, "device auth")
+                    return
+                }
+                Log.w(TAG, "Device my-campus het 'n ongeldige antwoord teruggestuur.")
+            } else if (result.code != null) {
+                Log.w(
+                    TAG,
+                    "Device my-campus HTTP ${result.code}: ${result.body.take(300)}"
+                )
+            } else if (result.error != null) {
+                Log.w(TAG, "Device my-campus netwerkfout.", result.error)
+            }
+
+            // 401/403 = device credential nie bruikbaar nie.
+            // 404/405 = device my-campus endpoint is nog nie op hierdie backend uitrol nie.
+            // In al vier gevalle val ons tydelik terug na die gewone JWT endpoint.
+            if (result.code != null && result.code !in listOf(401, 403, 404, 405)) {
+                return
+            }
+        }
+
+        // 2) Tydelike/aanvangs-terugval: gewone login JWT.
+        val jwt = bearerToken.trim()
+        if (jwt.isBlank()) {
+            Log.w(TAG, "Kampus refresh kan nie autentiseer nie: geen device token of JWT.")
+            return
+        }
+
+        val result = performGet(
+            "$base/noodgeval/my-campus",
+            "Authorization",
+            "Bearer $jwt",
+        )
+
+        if (result.code in 200..299) {
+            val presence = parseCampusPresence(result.body)
+            if (presence != null) {
+                applyCampusPresence(presence, "JWT")
+            } else {
+                Log.w(TAG, "JWT my-campus het 'n ongeldige antwoord teruggestuur.")
+            }
+            return
+        }
+
+        if (result.code != null) {
+            Log.w(
+                TAG,
+                "JWT my-campus HTTP ${result.code}: ${result.body.take(300)}"
+            )
+        } else if (result.error != null) {
+            Log.w(TAG, "JWT my-campus netwerkfout.", result.error)
+        }
+    }
+
+    private fun parseCampusPresence(body: String): CampusPresence? {
+        return try {
+            val root = JSONObject(body)
+            val data = root.optJSONObject("data") ?: return null
+            val opKampus = data.optBoolean("op_kampus", false)
+
+            if (!opKampus) {
+                CampusPresence(
+                    kampusId = 0,
+                    opKampus = false,
+                    kampusNaam = null,
+                )
+            } else {
+                if (data.isNull("kampus_id")) return null
+                val id = data.optInt("kampus_id", -1)
+                if (id <= 0) return null
+
+                CampusPresence(
+                    kampusId = id,
+                    opKampus = true,
+                    kampusNaam = data.optString("kampus_naam", "")
+                        .trim()
+                        .ifBlank { null },
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Kon my-campus JSON nie lees nie.", e)
+            null
+        }
+    }
+
+    private fun applyCampusPresence(presence: CampusPresence, authSource: String) {
+        val oldKampusId = kampusId
+        val newKampusId = presence.kampusId
+
+        if (oldKampusId == newKampusId) {
+            return
+        }
+
+        kampusId = newKampusId
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_KAMPUS_ID, newKampusId)
+            .apply()
+
+        Log.i(
+            TAG,
+            "STEP 12D kampus verander via $authSource: " +
+                "$oldKampusId -> $newKampusId " +
+                "(${presence.kampusNaam ?: if (presence.opKampus) "onbekend" else "nie op kampus"})"
+        )
+
+        // MQTT-veranderinge bly op die bestaande enkel MQTT executor sodat
+        // unsubscribe/subscribe nie gelyktydig teen mekaar kan hardloop nie.
+        mqttExecutor.execute {
+            val client = mqttClient
+            if (client?.isConnected == true) {
+                subscribe(client)
+                updateForegroundNotification(
+                    if (newKampusId > 0) {
+                        "MQTT gekoppel • kampus $newKampusId"
+                    } else {
+                        "Nie tans op 'n kampus nie • wag vir nuwe kampus scan"
+                    }
+                )
+            } else {
+                Log.i(
+                    TAG,
+                    "Kampus het verander terwyl MQTT aflyn is; koppel weer met nuwe kampus."
+                )
+                connectMqttAsync()
+            }
+        }
+    }
+
+    private fun connectMqttAsync() {
+        mqttExecutor.execute {
+            try {
+                val existing = mqttClient
+                if (existing?.isConnected == true) {
+                    val expectedUri = brokerUri()
+                    if (existing.serverURI == expectedUri) {
+                        subscribe(existing)
+                        return@execute
+                    }
+                }
+
+                try {
+                    existing?.disconnectForcibly(500, 500)
+                    existing?.close()
+                } catch (_: Exception) {
+                }
+
+                val androidId = Settings.Secure.getString(
+                    contentResolver,
+                    Settings.Secure.ANDROID_ID
+                ) ?: "unknown"
+
+                val safeId = androidId.replace(Regex("[^A-Za-z0-9_-]"), "")
+                val clientId = "moon_${safeId}_$kampusId"
+
+                val client = MqttClient(
+                    brokerUri(),
+                    clientId,
+                    MemoryPersistence()
+                )
+
+                client.setCallback(object : MqttCallbackExtended {
+                    override fun connectComplete(reconnect: Boolean, serverURI: String?) {
+                        Log.i(
+                            TAG,
+                            "MQTT connected reconnect=$reconnect server=$serverURI"
+                        )
+                        subscribe(client)
+                        updateForegroundNotification(
+                            "MQTT gekoppel • kampus $kampusId"
+                        )
+                    }
+
+                    override fun connectionLost(cause: Throwable?) {
+                        Log.w(TAG, "MQTT verbinding verloor", cause)
+                        updateForegroundNotification(
+                            "MQTT verbinding verloor • probeer weer koppel"
+                        )
+                    }
+
+                    override fun messageArrived(topic: String?, message: MqttMessage?) {
+                        val rawPayload = message?.payload
+                            ?.toString(Charsets.UTF_8)
+                            ?.trim()
+                            .orEmpty()
+
+                        Log.i(TAG, "MQTT ONTVANG [$topic]: $rawPayload")
+                        handleIncomingPayload(rawPayload)
+                    }
+
+                    override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                        // Hierdie service publish nie tans boodskappe nie.
+                    }
+                })
+
+                val options = MqttConnectOptions().apply {
+                    isAutomaticReconnect = true
+                    isCleanSession = false
+                    connectionTimeout = 10
+                    keepAliveInterval = 20
+
+                    if (mqttUsername.isNotBlank()) {
+                        setUserName(mqttUsername)
+                        setPassword(mqttPassword.toCharArray())
+                    }
+                }
+
+                Log.i(
+                    TAG,
+                    "MQTT verbind na ${brokerUri()} as gebruiker=${mqttUsername.ifBlank { "<geen>" }}"
+                )
+
+                mqttClient = client
+                client.connect(options)
+                subscribe(client)
+            } catch (e: Exception) {
+                Log.e(TAG, "Kon nie aan MQTT koppel nie", e)
+                updateForegroundNotification(
+                    "MQTT nie gekoppel nie • wag vir herverbinding"
+                )
+            }
+        }
+    }
+
+    private fun subscribe(client: MqttClient) {
+        try {
+            if (!client.isConnected) return
+
+            val nuweTopic = if (kampusId > 0) {
+                "moon/noodgeval/kampus/$kampusId"
+            } else {
+                null
+            }
+
+            val ouTopic = subscribedTopic
+            if (ouTopic != null && ouTopic != nuweTopic) {
+                try {
+                    client.unsubscribe(ouTopic)
+                    Log.i(TAG, "Unsubscribed: $ouTopic")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Kon nie ou MQTT topic unsubscribe nie: $ouTopic", e)
+                }
+            }
+
+            if (nuweTopic != null) {
+                // Om weer op dieselfde topic te subscribe is veilig en maak ook
+                // seker dat 'n herverbinding die subscription herstel.
+                client.subscribe(nuweTopic, 1)
+                subscribedTopic = nuweTopic
+                Log.i(TAG, "Subscribed: $nuweTopic")
+            } else {
+                subscribedTopic = null
+                Log.i(TAG, "Geen aktiewe kampus nie; geen kampus MQTT topic subscribed nie.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "MQTT subscribe fout", e)
+        }
+    }
+
+    private fun handleIncomingPayload(rawPayload: String) {
+        if (rawPayload.isBlank()) {
+            return
+        }
+
+        // STAP 3B:
+        // Net JSON met status=AKTIEF begin die alarm.
+        // Plain-text MQTT bly 'n gewone stille toetsnotification.
+        val json = try {
+            JSONObject(rawPayload)
+        } catch (_: Exception) {
+            showTestNotification(rawPayload)
+            return
+        }
+
+        val status = json.optString("status", "").trim().uppercase()
+
+        // Verdedigende kampus-kontrole: selfs al sou 'n ou MQTT subscription
+        // nog kortliks bestaan, mag 'n nood vir 'n ander kampus nooit alarm maak nie.
+        if (status in setOf("AKTIEF", "ACTIVE", "GESLUIT", "CLOSED")) {
+            val payloadKampusId = json.optInt("kampus_id", -1)
+            if (kampusId <= 0 || payloadKampusId != kampusId) {
+                Log.w(
+                    TAG,
+                    "Ignoreer noodgeval vir verkeerde kampus: payload=$payloadKampusId huidig=$kampusId"
+                )
+                return
+            }
+        }
+
+        val noodgevalId = json.opt("noodgeval_id")?.toString()
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: "local-${System.currentTimeMillis()}"
+
+        when (status) {
+            "AKTIEF", "ACTIVE" -> {
+                val titel = json.optString("titel", "MOON NOODGEVAL")
+                    .ifBlank { "MOON NOODGEVAL" }
+                val boodskap = json.optString(
+                    "boodskap",
+                    "Noodgevalboodskap ontvang."
+                ).ifBlank { "Noodgevalboodskap ontvang." }
+
+                startEmergencyAlarm(
+                    noodgevalId = noodgevalId,
+                    titel = titel,
+                    boodskap = boodskap,
+                )
+            }
+
+            "GESTOP", "GESLUIT", "GEKANSELLEER", "STOP", "CANCELLED", "CLOSED" -> {
+                stopAlarmAndVibration()
+                activeNoodgevalId = null
+                getSystemService(NotificationManager::class.java)
+                    .cancel(ALERT_NOTIFICATION_ID)
+
+                updateForegroundNotification(
+                    "Geen aktiewe noodgeval • MQTT gekoppel"
+                )
+            }
+
+            else -> {
+                showTestNotification(rawPayload)
+            }
+        }
+    }
+
+    private fun startEmergencyAlarm(
+        noodgevalId: String,
+        titel: String,
+        boodskap: String,
+    ) {
+        activeNoodgevalId = noodgevalId
+
+        // Rapporteer outomaties dat hierdie toestel die noodgeval ontvang het.
+        reportReceivedAsync(noodgevalId)
+
+        // Klank word deur Android se alarm-notification channel beheer.
+        // Vibrasie word ook direk geloop sodat dit aanhou totdat die gebruiker erken.
+        startVibration()
+        showEmergencyNotification(
+            noodgevalId = noodgevalId,
+            titel = titel,
+            boodskap = boodskap,
+        )
+
+        updateForegroundNotification(
+            "AKTIEWE NOODGEVAL • kennisname word vereis"
+        )
+    }
+
+    @Suppress("DEPRECATION")
+    private fun startVibration() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getSystemService(VibratorManager::class.java)
+                manager.defaultVibrator
+            } else {
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+
+            if (!vibrator.hasVibrator()) {
+                return
+            }
+
+            val pattern = longArrayOf(
+                0,
+                900, 450,
+                900, 450,
+                1400, 700
+            )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val amplitudes = intArrayOf(
+                    0,
+                    255, 0,
+                    255, 0,
+                    255, 0
+                )
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        pattern,
+                        amplitudes,
+                        0
+                    )
+                )
+            } else {
+                vibrator.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Kon nie vibrasie begin nie", e)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopAlarmAndVibration() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = getSystemService(VibratorManager::class.java)
+                manager.defaultVibrator
+            } else {
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+            vibrator.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Kon nie vibrasie stop nie", e)
+        }
+
+        // FLAG_INSISTENT se alarmklank stop wanneer die notification gekanselleer word.
+        getSystemService(NotificationManager::class.java)
+            .cancel(ALERT_NOTIFICATION_ID)
+    }
+
+    private fun acknowledgeLocally(noodgevalId: String?) {
+        if (
+            noodgevalId != null &&
+            activeNoodgevalId != null &&
+            noodgevalId != activeNoodgevalId
+        ) {
+            Log.w(
+                TAG,
+                "ACK vir ou noodgeval geïgnoreer: $noodgevalId "
+                    + "(aktief=$activeNoodgevalId)"
+            )
+            return
+        }
+
+        val idToAcknowledge = activeNoodgevalId ?: noodgevalId
+
+        // Die gebruiker se plaaslike alarm stop onmiddellik wanneer hy/sy
+        // "EK HET KENNIS GENEEM" druk. Die API-sinkronisering gebeur daarna.
+        stopAlarmAndVibration()
+
+        getSystemService(NotificationManager::class.java)
+            .cancel(ALERT_NOTIFICATION_ID)
+
+        Log.i(
+            TAG,
+            "EK HET KENNIS GENEEM: ${idToAcknowledge ?: "onbekend"}"
+        )
+
+        activeNoodgevalId = null
+
+        if (idToAcknowledge.isNullOrBlank()) {
+            updateForegroundNotification(
+                "Kennis geneem plaaslik • geen noodgeval-ID beskikbaar nie"
+            )
+            return
+        }
+
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putString(PREF_PENDING_ACK_ID, idToAcknowledge)
+            .apply()
+
+        updateForegroundNotification(
+            "Kennis geneem • stoor bevestiging..."
+        )
+
+        reportAcknowledgementAsync(idToAcknowledge)
+    }
+
+    private fun reportReceivedAsync(noodgevalId: String) {
+        apiExecutor.execute {
+            postNoodgevalState(
+                noodgevalId = noodgevalId,
+                action = "ontvang",
+                retryDelaysMs = longArrayOf(0L, 1500L, 4000L),
+            )
+        }
+    }
+
+    private fun reportAcknowledgementAsync(noodgevalId: String) {
+        apiExecutor.execute {
+            val success = postNoodgevalState(
+                noodgevalId = noodgevalId,
+                action = "kennisname",
+                retryDelaysMs = longArrayOf(0L, 2000L, 5000L, 15000L),
+            )
+
+            if (success) {
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit()
+                    .remove(PREF_PENDING_ACK_ID)
+                    .apply()
+
+                updateForegroundNotification(
+                    "Kennis geneem en gestoor • MQTT gekoppel • kampus $kampusId"
+                )
+            } else {
+                updateForegroundNotification(
+                    "Kennis geneem plaaslik • sinkronisering wag"
+                )
+            }
+        }
+    }
+
+    private fun retryPendingAcknowledgementIfNeeded() {
+        val pendingId = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getString(PREF_PENDING_ACK_ID, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+
+        reportAcknowledgementAsync(pendingId)
+    }
+
+    private fun registerDeviceCredentialAsync() {
+        apiExecutor.execute {
+            val base = apiBaseUrl.trim().trimEnd('/')
+            val jwt = bearerToken.trim()
+            if (base.isBlank() || jwt.isBlank()) {
+                return@execute
+            }
+
+            var connection: HttpURLConnection? = null
+            try {
+                val androidId = Settings.Secure.getString(
+                    contentResolver,
+                    Settings.Secure.ANDROID_ID
+                ) ?: "unknown-device"
+
+                val payload = JSONObject().apply {
+                    put("device_id", androidId)
+                    put(
+                        "device_name",
+                        "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+                    )
+                }.toString()
+
+                val url = URL("$base/noodgeval/device/register")
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                    useCaches = false
+                    doInput = true
+                    doOutput = true
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Authorization", "Bearer $jwt")
+                }
+
+                connection.outputStream.use { output ->
+                    output.write(payload.toByteArray(Charsets.UTF_8))
+                }
+
+                val code = connection.responseCode
+                val body = try {
+                    val stream = if (code in 200..299) {
+                        connection.inputStream
+                    } else {
+                        connection.errorStream
+                    }
+                    stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                } catch (_: Exception) {
+                    ""
+                }
+
+                if (code in 200..299) {
+                    val json = JSONObject(body)
+                    val token = json.optJSONObject("data")
+                        ?.optString("device_token", "")
+                        ?.trim()
+                        .orEmpty()
+
+                    if (token.isNotBlank()) {
+                        deviceToken = token
+                        getSharedPreferences(PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(PREF_DEVICE_TOKEN, token)
+                            .apply()
+
+                        Log.i(TAG, "Scoped device auth geregistreer.")
+                        retryPendingAcknowledgementIfNeeded()
+                    } else {
+                        Log.w(TAG, "Device register het geen token teruggestuur nie.")
+                    }
+                } else {
+                    Log.w(
+                        TAG,
+                        "Device register HTTP $code: ${body.take(300)}"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Kon nie scoped device auth registreer nie.", e)
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    private data class ApiPostResult(
+        val code: Int?,
+        val body: String = "",
+        val error: Exception? = null,
+    )
+
+    private fun performGet(
+        urlString: String,
+        headerName: String,
+        headerValue: String,
+    ): ApiPostResult {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 10000
+                useCaches = false
+                doInput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty(headerName, headerValue)
+            }
+            val code = connection.responseCode
+            val body = try {
+                val stream = if (code in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+                stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            ApiPostResult(code = code, body = body)
+        } catch (e: Exception) {
+            ApiPostResult(code = null, error = e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun performEmptyPost(
+        urlString: String,
+        headerName: String,
+        headerValue: String,
+    ): ApiPostResult {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10000
+                readTimeout = 10000
+                useCaches = false
+                doInput = true
+                doOutput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty(headerName, headerValue)
+                setFixedLengthStreamingMode(0)
+            }
+            connection.outputStream.use { }
+            val code = connection.responseCode
+            val body = try {
+                val stream = if (code in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream
+                }
+                stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            ApiPostResult(code = code, body = body)
+        } catch (e: Exception) {
+            ApiPostResult(code = null, error = e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun postNoodgevalState(
+        noodgevalId: String,
+        action: String,
+        retryDelaysMs: LongArray,
+    ): Boolean {
+        val numericId = noodgevalId.toLongOrNull()
+        if (numericId == null) {
+            Log.w(
+                TAG,
+                "Kan /$action nie rapporteer nie: ongeldige noodgeval-ID $noodgevalId"
+            )
+            return false
+        }
+
+        val base = apiBaseUrl.trim().trimEnd('/')
+        if (base.isBlank()) {
+            Log.w(TAG, "Kan /$action nie rapporteer nie: API URL ontbreek.")
+            return false
+        }
+
+        for (delayMs in retryDelaysMs) {
+            if (delayMs > 0) {
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+
+            // 1) Voorkeur: scoped, langerlewende device token.
+            val scoped = deviceToken.trim().ifBlank {
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .getString(PREF_DEVICE_TOKEN, "")
+                    ?.trim()
+                    .orEmpty()
+            }
+
+            if (scoped.isNotBlank()) {
+                val result = performEmptyPost(
+                    "$base/noodgeval/device/$numericId/$action",
+                    "X-MOON-Device-Token",
+                    scoped,
+                )
+
+                if (result.code in 200..299) {
+                    Log.i(
+                        TAG,
+                        "Noodgeval $noodgevalId /$action via device auth gestoor."
+                    )
+                    return true
+                }
+
+                if (result.code != null) {
+                    Log.w(
+                        TAG,
+                        "Device auth /$action HTTP ${result.code}: ${result.body.take(300)}"
+                    )
+                } else if (result.error != null) {
+                    Log.w(TAG, "Device auth /$action netwerkfout.", result.error)
+                }
+
+                // By 'n geldige HTTP antwoord anders as auth-fout, moenie dieselfde
+                // aksie met 'n ander credential dupliseer nie.
+                if (result.code != null && result.code !in listOf(401, 403)) {
+                    if (result.code in 400..499) return false
+                    continue
+                }
+            }
+
+            // 2) Terugval tydens/na login: gewone JWT endpoint. Dit laat Step 10
+            // veilig uitrol selfs voordat die device registration klaar is.
+            val jwt = bearerToken.trim()
+            if (jwt.isNotBlank()) {
+                val result = performEmptyPost(
+                    "$base/noodgeval/$numericId/$action",
+                    "Authorization",
+                    "Bearer $jwt",
+                )
+
+                if (result.code in 200..299) {
+                    Log.i(
+                        TAG,
+                        "Noodgeval $noodgevalId /$action via JWT gestoor."
+                    )
+                    return true
+                }
+
+                if (result.code != null) {
+                    Log.w(
+                        TAG,
+                        "JWT /$action HTTP ${result.code}: ${result.body.take(300)}"
+                    )
+                    if (result.code in 400..499) {
+                        return false
+                    }
+                } else if (result.error != null) {
+                    Log.w(TAG, "JWT /$action netwerkfout.", result.error)
+                }
+            } else if (scoped.isBlank()) {
+                Log.w(
+                    TAG,
+                    "Kan /$action nie rapporteer nie: geen device token of JWT beskikbaar nie."
+                )
+                return false
+            }
+        }
+
+        return false
+    }
+
+    private fun brokerUri(): String {
+        val rawHost = mqttHost.trim().removeSuffix("/")
+
+        // Laat 'n volledige URI toe vir toekomstige/dev gebruik.
+        if (rawHost.startsWith("tcp://", ignoreCase = true) ||
+            rawHost.startsWith("ssl://", ignoreCase = true) ||
+            rawHost.startsWith("ws://", ignoreCase = true) ||
+            rawHost.startsWith("wss://", ignoreCase = true)
+        ) {
+            return rawHost
+        }
+
+        // Railway Public Networking termineer TLS op 443 en stuur die
+        // WebSocket intern na Mosquitto se 9001 listener. Paho gebruik
+        // /mqtt as die standaard WebSocket-pad wanneer geen pad gegee is nie.
+        val isRailwayPublic = rawHost.endsWith(".up.railway.app", ignoreCase = true)
+        val scheme = if (isRailwayPublic || mqttPort == 443) "wss" else "tcp"
+        val effectivePort = if (isRailwayPublic) 443 else mqttPort
+
+        return "$scheme://$rawHost:$effectivePort"
+    }
+
+    private fun startAsForeground(text: String) {
+        val notification = buildServiceNotification(text)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                SERVICE_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
+            )
+        } else {
+            startForeground(SERVICE_NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun updateForegroundNotification(text: String) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(
+            SERVICE_NOTIFICATION_ID,
+            buildServiceNotification(text)
+        )
+    }
+
+    private fun buildServiceNotification(text: String): Notification {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+
+        val pendingIntent = if (launchIntent != null) {
+            PendingIntent.getActivity(
+                this,
+                0,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            null
+        }
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, SERVICE_CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+        }
+
+        builder
+            .setSmallIcon(R.drawable.ic_stat_moon)
+            .setContentTitle("MOON Noodgevaldiens aktief")
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+
+        if (pendingIntent != null) {
+            builder.setContentIntent(pendingIntent)
+        }
+
+        return builder.build()
+    }
+
+    private fun showEmergencyNotification(
+        noodgevalId: String,
+        titel: String,
+        boodskap: String,
+    ) {
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val contentPendingIntent = if (launchIntent != null) {
+            PendingIntent.getActivity(
+                this,
+                10,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            null
+        }
+
+        val ackIntent = Intent(
+            this,
+            NoodgevalActionReceiver::class.java
+        ).apply {
+            action = NoodgevalActionReceiver.ACTION_ACK
+            putExtra(EXTRA_NOODGEVAL_ID, noodgevalId)
+        }
+
+        val ackPendingIntent = PendingIntent.getBroadcast(
+            this,
+            11,
+            ackIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, ALERT_CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+                .setPriority(Notification.PRIORITY_MAX)
+        }
+
+        builder
+            .setSmallIcon(R.drawable.ic_stat_moon)
+            .setContentTitle("🚨 $titel")
+            .setContentText(boodskap)
+            .setStyle(Notification.BigTextStyle().bigText(boodskap))
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .addAction(
+                R.drawable.ic_stat_moon,
+                "EK HET KENNIS GENEEM",
+                ackPendingIntent
+            )
+
+        if (contentPendingIntent != null) {
+            builder.setContentIntent(contentPendingIntent)
+        }
+
+        val emergencyNotification = builder.build().apply {
+            // Android herhaal die channel se alarmklank totdat hierdie
+            // notification gekanselleer word.
+            flags = flags or Notification.FLAG_INSISTENT
+            flags = flags or Notification.FLAG_NO_CLEAR
+        }
+
+        manager.notify(
+            ALERT_NOTIFICATION_ID,
+            emergencyNotification
+        )
+    }
+
+    private fun showTestNotification(payload: String) {
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, SERVICE_CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+                .setPriority(Notification.PRIORITY_DEFAULT)
+        }
+
+        builder
+            .setSmallIcon(R.drawable.ic_stat_moon)
+            .setContentTitle("MOON MQTT TOETS ONTVANG")
+            .setContentText(payload)
+            .setStyle(Notification.BigTextStyle().bigText(payload))
+            .setAutoCancel(true)
+
+        val id = 8200 + abs(
+            (System.currentTimeMillis() % 100000).toInt()
+        )
+
+        manager.notify(id, builder.build())
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val serviceChannel = NotificationChannel(
+            SERVICE_CHANNEL_ID,
+            "MOON Noodgevaldiens",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Hou MOON se noodgeval-MQTT diens aktief."
+            setSound(null, null)
+            enableVibration(false)
+        }
+
+        // NUWE channel ID (_v2) is doelbewus belangrik:
+        // Android cache notification-channel klank/vibrasie instellings.
+        // Die vorige channel was stil geskep, en daardie instellings kan nie
+        // betroubaar programmaties verander word nadat die channel bestaan nie.
+        val alarmUri =
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val alarmAudioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+        val alertChannel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "MOON Noodgeval Alarm",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Harde MOON kampus-noodgevalle."
+            setSound(alarmUri, alarmAudioAttributes)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(
+                0,
+                900, 450,
+                900, 450,
+                1400, 700
+            )
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+
+        manager.createNotificationChannel(serviceChannel)
+        manager.createNotificationChannel(alertChannel)
+    }
+}

@@ -74,7 +74,7 @@ def _expire_old_invites(db: Session) -> int:
 
 def _generate_otp(db: Session) -> str:
     for _ in range(100):
-        otp = f"{secrets.randbelow(100_000_000):08d}"
+        otp = f"{secrets.randbelow(1_000_000):06d}"
         exists = (
             db.query(models.BesoekerUitnodiging)
             .filter(models.BesoekerUitnodiging.BES_Aktief_Sleutel == otp)
@@ -102,6 +102,11 @@ def _invite_dict(invite: models.BesoekerUitnodiging) -> dict:
         "rede": invite.BES_Rede,
         "otp": invite.BES_OTP,
         "status": invite.BES_Status,
+        "voorgestelde_rigting": (
+            "IN" if invite.BES_Status == "HANGEND"
+            else "UIT" if invite.BES_Status == "TOEGELAAT"
+            else None
+        ),
         "geskep_op": _iso_utc(invite.BES_Geskep_Op),
         "verval_op": _iso_utc(invite.BES_Verval_Op),
         "besluit_op": _iso_utc(invite.BES_Besluit_Op),
@@ -139,6 +144,7 @@ def _ensure_pending_and_valid(db: Session, invite: models.BesoekerUitnodiging) -
             "GEWEIER": "Hierdie OTP is reeds verwerk en toegang is geweier",
             "GEKANSELLEER": "Hierdie uitnodiging is gekanselleer",
             "VERVAL": "Hierdie OTP het verval",
+            "UIT": "Hierdie OTP is reeds klaar gebruik; die besoeker het reeds UIT geskandeer",
         }
         raise HTTPException(
             status_code=409,
@@ -180,8 +186,13 @@ def create_visitor_invite(
         db.query(models.BesoekerUitnodiging)
         .filter(
             models.BesoekerUitnodiging.Gasheer_ID == current_user.Gebruiker_ID,
-            models.BesoekerUitnodiging.BES_Status == "HANGEND",
-            models.BesoekerUitnodiging.BES_Verval_Op > datetime.utcnow(),
+            models.BesoekerUitnodiging.BES_Status.in_(["HANGEND", "TOEGELAAT"]),
+            # HANGEND moet nog binne sy geldigheid wees; TOEGELAAT bly aktief
+            # totdat die besoeker met dieselfde OTP UIT skandeer.
+            (
+                (models.BesoekerUitnodiging.BES_Status == "TOEGELAAT")
+                | (models.BesoekerUitnodiging.BES_Verval_Op > datetime.utcnow())
+            ),
         )
         .count()
     )
@@ -189,7 +200,7 @@ def create_visitor_invite(
         db.commit()
         raise HTTPException(
             status_code=409,
-            detail="Jy het reeds 5 aktiewe besoeker-OTP's. Kanselleer een of wag dat dit verval.",
+            detail="Jy het reeds 5 aktiewe besoeker-OTP's/besoekers. Kanselleer een of laat 'n besoeker eers UIT skandeer.",
         )
 
     otp = _generate_otp(db)
@@ -268,6 +279,8 @@ def verify_visitor_otp(
     if len(otp) != 6 or not otp.isdigit():
         raise HTTPException(status_code=400, detail="OTP moet presies 6 syfers wees")
 
+    # Net HANGEND uitnodigings verval volgens die oorspronklike 24 uur.
+    # Sodra 'n besoeker IN is, moet dieselfde OTP steeds vir UIT werk.
     changed = _expire_old_invites(db)
     if changed:
         db.commit()
@@ -287,18 +300,28 @@ def verify_visitor_otp(
         )
         if previous is not None:
             status_messages = {
-                "TOEGELAAT": "Hierdie OTP is reeds gebruik",
+                "UIT": "Hierdie OTP is reeds klaar gebruik; die besoeker het reeds UIT geskandeer",
                 "GEWEIER": "Hierdie OTP is reeds geweier",
                 "GEKANSELLEER": "Hierdie uitnodiging is gekanselleer",
                 "VERVAL": "Hierdie OTP het verval",
             }
             raise HTTPException(
                 status_code=409,
-                detail=status_messages.get(previous.BES_Status, "Hierdie OTP is nie meer geldig nie"),
+                detail=status_messages.get(
+                    previous.BES_Status,
+                    "Hierdie OTP is nie meer geldig nie",
+                ),
             )
         raise HTTPException(status_code=404, detail="Geen geldige besoeker vir hierdie OTP gevind nie")
 
-    _ensure_pending_and_valid(db, invite)
+    if invite.BES_Status == "HANGEND":
+        _ensure_pending_and_valid(db, invite)
+    elif invite.BES_Status == "TOEGELAAT":
+        # Besoeker is reeds IN. Die OTP bly doelbewus aktief vir die UIT-scan.
+        pass
+    else:
+        raise HTTPException(status_code=409, detail="Hierdie OTP is nie meer geldig nie")
+
     return schemas.APIResponse(sukses=True, data=_invite_dict(invite))
 
 
@@ -322,10 +345,56 @@ def allow_visitor_entry(
         raise HTTPException(status_code=404, detail="Kampus is nie gevind nie")
 
     invite.BES_Status = "TOEGELAAT"
-    invite.BES_Aktief_Sleutel = None
+    # BELANGRIK: hou die OTP aktief ná IN. Dieselfde kode word vir UIT gebruik.
+    invite.BES_Aktief_Sleutel = invite.BES_OTP
     invite.BES_Besluit_Op = datetime.utcnow()
     invite.Verwerk_Deur_ID = current_user.Gebruiker_ID
     invite.Kampus_ID = payload.kampus_id
+    db.commit()
+    db.refresh(invite)
+
+    return schemas.APIResponse(sukses=True, data=_invite_dict(invite))
+
+
+@router.post("/uitnodigings/{uitnodiging_id}/uit")
+def visitor_exit(
+    uitnodiging_id: int,
+    payload: schemas.BesoekerBesluitRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_sekuriteit),
+):
+    invite = _get_invite_or_404(db, uitnodiging_id)
+
+    if invite.BES_Status != "TOEGELAAT":
+        if invite.BES_Status == "UIT":
+            raise HTTPException(
+                status_code=409,
+                detail="Hierdie besoeker het reeds UIT geskandeer; die OTP is klaar gebruik",
+            )
+        raise HTTPException(
+            status_code=409,
+            detail="Besoeker moet eers IN geskandeer wees voordat UIT toegelaat word",
+        )
+
+    if invite.Kampus_ID is None or invite.Kampus_ID != payload.kampus_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Hierdie OTP kan net UIT skandeer by dieselfde kampus waar die besoeker IN geskandeer het",
+        )
+
+    kampus = (
+        db.query(models.Kampus)
+        .filter(models.Kampus.Kampus_ID == payload.kampus_id)
+        .first()
+    )
+    if kampus is None:
+        raise HTTPException(status_code=404, detail="Kampus is nie gevind nie")
+
+    invite.BES_Status = "UIT"
+    invite.BES_Aktief_Sleutel = None
+    invite.BES_Besluit_Op = datetime.utcnow()
+    invite.Verwerk_Deur_ID = current_user.Gebruiker_ID
     db.commit()
     db.refresh(invite)
 

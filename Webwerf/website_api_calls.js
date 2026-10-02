@@ -11,7 +11,7 @@
  *   - createKlas()
  *   - rooster-helpers: getCurrentUserId(), fetchModules(), fetchGroepe(),
  *     fetchRoosterKlasse(), fetchPersoneelRooster(), fetchStudentRooster(),
- *     fetchKlasStudente(), create-/assign-toewysings, importKlasseCsv()
+ *     fetchKlasStudente(), fetchKlasBywoning(), rooster-lokaal mapping, create-/assign-toewysings, importKlasseCsv()
  */
 
 (function () {
@@ -25,9 +25,15 @@
       return stored;
     }
 
-    // Konfigureer via localStorage('apiBaseUrl') of laat foute boodskap wys
-    console.warn('apiBaseUrl nie gestel nie — stel dit via localStorage');
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+    // Plaaslike ontwikkeling praat met die backend op poort 8000; enige ander
+    // gasheer (bv. die Railway-webwerf) gebruik die Railway-backend.
+    // Dieselfde logika as login.js — die twee MOET ooreenstem.
+    const host = window.location.hostname || 'localhost';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      const protocol = window.location.protocol || 'http:';
+      return `${protocol}//${host}:8000`;
+    }
+    return 'https://humorous-endurance-production-ee64.up.railway.app';
   }
 
   // Backend URL
@@ -209,6 +215,18 @@
         body: JSON.stringify(data),
       });
 
+      return r.body;
+    },
+
+    /**
+     * PUT /lokasies/{lokasieId}/nfc-tag  (slegs Admin)
+     * Koppel/hernoem die lokaal se fisiese NFC-tag-UID.
+     */
+    updateLokasieTag: async function (lokasieId, nfcUid) {
+      const r = await apiRequest('/lokasies/' + lokasieId + '/nfc-tag', {
+        method: 'PUT',
+        body: JSON.stringify({ NFC_UID: nfcUid }),
+      });
       return r.body;
     },
 
@@ -689,6 +707,30 @@
     },
 
     /**
+     * GET /rooster/lokaal-koppelings  (slegs Admin)
+     * Unieke Lantiv-lokale met hul huidige MOON-klaskamer mapping.
+     */
+    fetchRoosterLokaalKoppelings: async function () {
+      const r = await apiRequest('/rooster/lokaal-koppelings', { method: 'GET' });
+      return r.body;
+    },
+
+    /**
+     * POST /rooster/lokaal-koppelings  (slegs Admin)
+     * data: { KLA_Lokaal, Lokasie_ID }; Lokasie_ID=null ontkoppel.
+     */
+    saveRoosterLokaalKoppeling: async function (lantivLokaal, lokasieId) {
+      const r = await apiRequest('/rooster/lokaal-koppelings', {
+        method: 'POST',
+        body: JSON.stringify({
+          KLA_Lokaal: lantivLokaal,
+          Lokasie_ID: lokasieId == null ? null : Number(lokasieId),
+        }),
+      });
+      return r.body;
+    },
+
+    /**
      * POST /rooster/modules  (slegs Admin)
      * data: { MOD_Kode, MOD_Naam? }
      */
@@ -896,8 +938,24 @@
      * Klasregister: [{ Gebruiker_ID, GEB_Naam, GEB_Van, STU_Nommer }].
      * Personeel net vir klasse op hul eie rooster; Admin vir enige klas.
      */
-    fetchKlasStudente: async function (klasId) {
-      const r = await apiRequest('/rooster/klasse/' + encodeURIComponent(klasId) + '/studente', {
+    fetchKlasStudente: async function (klasId, datum) {
+      let path = '/rooster/klasse/' + encodeURIComponent(klasId) + '/studente';
+      if (datum) path += '?datum=' + encodeURIComponent(datum);
+      const r = await apiRequest(path, {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
+     * GET /rooster/klasse/{klasId}/bywoning?datum=YYYY-MM-DD
+     * Regte NFC-bywoning vir die spesifieke roosterklas en datum.
+     * Die backend filter op die klas se Lokasie_ID + NFC + geskeduleerde tydvenster.
+     */
+    fetchKlasBywoning: async function (klasId, datum) {
+      let path = '/rooster/klasse/' + encodeURIComponent(klasId) + '/bywoning';
+      if (datum) path += '?datum=' + encodeURIComponent(datum);
+      const r = await apiRequest(path, {
         method: 'GET',
       });
       return r.body;

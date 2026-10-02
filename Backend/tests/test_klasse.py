@@ -190,42 +190,36 @@ class TestStudentToewysingCSV:
 
 class TestCSVInvoerIdempotensie:
     def test_herinvoer_skep_nie_duplikate_nie(self, db):
-        # Simuleer twee invoere van dieselfde CSV deur dieselfde logika
-        # twee keer te laat loop (via die router se hulpfunksies).
+        # Simuleer twee invoere van dieselfde CSV deur die werklike
+        # importeer_klasse-logika twee keer te laat loop.
+        import asyncio
+        import io
+        from fastapi import UploadFile
+        from routers.klasse import importeer_klasse
+
         inhoud = (
             '"10:00,""9:00"",""Maandag"",""GH117 A (50)"",""ER 2"",""EBREK370"",""8:00"",""9:00"""'
         )
-        reëls = parse_lantiv_csv(inhoud)
 
         def voer_in():
-            module = db.query(models.Module).filter(models.Module.MOD_Kode == "EBREK370").first()
-            if not module:
-                module = models.Module(MOD_Kode="EBREK370")
-                db.add(module)
-                db.flush()
-            klas = models.Klas(
-                Module_ID=module.Module_ID,
-                KLA_Lokaal="GH117 A (50)",
-                KLA_Dag="Maandag",
-                KLA_Begin_Tyd="8:00",
-                KLA_Eind_Tyd="9:00",
-            )
-            db.add(klas)
-            db.flush()
-            groep = db.query(models.Groep).filter(models.Groep.GRO_Naam == "ER 2").first()
-            if not groep:
-                groep = models.Groep(GRO_Naam="ER 2")
-                db.add(groep)
-                db.flush()
-            db.add(models.Klas_Groep(Klas_ID=klas.Klas_ID, Groep_ID=groep.Groep_ID))
-            db.flush()
+            lêer = UploadFile(filename="rooster.csv", file=io.BytesIO(inhoud.encode("utf-8")))
+            result = asyncio.run(importeer_klasse(lêer, db=db, _=True))
+            assert result.sukses is True
+            return result.data
 
-        voer_in()
-        voer_in()
+        eerste = voer_in()
+        tweede = voer_in()
 
+        assert eerste["modules_geskep"] == 1
+        assert eerste["klasse_geskep"] == 1
+        assert eerste["groepe_geskep"] == 1
+        # Her-invoer moet niks nuuts skep nie.
+        assert tweede["modules_geskep"] == 0
+        assert tweede["klasse_geskep"] == 0
+        assert tweede["groepe_geskep"] == 0
         assert db.query(models.Module).filter(models.Module.MOD_Kode == "EBREK370").count() == 1
         assert db.query(models.Groep).filter(models.Groep.GRO_Naam == "ER 2").count() == 1
-        assert db.query(models.Klas).count() == 2  # elke invoer skep 'n nuwe klas-ry
+        assert db.query(models.Klas).count() == 1  # her-invoer hergebruik dieselfde klas-ry
 
 
 class TestRoosterHTTPAuth:
@@ -551,3 +545,87 @@ class TestRoosterHTTPAuth:
         assert resp.json()["data"]["groep_koppelings"] == 0
         assert resp.json()["data"]["module_koppelings"] == 0
         assert http_db.query(models.Student_Groep).count() == 3
+
+
+class TestLaasteSkandering:
+    """resolver_klas_studente se Laaste_Skandering-veld (jongste IN-log vandag)."""
+
+    def _maak_student(self, db, n):
+        rol = db.query(models.Rolle).filter(models.Rolle.ROL_Naam == "Student").first()
+        if not rol:
+            rol = models.Rolle(ROL_Naam="Student")
+            db.add(rol)
+            db.flush()
+        gebruiker = models.Gebruikers(
+            GEB_Naam="Toets",
+            GEB_Van=f"Student{n}",
+            GEB_ID_Nommer=f"900101000010{n}",
+            GEB_Epos=f"skandering{n}@voorbeeld.co.za",
+            GEB_Wagwoord="hashed",
+            Rol_ID=rol.Rol_ID,
+        )
+        db.add(gebruiker)
+        db.flush()
+        return gebruiker
+
+    def _maak_lokaal(self, db, naam):
+        kampus = db.query(models.Kampus).first()
+        if not kampus:
+            kampus = models.Kampus(KAM_Naam="Hoofkampus")
+            db.add(kampus)
+            db.flush()
+        lokaal = models.Lokasie(LOK_Naam=naam, LOK_Tipe="Klaskamer", Kampus_ID=kampus.Kampus_ID)
+        db.add(lokaal)
+        db.flush()
+        return lokaal
+
+    def _log(self, db, gebruiker, lokaal, rigting, tydstempel):
+        db.add(models.ToegangsLogs(
+            Gebruiker_ID=gebruiker.Gebruiker_ID,
+            Lokasie_ID=lokaal.Lokasie_ID,
+            TOE_Rigting=rigting,
+            TOE_Metode="NFC",
+            TOE_Tydstempel=tydstempel,
+        ))
+        db.flush()
+
+    def _register(self, db, klas):
+        return {s["Gebruiker_ID"]: s for s in resolver_klas_studente(db, klas.Klas_ID)}
+
+    def test_jongste_in_log_vandag_word_teruggegee(self, db):
+        from datetime import datetime, timedelta
+        module = skep_module(db, "SKND100")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 1)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        vroeg = self._maak_lokaal(db, "Ou Lokaal")
+        laat = self._maak_lokaal(db, "Bitterbessie")
+        nou = datetime.utcnow()
+        self._log(db, student, vroeg, "IN", nou - timedelta(minutes=90))
+        self._log(db, student, laat, "IN", nou - timedelta(minutes=5))
+
+        info = self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"]
+        assert info is not None
+        assert info["lokaal"] == "Bitterbessie"
+        assert info["tyd"].endswith("Z")
+
+    def test_geen_logs_gee_none(self, db):
+        module = skep_module(db, "SKND200")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 2)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+
+        assert self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"] is None
+
+    def test_gister_en_uit_logs_tel_nie(self, db):
+        from datetime import datetime, timedelta
+        module = skep_module(db, "SKND300")
+        klas = skep_klas(db, module)
+        student = self._maak_student(db, 3)
+        db.add(models.Student_Klas(Gebruiker_ID=student.Gebruiker_ID, Klas_ID=klas.Klas_ID))
+        lokaal = self._maak_lokaal(db, "Gister Lokaal")
+        nou = datetime.utcnow()
+        self._log(db, student, lokaal, "IN", nou - timedelta(days=1, hours=1))
+        self._log(db, student, lokaal, "UIT", nou - timedelta(minutes=10))
+
+        assert self._register(db, klas)[student.Gebruiker_ID]["Laaste_Skandering"] is None
