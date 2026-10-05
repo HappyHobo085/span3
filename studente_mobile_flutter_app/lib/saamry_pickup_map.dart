@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import 'app_shared.dart';
@@ -18,7 +21,206 @@ class SaamryPinSelection {
   });
 }
 
+class _SaamryAddressResult {
+  final String displayName;
+  final double latitude;
+  final double longitude;
+
+  const _SaamryAddressResult({
+    required this.displayName,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  factory _SaamryAddressResult.fromJson(Map<String, dynamic> json) {
+    return _SaamryAddressResult(
+      displayName: json['display_name']?.toString() ?? '',
+      latitude: double.parse(json['lat'].toString()),
+      longitude: double.parse(json['lon'].toString()),
+    );
+  }
+}
+
 LatLng _saamryDefaultMapCenter() => const LatLng(-30.5595, 22.9375);
+
+Future<List<_SaamryAddressResult>> _searchSaamryAddresses(String rawQuery) async {
+  final query = rawQuery.trim();
+  if (query.length < 3) {
+    throw Exception('Tik minstens 3 karakters van die adres');
+  }
+
+  final uri = Uri.https(
+    'nominatim.openstreetmap.org',
+    '/search',
+    <String, String>{
+      'format': 'jsonv2',
+      'q': query,
+      'limit': '6',
+      'countrycodes': 'za',
+      'addressdetails': '1',
+    },
+  );
+
+  final response = await http.get(
+    uri,
+    headers: const <String, String>{
+      'Accept': 'application/json',
+      'User-Agent': 'MOON-Saamry/1.0',
+    },
+  );
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw Exception('Kon nie die adres soek nie (HTTP ${response.statusCode})');
+  }
+
+  final decoded = jsonDecode(response.body);
+  if (decoded is! List) {
+    throw Exception('Ongeldige adres-soek antwoord');
+  }
+
+  return decoded
+      .whereType<Map>()
+      .map((item) => _SaamryAddressResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ))
+      .where((item) => item.displayName.trim().isNotEmpty)
+      .toList();
+}
+
+class _AddressSearchPanel extends StatefulWidget {
+  final TextEditingController controller;
+  final bool enabled;
+  final ValueChanged<_SaamryAddressResult> onSelected;
+
+  const _AddressSearchPanel({
+    required this.controller,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  State<_AddressSearchPanel> createState() => _AddressSearchPanelState();
+}
+
+class _AddressSearchPanelState extends State<_AddressSearchPanel> {
+  bool _searching = false;
+  String? _error;
+  List<_SaamryAddressResult> _results = const [];
+
+  Future<void> _search() async {
+    if (!widget.enabled || _searching) return;
+
+    setState(() {
+      _searching = true;
+      _error = null;
+      _results = const [];
+    });
+
+    try {
+      final results = await _searchSaamryAddresses(widget.controller.text);
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _searching = false;
+        if (results.isEmpty) {
+          _error = 'Geen adres gevind nie. Probeer straat, voorstad en dorp/stad.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _searching = false;
+      });
+    }
+  }
+
+  void _select(_SaamryAddressResult result) {
+    widget.controller.text = result.displayName;
+    widget.onSelected(result);
+    setState(() {
+      _results = const [];
+      _error = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          enabled: widget.enabled && !_searching,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _search(),
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Adres',
+            hintText: 'bv. 12 Kerkstraat, Springs, Gauteng',
+            prefixIcon: const Icon(Icons.search_rounded, color: kTextMuted),
+            labelStyle: const TextStyle(color: kTextMuted),
+            hintStyle: const TextStyle(color: kTextMuted),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        const SizedBox(height: 9),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.enabled && !_searching ? _search : null,
+            icon: _searching
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.location_searching_rounded),
+            label: Text(_searching ? 'Soek adres...' : 'Soek Adres'),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: GoogleFonts.inter(color: Colors.orangeAccent, fontSize: 11),
+          ),
+        ],
+        if (_results.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < _results.length; i++) ...[
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.location_on_outlined, color: kAccent),
+                    title: Text(
+                      _results[i].displayName,
+                      style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
+                    ),
+                    onTap: () => _select(_results[i]),
+                  ),
+                  if (i != _results.length - 1)
+                    const Divider(height: 1, color: Colors.white10),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
 
 class SaamryPinPickerPage extends StatefulWidget {
   final String title;
@@ -41,13 +243,13 @@ class SaamryPinPickerPage extends StatefulWidget {
 }
 
 class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
-  late final TextEditingController _noteController;
+  late final TextEditingController _addressController;
   LatLng? _selected;
 
   @override
   void initState() {
     super.initState();
-    _noteController = TextEditingController(text: widget.initialBeskrywing ?? '');
+    _addressController = TextEditingController(text: widget.initialBeskrywing ?? '');
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       _selected = LatLng(widget.initialLatitude!, widget.initialLongitude!);
     }
@@ -55,13 +257,20 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
 
   @override
   void dispose() {
-    _noteController.dispose();
+    _addressController.dispose();
     super.dispose();
+  }
+
+  void _useAddress(_SaamryAddressResult result) {
+    setState(() {
+      _selected = LatLng(result.latitude, result.longitude);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final center = _selected ?? _saamryDefaultMapCenter();
+
     return Scaffold(
       backgroundColor: kBg,
       body: SafeArea(
@@ -82,19 +291,32 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Tik op die kaart waar die Driver begin ry.',
+                          'Tik die adres waar die Driver begin ry. Kies daarna die korrekte soekresultaat.',
                           style: GoogleFonts.inter(color: kText1, fontSize: 13),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
+                        _AddressSearchPanel(
+                          controller: _addressController,
+                          enabled: true,
+                          onSelected: _useAddress,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          _selected == null
+                              ? 'Kies ’n adres om die ligging op die kaart te bevestig.'
+                              : 'Adres gekies — bevestig die ligging hieronder.',
+                          style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
+                        ),
+                        const SizedBox(height: 10),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: SizedBox(
-                            height: 390,
+                            height: 330,
                             child: FlutterMap(
+                              key: ValueKey('${_selected?.latitude}-${_selected?.longitude}'),
                               options: MapOptions(
                                 initialCenter: center,
-                                initialZoom: _selected == null ? 5.5 : 15,
-                                onTap: (_, point) => setState(() => _selected = point),
+                                initialZoom: _selected == null ? 5.5 : 16,
                               ),
                               children: [
                                 TileLayer(
@@ -126,25 +348,10 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        TextField(
-                          controller: _noteController,
-                          maxLength: 200,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            labelText: 'Beskrywing (opsioneel)',
-                            hintText: 'bv. Hoofhek, Engen, voor woonstel',
-                            labelStyle: const TextStyle(color: kTextMuted),
-                            hintStyle: const TextStyle(color: kTextMuted),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.05),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
                         GradientActionButton(
-                          label: _selected == null ? 'Kies eers ’n pin' : 'Gebruik Hierdie Pin',
+                          label: _selected == null
+                              ? 'Kies eers ’n adres'
+                              : 'Gebruik Hierdie Adres',
                           onTap: _selected == null
                               ? () {}
                               : () {
@@ -153,9 +360,9 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                                     SaamryPinSelection(
                                       latitude: _selected!.latitude,
                                       longitude: _selected!.longitude,
-                                      beskrywing: _noteController.text.trim().isEmpty
+                                      beskrywing: _addressController.text.trim().isEmpty
                                           ? null
-                                          : _noteController.text.trim(),
+                                          : _addressController.text.trim(),
                                     ),
                                   );
                                 },
@@ -190,7 +397,7 @@ class SaamryPickupMapPage extends StatefulWidget {
 
 class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
   late SaamryEventDto _event;
-  late final TextEditingController _noteController;
+  late final TextEditingController _addressController;
   LatLng? _draft;
   bool _saving = false;
 
@@ -206,7 +413,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
     super.initState();
     _event = widget.event;
     final me = _me;
-    _noteController = TextEditingController(text: me?.pickupBeskrywing ?? '');
+    _addressController = TextEditingController(text: me?.pickupBeskrywing ?? '');
     if (me?.pickupLatitude != null && me?.pickupLongitude != null) {
       _draft = LatLng(me!.pickupLatitude!, me.pickupLongitude!);
     }
@@ -214,7 +421,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
 
   @override
   void dispose() {
-    _noteController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -233,16 +440,24 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
     return LatLng(lat, lon);
   }
 
+  void _selectAddress(_SaamryAddressResult result) {
+    setState(() {
+      _draft = LatLng(result.latitude, result.longitude);
+    });
+  }
+
   Future<void> _save() async {
     final point = _draft;
-    if (point == null || _saving) return;
+    final address = _addressController.text.trim();
+    if (point == null || address.isEmpty || _saving) return;
+
     setState(() => _saving = true);
     try {
       final updated = await MoonApi.updateSaamryPickup(
         eventId: _event.eventId,
         latitude: point.latitude,
         longitude: point.longitude,
-        beskrywing: _noteController.text,
+        beskrywing: address,
       );
       if (!mounted) return;
       setState(() {
@@ -250,7 +465,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
         _saving = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Optel-pin is gestoor')),
+        const SnackBar(content: Text('Opteladres is gestoor')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -276,7 +491,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Pickup-kaart',
+              title: 'Pickup-adresse',
               subtitle: widget.group.naam,
               showBack: true,
             ),
@@ -296,8 +511,8 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                             Expanded(
                               child: Text(
                                 _event.isBestuurder
-                                    ? '${_event.pickupGereed}/${_event.pickupTotaal} optelpunte gereed'
-                                    : 'Jou optelpunt + Driver se beginpunt',
+                                    ? '${_event.pickupGereed}/${_event.pickupTotaal} adresse gereed'
+                                    : 'Jou opteladres + Driver se beginadres',
                                 style: GoogleFonts.inter(
                                   color: kText1,
                                   fontSize: 13,
@@ -310,23 +525,30 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                         const SizedBox(height: 10),
                         Text(
                           _event.isBestuurder
-                              ? 'As Driver/Admin kan jy al die deelnemers se pins sien. Tik op die kaart om jou eie begin-pin te verander.'
-                              : 'Tik op die kaart om jou eie optelpunt te stel of te verander. Ander passasiers se presiese pins bly privaat.',
+                              ? 'As Driver/Admin kan jy al die deelnemers se opteladresse sien. Tik jou eie beginadres hieronder om dit te verander.'
+                              : 'Tik jou opteladres hieronder. Ander passasiers se presiese adresse bly privaat.',
                           style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                         ),
-                        const SizedBox(height: 12),
+                        if (canEdit) ...[
+                          const SizedBox(height: 14),
+                          _AddressSearchPanel(
+                            controller: _addressController,
+                            enabled: !_saving,
+                            onSelected: _selectAddress,
+                          ),
+                        ],
+                        const SizedBox(height: 14),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: SizedBox(
-                            height: 420,
+                            height: 390,
                             child: FlutterMap(
-                              key: ValueKey('${_event.eventId}-${visible.length}-${_draft?.latitude}-${_draft?.longitude}'),
+                              key: ValueKey(
+                                '${_event.eventId}-${visible.length}-${_draft?.latitude}-${_draft?.longitude}',
+                              ),
                               options: MapOptions(
                                 initialCenter: _center(),
                                 initialZoom: initialZoom,
-                                onTap: canEdit
-                                    ? (_, point) => setState(() => _draft = point)
-                                    : null,
                               ),
                               children: [
                                 TileLayer(
@@ -403,32 +625,17 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                         ),
                         if (canEdit) ...[
                           const SizedBox(height: 14),
-                          TextField(
-                            controller: _noteController,
-                            maxLength: 200,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                              labelText: _event.isBestuurder
-                                  ? 'Beginpunt beskrywing'
-                                  : 'Optelpunt beskrywing',
-                              hintText: 'bv. Hoofhek, Engen, voor woonstel',
-                              labelStyle: const TextStyle(color: kTextMuted),
-                              hintStyle: const TextStyle(color: kTextMuted),
-                              filled: true,
-                              fillColor: Colors.white.withOpacity(0.05),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
                           GradientActionButton(
                             label: _saving
                                 ? 'Stoor...'
                                 : (_me?.pickupGestel == true
-                                    ? 'Verander My Pin'
-                                    : 'Stoor My Pin'),
-                            onTap: _saving || _draft == null ? () {} : _save,
+                                    ? 'Verander My Adres'
+                                    : 'Stoor My Adres'),
+                            onTap: _saving ||
+                                    _draft == null ||
+                                    _addressController.text.trim().isEmpty
+                                ? () {}
+                                : _save,
                             height: 50,
                           ),
                         ],
@@ -453,8 +660,9 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                         const SizedBox(height: 10),
                         ..._event.lede.map(
                           (member) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.only(bottom: 10),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Icon(
                                   member.pickupGestel
@@ -489,10 +697,11 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                                     ],
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 Text(
                                   member.isBestuurder
                                       ? 'DRIVER'
-                                      : (member.pickupGestel ? 'PIN GEREED' : 'WAG VIR PIN'),
+                                      : (member.pickupGestel ? 'ADRES GEREED' : 'WAG VIR ADRES'),
                                   style: TextStyle(
                                     color: member.pickupGestel
                                         ? kAccent

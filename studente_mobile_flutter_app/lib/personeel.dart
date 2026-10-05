@@ -1146,7 +1146,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$passengers passasier${passengers == 1 ? '' : 's'} · ${event.pickupGereed}/${event.pickupTotaal} pins gereed',
+                      '$passengers passasier${passengers == 1 ? '' : 's'} · ${event.pickupGereed}/${event.pickupTotaal} adresse gereed',
                       style: GoogleFonts.inter(color: kText1, fontSize: 12),
                     ),
                   ],
@@ -1165,7 +1165,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
               label: Text(
                 event.isBestuurder
                     ? 'Pickup-kaart'
-                    : (myPinReady ? 'Pickup-kaart / Verander Pin' : 'Stel My Optel-pin'),
+                    : (myPinReady ? 'Pickup-kaart / Verander Adres' : 'Stel My Opteladres'),
               ),
             ),
           ],
@@ -1914,7 +1914,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
       context,
       MaterialPageRoute(
         builder: (_) => SaamryPinPickerPage(
-          title: 'Driver Begin-pin',
+          title: 'Driver Beginadres',
           subtitle: _group.naam,
           initialLatitude: _driverPin?.latitude,
           initialLongitude: _driverPin?.longitude,
@@ -1936,7 +1936,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
     }
     if (_driverPin == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stel eers die Driver se begin-pin')),
+        const SnackBar(content: Text('Stel eers die Driver se beginadres')),
       );
       return;
     }
@@ -2041,8 +2041,8 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
                           ),
                           label: Text(
                             _driverPin == null
-                                ? 'Stel Driver se begin-pin'
-                                : 'Begin-pin gestel · Verander',
+                                ? 'Stel Driver se beginadres'
+                                : 'Beginadres gestel · Verander',
                           ),
                         ),
                         if (_driverPin?.beskrywing?.trim().isNotEmpty == true) ...[
