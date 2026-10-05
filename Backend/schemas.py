@@ -770,6 +770,15 @@ class SaamryBestuurderOordragRequest(BaseModel):
 class SaamryEventCreate(BaseModel):
     groep_id: int
     gebruiker_ids: List[int]
+    driver_latitude: float = Field(..., ge=-90, le=90)
+    driver_longitude: float = Field(..., ge=-180, le=180)
+    driver_pickup_beskrywing: Optional[str] = Field(default=None, max_length=200)
+
+
+class SaamryPickupUpdate(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    beskrywing: Optional[str] = Field(default=None, max_length=200)
 
 
 class SaamryBoodskapCreate(BaseModel):

@@ -228,13 +228,52 @@ def _active_event_for_user(db: Session, user_id: int) -> Optional[models.SaamryE
 
 
 def _event_dict(event: models.SaamryEvent, viewer_id: int) -> dict:
+    viewer_is_participant = any(
+        event_member.Gebruiker_ID == viewer_id
+        for event_member in event.lede
+    )
     members = []
+    pickup_ready = 0
     for event_member in event.lede:
         if event_member.gebruiker is None:
             continue
+        pickup_set = (
+            event_member.Pickup_Latitude is not None
+            and event_member.Pickup_Longitude is not None
+        )
+        if pickup_set:
+            pickup_ready += 1
+
+        # Pickup-koördinate is sensitief: die Driver sien almal; 'n passasier
+        # sien net sy/haar eie pin en die Driver se begin-pin.
+        can_view_pin = bool(
+            pickup_set
+            and viewer_is_participant
+            and (
+                viewer_id == event.Bestuurder_ID
+                or event_member.Gebruiker_ID == viewer_id
+                or event_member.Gebruiker_ID == event.Bestuurder_ID
+            )
+        )
         members.append(
             {
                 "is_bestuurder": event_member.Gebruiker_ID == event.Bestuurder_ID,
+                "is_myne": event_member.Gebruiker_ID == viewer_id,
+                "pickup_gestel": pickup_set,
+                "pickup_latitude": (
+                    event_member.Pickup_Latitude if can_view_pin else None
+                ),
+                "pickup_longitude": (
+                    event_member.Pickup_Longitude if can_view_pin else None
+                ),
+                "pickup_beskrywing": (
+                    event_member.Pickup_Beskrywing if can_view_pin else None
+                ),
+                "pickup_gewysig_op": (
+                    event_member.Pickup_Gewysig_Op.isoformat()
+                    if can_view_pin and event_member.Pickup_Gewysig_Op
+                    else None
+                ),
                 "gebruiker": _user_dict(event_member.gebruiker, include_contact=True),
             }
         )
@@ -250,6 +289,9 @@ def _event_dict(event: models.SaamryEvent, viewer_id: int) -> dict:
         "bestuurder_id": event.Bestuurder_ID,
         "status": event.SAA_Status,
         "is_bestuurder": event.Bestuurder_ID == viewer_id,
+        "is_deelnemer": viewer_is_participant,
+        "pickup_gereed": pickup_ready,
+        "pickup_totaal": len(members),
         "geskep_op": event.Geskep_Op.isoformat() if event.Geskep_Op else None,
         "voltooi_op": event.Voltooi_Op.isoformat() if event.Voltooi_Op else None,
         "voltooi_rigting": event.Voltooi_Rigting,
@@ -1020,11 +1062,68 @@ def create_saamry_event(
     )
     db.add(event)
     db.flush()
-    for user_id in [group.Bestuurder_ID, *selected_ids]:
+    # Driver se begin-pin is verpligtend wanneer die event geskep word.
+    now = datetime.utcnow()
+    db.add(
+        models.SaamryEventLid(
+            Event_ID=event.Event_ID,
+            Gebruiker_ID=group.Bestuurder_ID,
+            Pickup_Latitude=payload.driver_latitude,
+            Pickup_Longitude=payload.driver_longitude,
+            Pickup_Beskrywing=(payload.driver_pickup_beskrywing or '').strip() or None,
+            Pickup_Gewysig_Op=now,
+        )
+    )
+    for user_id in selected_ids:
         db.add(models.SaamryEventLid(Event_ID=event.Event_ID, Gebruiker_ID=user_id))
     db.commit()
     db.refresh(event)
     return schemas.APIResponse(sukses=True, data=_event_dict(event, current_user.Gebruiker_ID))
+
+
+@router.put("/events/{event_id}/pickup")
+def update_saamry_pickup(
+    event_id: int,
+    payload: schemas.SaamryPickupUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    event = (
+        db.query(models.SaamryEvent)
+        .filter(models.SaamryEvent.Event_ID == event_id)
+        .first()
+    )
+    if event is None:
+        raise HTTPException(status_code=404, detail="Saamry-event is nie gevind nie")
+    if event.SAA_Status != "AKTIEF":
+        raise HTTPException(status_code=409, detail="Hierdie Saamry-event is nie meer aktief nie")
+
+    event_member = (
+        db.query(models.SaamryEventLid)
+        .filter(
+            models.SaamryEventLid.Event_ID == event_id,
+            models.SaamryEventLid.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .first()
+    )
+    if event_member is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Jy is nie deel van hierdie Saamry-event nie",
+        )
+
+    event_member.Pickup_Latitude = payload.latitude
+    event_member.Pickup_Longitude = payload.longitude
+    event_member.Pickup_Beskrywing = (payload.beskrywing or '').strip() or None
+    event_member.Pickup_Gewysig_Op = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=_event_dict(event, current_user.Gebruiker_ID),
+    )
 
 
 @router.post("/events/{event_id}/kanselleer")

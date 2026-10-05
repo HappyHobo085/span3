@@ -1136,3 +1136,27 @@ def run_migrations(engine):
             "Waarskuwing: migrasie 021 "
             f"(Saamry permanente groepe/events/chat) het misluk: {_migrasie_fout}"
         )
+
+
+    # Migrasie 022: Saamry-event pickup pins
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                ALTER TABLE saamry_event_lid
+                ADD COLUMN IF NOT EXISTS "Pickup_Latitude" DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS "Pickup_Longitude" DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS "Pickup_Beskrywing" VARCHAR(200),
+                ADD COLUMN IF NOT EXISTS "Pickup_Gewysig_Op" TIMESTAMP
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_event_lid_pickup
+                ON saamry_event_lid ("Event_ID", "Gebruiker_ID")
+                WHERE "Pickup_Latitude" IS NOT NULL
+                  AND "Pickup_Longitude" IS NOT NULL
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 022 "
+            f"(Saamry event pickup pins) het misluk: {_migrasie_fout}"
+        )
+

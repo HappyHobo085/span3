@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'profile_page.dart';
+import 'saamry_pickup_map.dart';
 
 
 ThemeData _moonPickerTheme(BuildContext context) {
@@ -893,6 +894,8 @@ class _SaamryTabState extends State<SaamryTab> {
   String? _error;
   SaamryStatusDto? _status;
   Timer? _statusTimer;
+  int? _selectedGroupId;
+  bool _showPeople = false;
 
   @override
   void initState() {
@@ -1162,6 +1165,21 @@ class _SaamryTabState extends State<SaamryTab> {
     await _load();
   }
 
+  Future<void> _openPickupMap(SaamryGroupDto group) async {
+    final event = group.aktieweEvent;
+    if (event == null || !event.isDeelnemer) {
+      _message('Jy is nie deel van hierdie aktiewe Saamry-event nie');
+      return;
+    }
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaamryPickupMapPage(group: group, event: event),
+      ),
+    );
+    await _load();
+  }
+
   Widget _sectionTitle(String text) => Text(
         text,
         style: GoogleFonts.inter(
@@ -1354,6 +1372,15 @@ class _SaamryTabState extends State<SaamryTab> {
     }
 
     final passengers = event.lede.where((e) => !e.isBestuurder).length;
+    SaamryEventMemberDto? me;
+    for (final member in event.lede) {
+      if (member.isMyne) {
+        me = member;
+        break;
+      }
+    }
+    final myPinReady = me?.pickupGestel == true;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
@@ -1362,35 +1389,56 @@ class _SaamryTabState extends State<SaamryTab> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kAccent.withOpacity(0.45)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.directions_car_filled_rounded, color: kAccent),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AKTIEWE SAAMRY-EVENT',
-                  style: GoogleFonts.inter(
-                    color: kAccent,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
+          Row(
+            children: [
+              const Icon(Icons.directions_car_filled_rounded, color: kAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AKTIEWE SAAMRY-EVENT',
+                      style: GoogleFonts.inter(
+                        color: kAccent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$passengers passasier${passengers == 1 ? '' : 's'} · ${event.pickupGereed}/${event.pickupTotaal} pins gereed',
+                      style: GoogleFonts.inter(color: kText1, fontSize: 12),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '$passengers passasier${passengers == 1 ? '' : 's'} · verdwyn ná Driver se suksesvolle IN/UIT scan',
-                  style: GoogleFonts.inter(color: kText1, fontSize: 12),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (event.isDeelnemer) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _openPickupMap(group),
+              icon: Icon(
+                myPinReady ? Icons.map_rounded : Icons.add_location_alt_rounded,
+                size: 18,
+              ),
+              label: Text(
+                event.isBestuurder
+                    ? 'Pickup-kaart'
+                    : (myPinReady ? 'Pickup-kaart / Verander Pin' : 'Stel My Optel-pin'),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+
 
   Widget _groupCard(SaamryGroupDto group) {
     return GlassCard(
@@ -1689,32 +1737,55 @@ class _SaamryTabState extends State<SaamryTab> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading && _status == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null && _status == null) {
-      return RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
-          children: [
-            const SizedBox(height: 80),
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red),
-            ),
-          ],
+  Widget _groupSummaryCard(SaamryGroupDto group) {
+    final memberCount = group.lede.where((m) => m.status == 'AANVAAR').length;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: () => setState(() {
+          _selectedGroupId = group.groepId;
+          _showPeople = false;
+        }),
+        borderRadius: BorderRadius.circular(16),
+        child: GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              const Icon(Icons.groups_2_rounded, color: kAccent, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.naam,
+                      style: GoogleFonts.inter(
+                        color: kText1,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$memberCount lid${memberCount == 1 ? '' : 'e'}',
+                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+            ],
+          ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    final status = _status!;
+  int _noticeCount(SaamryStatusDto status) =>
+      status.incomingRequests.length + status.groupInvites.length;
+
+  Widget _buildGroupsHome(SaamryStatusDto status) {
+    final noticeCount = _noticeCount(status);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -1736,11 +1807,26 @@ class _SaamryTabState extends State<SaamryTab> {
                       ),
                     ),
                     Text(
-                      'Permanente groepe, eenmalige rit-events en live chat.',
+                      'My permanente groepe',
                       style: GoogleFonts.inter(color: kTextMuted, fontSize: 11.5),
                     ),
                   ],
                 ),
+              ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    tooltip: 'Vriende & uitnodigings',
+                    onPressed: () => setState(() {
+                      _showPeople = true;
+                      _selectedGroupId = null;
+                    }),
+                    icon: const Icon(Icons.people_alt_rounded, color: kAccent),
+                  ),
+                  if (noticeCount > 0)
+                    Positioned(right: 1, top: 1, child: _badge(noticeCount)),
+                ],
               ),
               IconButton(
                 tooltip: 'Herlaai',
@@ -1749,41 +1835,7 @@ class _SaamryTabState extends State<SaamryTab> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlineActionButton(
-                  label: 'Nuwe Groep',
-                  onTap: _openCreateGroup,
-                  height: 46,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GradientActionButton(
-                  label: 'Nuwe Saamry',
-                  onTap: () => _openCreateEvent(),
-                  height: 46,
-                ),
-              ),
-            ],
-          ),
-          if (status.incomingRequests.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _sectionTitle('VRIENDSKAPVERSOEKE'),
-            const SizedBox(height: 8),
-            ...status.incomingRequests.map(_incomingFriendCard),
-          ],
-          if (status.groupInvites.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _sectionTitle('GROEPUITNODIGINGS'),
-            const SizedBox(height: 8),
-            ...status.groupInvites.map(_groupInviteCard),
-          ],
-          const SizedBox(height: 18),
-          _sectionTitle('MY PERMANENTE GROEPE'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           if (status.groups.isEmpty)
             GlassCard(
               padding: const EdgeInsets.all(18),
@@ -1793,13 +1845,57 @@ class _SaamryTabState extends State<SaamryTab> {
               ),
             )
           else
-            ...status.groups.expand(
-              (group) => [
-                _groupCard(group),
-                const SizedBox(height: 12),
-              ],
-            ),
+            ...status.groups.map(_groupSummaryCard),
           const SizedBox(height: 8),
+          GradientActionButton(
+            label: 'Nuwe Groep',
+            onTap: _openCreateGroup,
+            height: 48,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeopleView(SaamryStatusDto status) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Terug',
+                onPressed: () => setState(() => _showPeople = false),
+                icon: const Icon(Icons.arrow_back_rounded, color: kText1),
+              ),
+              Expanded(
+                child: Text(
+                  'Vriende & Uitnodigings',
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (status.incomingRequests.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _sectionTitle('VRIENDSKAPVERSOEKE'),
+            const SizedBox(height: 8),
+            ...status.incomingRequests.map(_incomingFriendCard),
+          ],
+          if (status.groupInvites.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _sectionTitle('GROEPUITNODIGINGS'),
+            const SizedBox(height: 8),
+            ...status.groupInvites.map(_groupInviteCard),
+          ],
+          const SizedBox(height: 14),
           _friendsCard(status),
           if (status.outgoingRequests.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -1839,6 +1935,80 @@ class _SaamryTabState extends State<SaamryTab> {
       ),
     );
   }
+
+  Widget _buildGroupDetail(SaamryGroupDto group) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Terug na groepe',
+                onPressed: () => setState(() => _selectedGroupId = null),
+                icon: const Icon(Icons.arrow_back_rounded, color: kText1),
+              ),
+              Expanded(
+                child: Text(
+                  group.naam,
+                  style: GoogleFonts.inter(
+                    color: kText1,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Herlaai',
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, color: kAccent),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _groupCard(group),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _status == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _status == null) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 80),
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final status = _status!;
+    if (_showPeople) return _buildPeopleView(status);
+    final selectedId = _selectedGroupId;
+    if (selectedId != null) {
+      final matches = status.groups.where((g) => g.groepId == selectedId).toList();
+      if (matches.isNotEmpty) return _buildGroupDetail(matches.first);
+    }
+    return _buildGroupsHome(status);
+  }
+
 }
 
 class CreateSaamryGroupPage extends StatefulWidget {
@@ -1980,6 +2150,7 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
   late int _groupId;
   final Set<int> _selected = <int>{};
   bool _busy = false;
+  SaamryPinSelection? _driverPin;
 
   @override
   void initState() {
@@ -2003,10 +2174,34 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
       ..addAll(_passengers.map((m) => m.gebruiker.gebruikerId));
   }
 
+  Future<void> _pickDriverPin() async {
+    final selected = await Navigator.push<SaamryPinSelection>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaamryPinPickerPage(
+          title: 'Driver Begin-pin',
+          subtitle: _group.naam,
+          initialLatitude: _driverPin?.latitude,
+          initialLongitude: _driverPin?.longitude,
+          initialBeskrywing: _driverPin?.beskrywing,
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _driverPin = selected);
+    }
+  }
+
   Future<void> _create() async {
     if (_selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kies minstens een passasier')),
+      );
+      return;
+    }
+    if (_driverPin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stel eers die Driver se begin-pin')),
       );
       return;
     }
@@ -2015,6 +2210,9 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
       await MoonApi.createSaamryEvent(
         groepId: _groupId,
         gebruikerIds: _selected.toList(),
+        driverLatitude: _driverPin!.latitude,
+        driverLongitude: _driverPin!.longitude,
+        driverPickupBeskrywing: _driverPin!.beskrywing,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2098,6 +2296,27 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _pickDriverPin,
+                          icon: Icon(
+                            _driverPin == null
+                                ? Icons.add_location_alt_rounded
+                                : Icons.location_on_rounded,
+                          ),
+                          label: Text(
+                            _driverPin == null
+                                ? 'Stel Driver se begin-pin'
+                                : 'Begin-pin gestel · Verander',
+                          ),
+                        ),
+                        if (_driverPin?.beskrywing?.trim().isNotEmpty == true) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            _driverPin!.beskrywing!,
+                            style: GoogleFonts.inter(color: kTextMuted, fontSize: 10.5),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         Text(
                           'WIE RY SAAM?',

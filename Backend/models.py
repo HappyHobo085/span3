@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -560,6 +560,10 @@ class SaamryEventLid(Base):
 
     Event_ID = Column(Integer, ForeignKey('saamry_event.Event_ID', ondelete='CASCADE'), primary_key=True)
     Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), primary_key=True)
+    Pickup_Latitude = Column(Float, nullable=True)
+    Pickup_Longitude = Column(Float, nullable=True)
+    Pickup_Beskrywing = Column(String(200), nullable=True)
+    Pickup_Gewysig_Op = Column(DateTime, nullable=True)
     Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     event = relationship('SaamryEvent', back_populates='lede')
