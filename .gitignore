@@ -146,3 +146,4 @@ studente_mobile_flutter_app/windows/x64/
 studente_mobile_flutter_app/windows/x86/
 studente_mobile_flutter_app/windows/*.[Cc]ache
 !studente_mobile_flutter_app/windows/*.[Cc]ache/
+Backend/ml_data/*.csv
