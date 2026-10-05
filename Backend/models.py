@@ -725,3 +725,12 @@ class NoodgevalKennisname(Base):
     NOK_Ontvang_Op        = Column(DateTime, nullable=True)
     NOK_Kennis_Geneem_Op  = Column(DateTime, nullable=True)
     Gewysig_Op            = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SaamryVoorstelLog(Base):
+    __tablename__ = 'SaamryVoorstelLog'
+    Log_ID = Column(Integer, primary_key=True, index=True)
+    Gebruiker_ID = Column(Integer, ForeignKey('Gebruikers.Gebruiker_ID'), nullable=False)
+    Kandidaat_ID = Column(Integer, ForeignKey('Gebruikers.Gebruiker_ID'), nullable=False)
+    Voorspelde_Telling = Column(Float, nullable=False)
+    Aksie = Column(String(50), nullable=False) # bv. GESIEN, GESTUUR
+    Tydstempel = Column(DateTime, default=datetime.utcnow)

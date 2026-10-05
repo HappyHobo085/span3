@@ -1,3 +1,4 @@
+import re
 """Suiwer wiskundige en logiese diens vir Saamry Versoenbaarheid.
 
 Hierdie module bevat slegs suiwer funksies (pure functions) sonder databasis-navrae,
@@ -6,6 +7,7 @@ wat onafhanklik getoets kan word.
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from services.ml_service import voorspel_aankomstyd_offset
 import math
 
 
@@ -20,6 +22,7 @@ class DagSkedule:
     vertrek_minuut: Optional[int] = None
     aantal_monsters: int = 0
     standaardafwyking_min: float = 0.0
+    bron: str = "LOGS"
 
 
 @dataclass(frozen=True)
@@ -87,7 +90,7 @@ def bereken_tyd_telling(verskil_min: float) -> float:
 # ---------------------------------------------------------------------------
 
 # Bekende voorstede en hul klusters in Pretoria / Tshwane omgewing
-VOORSTAD_KLUSTERS = {
+OU_VOORSTAD_KLUSTERS = {
     "oos": {
         "pretoria oos", "pretoria-oos", "garsfontein", "faerie glen", "menlyn",
         "lynnwood", "moreletapark", "silver lakes", "wapadrand", "woodhill",
@@ -116,18 +119,77 @@ VOORSTAD_KLUSTERS = {
     },
 }
 
+VOORSTAD_KLUSTERS = {}
+for k, vs in OU_VOORSTAD_KLUSTERS.items():
+    VOORSTAD_KLUSTERS[k] = set(vs)
+
+# Voeg nuwe voorstede by (samesmelting)
+NEW_SUBURBS = {
+    "oos": [
+        "alphen park", "ashlea gardens", "brummeria", "die wilgers",
+        "equestria", "erasmusrand", "hazelwood", "lynnwood glen", "lynnwood manor",
+        "lynnwood park", "lynnwood ridge", "maroelana", "menlyn maine",
+        "menlopark", "meyerspark", "monumentpark", "mooikloof", "mooikloof ridge",
+        "murrayfield", "newlands", "rietvalleirand", "sterrewag", "waterkloof",
+        "waterkloof glen", "waterkloof heights", "waterkloof park", "waterkloofrif",
+        "weavind park", "willow acres"
+    ],
+    "centurion": [
+        "blue valley golf estate", "brakfontein", "bronberrik",
+        "centurion sentraal", "centurion golf estate", "celtisdal", "claudius",
+        "cornwall hill", "doringkloof", "eco park estate",
+        "eldo lakes", "eldo meadows", "eldo view", "eldoglen",
+        "hennopspark", "heritage hill", "highveld", "irene farm villages",
+        "irene park", "kloofsig", "kosmosdal", "laudium",
+        "louwlardia", "lyttelton landbouhoewes", "lyttelton manor",
+        "mnandi", "monavoni", "olievenhoutbosch", "pierre van ryneveld",
+        "rooihuiskraal noord", "samrand", "southdowns",
+        "sunderland ridge", "thatchfield", "the reeds", "valhalla", "zwartkop"
+    ],
+    "sentraal": [
+        "baileys muckleneuk", "bryntirion", "clydesdale",
+        "colbyn", "groenkloof", "hillcrest", "lukasrand",
+        "nieuw muckleneuk", "pretoria central", "salvokop"
+    ],
+    "moot": [
+        "capital park", "kilner park", "rietondale", "riviera"
+    ]
+}
+
+for k, vs in NEW_SUBURBS.items():
+    VOORSTAD_KLUSTERS[k].update(vs)
+
+def norm_voorstad(s: str) -> str:
+    if not s:
+        return ""
+    s = s.replace("'", "")
+    s = re.sub(r"[^\w\s]", " ", s.lower())
+    return re.sub(r"\s+", " ", s).strip()
+
+VOORSTAD_NA_KLUSTER = {}
+# Maak seker ons gebruik die gesamentlike lys vir presiese opsoeke
+for k, vs in VOORSTAD_KLUSTERS.items():
+    for v in vs:
+        nv = norm_voorstad(v)
+        assert nv not in VOORSTAD_NA_KLUSTER or VOORSTAD_NA_KLUSTER[nv] == k, f"Botsing: {nv}"
+        VOORSTAD_NA_KLUSTER[nv] = k
 
 def _vind_kluster(voorstad: str) -> Optional[str]:
     v = voorstad.lower().strip()
-    for kluster_naam, lede in VOORSTAD_KLUSTERS.items():
+    norm_v = norm_voorstad(v)
+    
+    # 1. Presiese opsoek teen nuwe en ou lyste gesamentlik
+    if norm_v in VOORSTAD_NA_KLUSTER:
+        return VOORSTAD_NA_KLUSTER[norm_v]
+        
+    # 2. Gedeeltelike terugval slegs teen ou logika vir backwards compatibility
+    for kluster_naam, lede in OU_VOORSTAD_KLUSTERS.items():
         if v in lede:
             return kluster_naam
-        # Deelstringpassing (bv. 'Garsfontein Oos')
         for lid in lede:
             if lid in v or v in lid:
                 return kluster_naam
     return None
-
 
 def bereken_voorstad_ooreenstemming(
     voorstad_a: Optional[str],
@@ -346,8 +408,16 @@ def bereken_saamry_versoenbaarheid(
             beste_dag = dag
 
         # Voeg deursigtige verduidelikings by vir die UI
+        def ui_bron(b):
+            if b == "ML_MODEL": return "ML-voorspelling"
+            if b == "MEDIAAN": return "gemiddelde aankomstyd van studente"
+            if b == "KLASROOSTER": return "klasrooster-terugval"
+            return "hek-logs"
+            
+        bron_inligting = f"Aankomste geskat deur {ui_bron(dag_k.bron)}." if dag_k.bron != "LOGS" else f"Gebaseer op {dag_k.aantal_monsters} outentieke rekords."
+
         verduideliking = (
-            f"Basiese tydverskil is {verskil_in} min. "
+            f"{bron_inligting} Basiese tydverskil is {verskil_in} min. "
             f"Met onsekerheid ({round(gesamentlike_afwyking_in, 1)} min afwyking) is die effektiewe faktor {round(effektiewe_verskil_in, 1)} min."
         )
 
@@ -404,16 +474,22 @@ def bereken_saamry_versoenbaarheid(
     # Minimum gemiddelde monsters oor die gemeenskaplike dae
     gem_monsters = min(totale_monsters_s, totale_monsters_k) / float(aantal_dae)
 
-    if gem_monsters >= 10:
-        monster_faktor = 1.0
-    elif gem_monsters >= 5:
-        # Verval lineêr van 1.0 tot 0.85 vir monsters tussen 10 en 5
-        monster_faktor = 0.85 + 0.15 * ((gem_monsters - 5) / 5.0)
-    elif gem_monsters >= 1:
-        # Verval lineêr van 0.85 tot 0.50 vir monsters tussen 5 en 1
-        monster_faktor = 0.50 + 0.35 * ((gem_monsters - 1) / 4.0)
-    else:
+    bron_s = next((d.bron for d in skedule_s.values() if d.het_aktiwiteit and d.dag_naam in gemeenskaplike_dae), "LOGS")
+    bron_k = next((d.bron for d in skedule_k.values() if d.het_aktiwiteit and d.dag_naam in gemeenskaplike_dae), "LOGS")
+
+    if bron_s in ["ML_MODEL", "MEDIAAN", "KLASROOSTER"] or bron_k in ["ML_MODEL", "MEDIAAN", "KLASROOSTER"]:
         monster_faktor = 0.40
+    else:
+        if gem_monsters >= 10:
+            monster_faktor = 1.0
+        elif gem_monsters >= 5:
+            # Verval lineêr van 1.0 tot 0.85 vir monsters tussen 10 en 5
+            monster_faktor = 0.85 + 0.15 * ((gem_monsters - 5) / 5.0)
+        elif gem_monsters >= 1:
+            # Verval lineêr van 0.85 tot 0.50 vir monsters tussen 5 en 1
+            monster_faktor = 0.50 + 0.35 * ((gem_monsters - 1) / 4.0)
+        else:
+            monster_faktor = 0.40
 
     # Variansie is reeds by die effektiewe_tyd ingesluit, so hierdie is slegs monster-vertroue
     betroubaarheid_telling = round(100.0 * monster_faktor, 1)
@@ -604,9 +680,10 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
                 vertrek_minuut=gem_uit,
                 aantal_monsters=aantal_monsters,
                 standaardafwyking_min=afwyking,
+                bron="LOGS",
             )
         elif klas_lys:
-            # Val terug op die amptelike klasrooster
+            # Val terug op ML Model
             begin_tye = [_parse_tyd_na_minute(k.KLA_Begin_Tyd) for k in klas_lys]
             eind_tye = [_parse_tyd_na_minute(k.KLA_Eind_Tyd) for k in klas_lys]
             geldige_begin = [t for t in begin_tye if t is not None]
@@ -614,8 +691,13 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
 
             vroegste_in = min(geldige_begin) if geldige_begin else 480
             laaste_uit = max(geldige_eind) if geldige_eind else (vroegste_in + 360)
+            
+            kluster = _vind_kluster(voorstad) if voorstad else None
+            # Veronderstel dat is_koshuis beskikbaar is (anders gee ons 0)
+            is_koshuis = 0
+            offset, sigma, bron = voorspel_aankomstyd_offset(vroegste_in, kluster, saamry_rol, is_koshuis)
 
-            geskat_in = max(0, vroegste_in - 15)
+            geskat_in = max(0, vroegste_in - offset)
             geskat_uit = min(1439, laaste_uit + 15)
 
             skedule_per_dag[dag] = DagSkedule(
@@ -623,8 +705,9 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
                 het_aktiwiteit=True,
                 aankoms_minuut=geskat_in,
                 vertrek_minuut=geskat_uit,
-                aantal_monsters=max(aantal_monsters, 5),
-                standaardafwyking_min=10.0,
+                aantal_monsters=aantal_monsters,
+                standaardafwyking_min=sigma,
+                bron=bron,
             )
         elif aantal_in > 0:
             gem_in = int(sum(in_lys) / aantal_in)
@@ -636,6 +719,7 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
                 vertrek_minuut=gem_uit,
                 aantal_monsters=aantal_monsters,
                 standaardafwyking_min=20.0,
+                bron="LOGS",
             )
         else:
             skedule_per_dag[dag] = DagSkedule(
