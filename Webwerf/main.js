@@ -267,6 +267,187 @@ if (isSuwerStudent && currentPage !== 'login.html') {
   }
 })();
 
+// -----------------------------------------------------------------------------
+// Bywoningsverslag (Excel) — knoppie in die sybalk se profielblok vir
+// Administrateur, Personeel en Kampus_Opsigter. Die bediener bepaal die omvang
+// van die data volgens die rol (alles / eie kampus / eie klasse).
+// -----------------------------------------------------------------------------
+function magVerslagUitvoer() {
+  return hasRole('Administrateur') || hasRole('Personeel') || hasRole('Kampus_Opsigter');
+}
+
+function verslagOmvangTeks() {
+  if (hasRole('Administrateur')) return 'Alle studente en personeel (of kies een kampus).';
+  if (hasRole('Kampus_Opsigter')) return 'Studente en personeel op jou kampus.';
+  return 'Studente in jou eie klasse (klasbywoning).';
+}
+
+function isoDatum(d) {
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var dag = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + dag;
+}
+
+function bouVerslagModal() {
+  var bestaande = document.getElementById('verslagModal');
+  if (bestaande) return bestaande;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'verslagModal';
+  overlay.className = 'class-modal-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.innerHTML =
+    '<div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="verslag-modal-title">' +
+      '<h3 id="verslag-modal-title">Eksporteer bywoningsverslag</h3>' +
+      '<p class="verslag-omvang" id="verslag-omvang"></p>' +
+      '<div class="field">' +
+        '<label>Vinnige keuse</label>' +
+        '<div class="verslag-voorafstellings">' +
+          '<button type="button" class="btn-outline" data-dae="0">Vandag</button>' +
+          '<button type="button" class="btn-outline" data-dae="7">7 dae</button>' +
+          '<button type="button" class="btn-outline" data-dae="30">30 dae</button>' +
+          '<button type="button" class="btn-outline" data-dae="maand">Hierdie maand</button>' +
+          '<button type="button" class="btn-outline" data-dae="90">90 dae</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="verslag-datums">' +
+        '<div class="field"><label for="verslag-van">Van</label><input type="date" id="verslag-van"></div>' +
+        '<div class="field"><label for="verslag-tot">Tot</label><input type="date" id="verslag-tot"></div>' +
+      '</div>' +
+      '<div class="field" id="verslag-kampus-veld" hidden>' +
+        '<label for="verslag-kampus">Kampus</label>' +
+        '<select id="verslag-kampus"><option value="">Alle kampusse</option></select>' +
+      '</div>' +
+      '<div class="modal-status" id="verslag-status" role="status"></div>' +
+      '<div class="class-modal-actions">' +
+        '<button type="button" class="btn-outline" id="verslag-kanselleer">Kanselleer</button>' +
+        '<button type="button" class="btn-primary" id="verslag-laai-af">Laai Excel af</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var vanEl = overlay.querySelector('#verslag-van');
+  var totEl = overlay.querySelector('#verslag-tot');
+  var statusEl = overlay.querySelector('#verslag-status');
+  var laaiBtn = overlay.querySelector('#verslag-laai-af');
+
+  function stelTydperk(keuse) {
+    var tot = new Date();
+    var van = new Date(tot);
+    if (keuse === 'maand') {
+      van.setDate(1);
+    } else {
+      var dae = parseInt(keuse, 10) || 0;
+      van.setDate(van.getDate() - Math.max(dae - 1, 0));
+    }
+    vanEl.value = isoDatum(van);
+    totEl.value = isoDatum(tot);
+  }
+
+  function wysStatus(teks, tipe) {
+    statusEl.textContent = teks || '';
+    statusEl.className = 'modal-status' + (tipe ? ' ' + tipe : '');
+  }
+
+  function maakToe() {
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  overlay.querySelectorAll('[data-dae]').forEach(function (btn) {
+    btn.addEventListener('click', function () { stelTydperk(btn.getAttribute('data-dae')); });
+  });
+  overlay.querySelector('#verslag-kanselleer').addEventListener('click', maakToe);
+  overlay.addEventListener('click', function (ev) { if (ev.target === overlay) maakToe(); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && overlay.classList.contains('open')) maakToe();
+  });
+
+  laaiBtn.addEventListener('click', async function () {
+    if (!vanEl.value || !totEl.value) {
+      wysStatus('Kies asseblief beide datums.', 'error');
+      return;
+    }
+    if (vanEl.value > totEl.value) {
+      wysStatus("Die 'Van'-datum moet voor die 'Tot'-datum wees.", 'error');
+      return;
+    }
+    var kampusId = overlay.querySelector('#verslag-kampus').value;
+    laaiBtn.disabled = true;
+    wysStatus('Verslag word gegenereer…', '');
+    try {
+      var r = await window.MoonApi.exportBywoningVerslag(vanEl.value, totEl.value, kampusId);
+      if (!r.ok) {
+        wysStatus(r.fout || 'Kon nie die verslag genereer nie.', 'error');
+        return;
+      }
+      var url = URL.createObjectURL(r.blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = r.leernaam;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      wysStatus('Verslag afgelaai: ' + r.leernaam, 'success');
+    } catch (err) {
+      console.error('[main.js] verslag-uitvoer', err);
+      wysStatus('Kon nie die bediener bereik nie.', 'error');
+    } finally {
+      laaiBtn.disabled = false;
+    }
+  });
+
+  overlay.querySelector('#verslag-omvang').textContent = verslagOmvangTeks();
+  stelTydperk('30');
+
+  // Slegs admins kan 'n spesifieke kampus kies; opsigters is reeds beperk.
+  if (hasRole('Administrateur') && window.MoonApi && window.MoonApi.fetchKampusse) {
+    window.MoonApi.fetchKampusse().then(function (body) {
+      var kampusse = (body && body.data) || [];
+      var select = overlay.querySelector('#verslag-kampus');
+      kampusse.forEach(function (k) {
+        var opt = document.createElement('option');
+        opt.value = k.Kampus_ID;
+        opt.textContent = k.KAM_Naam;
+        select.appendChild(opt);
+      });
+      if (kampusse.length) overlay.querySelector('#verslag-kampus-veld').hidden = false;
+    }).catch(function () { /* kampuskeuse bly versteek */ });
+  }
+
+  return overlay;
+}
+
+function maakVerslagModalOop() {
+  var overlay = bouVerslagModal();
+  overlay.querySelector('#verslag-status').className = 'modal-status';
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.querySelector('#verslag-laai-af').focus();
+}
+
+function voegVerslagKnoppieBy() {
+  var voet = document.querySelector('.sidebar-foot');
+  if (!voet || document.getElementById('verslag-knoppie')) return;
+  var btn = document.createElement('button');
+  btn.id = 'verslag-knoppie';
+  btn.type = 'button';
+  btn.className = 'btn-outline';
+  btn.innerHTML =
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path d="M9 1.5H4a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V6L9 1.5Z"/>' +
+    '<path d="M9 1.5V6h4.5M8 8v4.5M6 10.5l2 2 2-2"/></svg>' +
+    '<span>Eksporteer Verslag</span>';
+  btn.addEventListener('click', maakVerslagModalOop);
+  var uitteken = voet.querySelector('button[onclick="logOut()"]');
+  voet.insertBefore(btn, uitteken || null);
+}
+
+if (magVerslagUitvoer() && currentPageName() !== 'login.html') {
+  onSiteHeaderReady(voegVerslagKnoppieBy);
+}
+
 // Hierdie funksie teken die gebruiker uit en stuur hom/haar terug
 // na die inteken-blad.
 function logOut(rede) {

@@ -8,7 +8,7 @@ import pytest
 # DISABLE_AUTH=1 (span-toetsing/Docker) mag nie die toetsgedrag verander nie —
 # load_dotenv() oorskryf nie reeds-gestelde omgewingsveranderlikes nie.
 os.environ["DISABLE_AUTH"] = "0"
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 # Die backend gebruik plat top-vlak imports (bv. `import models`)
@@ -21,6 +21,13 @@ from database import Base  # noqa: E402
 @pytest.fixture()
 def db():
     engine = create_engine("sqlite://")
+
+    # Sommige CHECK-beperkings gebruik PostgreSQL se char_length(); SQLite ken
+    # dit nie, so registreer 'n ekwivalent op elke verbinding.
+    @event.listens_for(engine, "connect")
+    def _registreer_char_length(dbapi_conn, _):
+        dbapi_conn.create_function("char_length", 1, lambda s: None if s is None else len(s))
+
     Base.metadata.create_all(bind=engine)
     TestSession = sessionmaker(bind=engine)
     session = TestSession()
