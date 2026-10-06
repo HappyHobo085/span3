@@ -1023,6 +1023,13 @@ class _SaamryTabState extends State<SaamryTab> {
     if (changed == true) await _load();
   }
 
+  Future<void> _openDefaultPickup() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const SaamryDefaultPickupPage()),
+    );
+  }
+
   Future<void> _openCreateEvent({SaamryGroupDto? initialGroup}) async {
     final allGroups = _status?.groups ?? const <SaamryGroupDto>[];
     final ownedActive = allGroups
@@ -1813,6 +1820,11 @@ class _SaamryTabState extends State<SaamryTab> {
                   ],
                 ),
               ),
+              IconButton(
+                tooltip: 'My pickup-adres',
+                onPressed: _openDefaultPickup,
+                icon: const Icon(Icons.home_pin_rounded, color: kAccent),
+              ),
               Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -2159,6 +2171,23 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
         ? widget.initialGroupId!
         : widget.groups.first.groepId;
     _selectDefaultPassengers();
+    _loadDefaultDriverAddress();
+  }
+
+  Future<void> _loadDefaultDriverAddress() async {
+    try {
+      final profile = await MoonApi.fetchSaamryPickupProfile();
+      if (!mounted || profile == null || _driverPin != null) return;
+      setState(() {
+        _driverPin = SaamryPinSelection(
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          beskrywing: profile.beskrywing,
+        );
+      });
+    } catch (_) {
+      // 'n Gewone pickup-adres is gerieflik, maar nie nodig om die blad oop te maak nie.
+    }
   }
 
   SaamryGroupDto get _group =>
@@ -2184,6 +2213,7 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
           initialLatitude: _driverPin?.latitude,
           initialLongitude: _driverPin?.longitude,
           initialBeskrywing: _driverPin?.beskrywing,
+          allowSaveAsDefault: true,
         ),
       ),
     );
@@ -2213,6 +2243,7 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
         driverLatitude: _driverPin!.latitude,
         driverLongitude: _driverPin!.longitude,
         driverPickupBeskrywing: _driverPin!.beskrywing,
+        stoorDriverAsVerstek: _driverPin!.stoorAsVerstek,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2307,7 +2338,7 @@ class _CreateSaamryEventPageState extends State<CreateSaamryEventPage> {
                           label: Text(
                             _driverPin == null
                                 ? 'Stel Driver se beginadres'
-                                : 'Beginadres gestel · Verander',
+                                : 'Beginadres gereed · Verander',
                           ),
                         ),
                         if (_driverPin?.beskrywing?.trim().isNotEmpty == true) ...[

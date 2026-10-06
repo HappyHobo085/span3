@@ -445,6 +445,29 @@ class SaamryVriendskap(Base):
     )
 
 
+class SaamryPickupProfiel(Base):
+    """Gebruiker se gewone/default Saamry opteladres.
+
+    Hierdie profiel is apart van 'n spesifieke Saamry-event. 'n Event kopieer
+    die adres as 'n voorstel; die gebruiker moet dit vir die event bevestig.
+    """
+
+    __tablename__ = 'saamry_pickup_profiel'
+
+    Gebruiker_ID = Column(
+        Integer,
+        ForeignKey('gebruikers.Gebruiker_ID', ondelete='CASCADE'),
+        primary_key=True,
+    )
+    Pickup_Latitude = Column(Float, nullable=False)
+    Pickup_Longitude = Column(Float, nullable=False)
+    Pickup_Beskrywing = Column(String(200), nullable=False)
+    Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
+    Gewysig_Op = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    gebruiker = relationship('Gebruikers', foreign_keys=[Gebruiker_ID], lazy='selectin')
+
+
 class SaamryGroep(Base):
     __tablename__ = 'saamry_groep'
 
@@ -564,6 +587,7 @@ class SaamryEventLid(Base):
     Pickup_Longitude = Column(Float, nullable=True)
     Pickup_Beskrywing = Column(String(200), nullable=True)
     Pickup_Gewysig_Op = Column(DateTime, nullable=True)
+    Pickup_Bevestig = Column(Boolean, nullable=False, default=False)
     Geskep_Op = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     event = relationship('SaamryEvent', back_populates='lede')

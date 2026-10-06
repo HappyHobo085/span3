@@ -441,6 +441,34 @@ class SaamryGroupMemberDto {
   }
 }
 
+class SaamryPickupProfileDto {
+  final int gebruikerId;
+  final double latitude;
+  final double longitude;
+  final String beskrywing;
+  final DateTime? gewysigOp;
+
+  SaamryPickupProfileDto({
+    required this.gebruikerId,
+    required this.latitude,
+    required this.longitude,
+    required this.beskrywing,
+    this.gewysigOp,
+  });
+
+  factory SaamryPickupProfileDto.fromJson(Map<String, dynamic> json) {
+    return SaamryPickupProfileDto(
+      gebruikerId: (json['gebruiker_id'] as num).toInt(),
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      beskrywing: json['beskrywing']?.toString() ?? '',
+      gewysigOp: json['gewysig_op'] == null
+          ? null
+          : DateTime.tryParse(json['gewysig_op'].toString()),
+    );
+  }
+}
+
 class SaamryEventMemberDto {
   final bool isBestuurder;
   final bool isMyne;
@@ -2953,12 +2981,45 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     _decodeSaamryResponse(response);
   }
 
+  static Future<SaamryPickupProfileDto?> fetchSaamryPickupProfile() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/saamry/pickup-profiel'),
+      headers: _saamryHeaders(),
+    );
+    final data = _decodeSaamryResponse(response);
+    if (data == null) return null;
+    return SaamryPickupProfileDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<SaamryPickupProfileDto> saveSaamryPickupProfile({
+    required double latitude,
+    required double longitude,
+    required String beskrywing,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/saamry/pickup-profiel'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({
+        'latitude': latitude,
+        'longitude': longitude,
+        'beskrywing': beskrywing.trim(),
+      }),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryPickupProfileDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
   static Future<SaamryEventDto> createSaamryEvent({
     required int groepId,
     required List<int> gebruikerIds,
     required double driverLatitude,
     required double driverLongitude,
     String? driverPickupBeskrywing,
+    bool stoorDriverAsVerstek = false,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/saamry/events'),
@@ -2969,6 +3030,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
         'driver_latitude': driverLatitude,
         'driver_longitude': driverLongitude,
         'driver_pickup_beskrywing': driverPickupBeskrywing?.trim(),
+        'stoor_driver_as_verstek': stoorDriverAsVerstek,
       }),
     );
     final data = _decodeSaamryResponse(response);
@@ -2980,6 +3042,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     required double latitude,
     required double longitude,
     String? beskrywing,
+    bool stoorAsVerstek = false,
   }) async {
     final response = await http.put(
       Uri.parse('$baseUrl/saamry/events/$eventId/pickup'),
@@ -2988,6 +3051,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
         'latitude': latitude,
         'longitude': longitude,
         'beskrywing': beskrywing?.trim(),
+        'stoor_as_verstek': stoorAsVerstek,
       }),
     );
     final data = _decodeSaamryResponse(response);

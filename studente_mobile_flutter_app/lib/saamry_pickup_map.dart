@@ -13,11 +13,13 @@ class SaamryPinSelection {
   final double latitude;
   final double longitude;
   final String? beskrywing;
+  final bool stoorAsVerstek;
 
   const SaamryPinSelection({
     required this.latitude,
     required this.longitude,
     this.beskrywing,
+    this.stoorAsVerstek = false,
   });
 }
 
@@ -228,6 +230,7 @@ class SaamryPinPickerPage extends StatefulWidget {
   final double? initialLatitude;
   final double? initialLongitude;
   final String? initialBeskrywing;
+  final bool allowSaveAsDefault;
 
   const SaamryPinPickerPage({
     super.key,
@@ -236,6 +239,7 @@ class SaamryPinPickerPage extends StatefulWidget {
     this.initialLatitude,
     this.initialLongitude,
     this.initialBeskrywing,
+    this.allowSaveAsDefault = false,
   });
 
   @override
@@ -245,6 +249,7 @@ class SaamryPinPickerPage extends StatefulWidget {
 class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
   late final TextEditingController _addressController;
   LatLng? _selected;
+  bool _saveAsDefault = false;
 
   @override
   void initState() {
@@ -347,6 +352,21 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                             ),
                           ),
                         ),
+                        if (widget.allowSaveAsDefault) ...[
+                          const SizedBox(height: 10),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _saveAsDefault,
+                            activeColor: kAccent,
+                            checkColor: Colors.black,
+                            title: Text(
+                              'Stoor ook as my gewone pickup-adres',
+                              style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
+                            ),
+                            onChanged: (value) =>
+                                setState(() => _saveAsDefault = value == true),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         GradientActionButton(
                           label: _selected == null
@@ -363,6 +383,7 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                                       beskrywing: _addressController.text.trim().isEmpty
                                           ? null
                                           : _addressController.text.trim(),
+                                      stoorAsVerstek: _saveAsDefault,
                                     ),
                                   );
                                 },
@@ -370,6 +391,169 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                         ),
                       ],
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SaamryDefaultPickupPage extends StatefulWidget {
+  const SaamryDefaultPickupPage({super.key});
+
+  @override
+  State<SaamryDefaultPickupPage> createState() => _SaamryDefaultPickupPageState();
+}
+
+class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
+  bool _loading = true;
+  bool _saving = false;
+  SaamryPickupProfileDto? _profile;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await MoonApi.fetchSaamryPickupProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _changeAddress() async {
+    final selected = await Navigator.push<SaamryPinSelection>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaamryPinPickerPage(
+          title: 'My Gewone Pickup-adres',
+          subtitle: 'Word as verstek vir nuwe Saamry-events gebruik',
+          initialLatitude: _profile?.latitude,
+          initialLongitude: _profile?.longitude,
+          initialBeskrywing: _profile?.beskrywing,
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final address = selected.beskrywing?.trim() ?? '';
+    if (address.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      final profile = await MoonApi.saveSaamryPickupProfile(
+        latitude: selected.latitude,
+        longitude: selected.longitude,
+        beskrywing: address,
+      );
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gewone pickup-adres is gestoor')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const AppScreenHeader(
+              title: 'My Pickup-adres',
+              subtitle: 'Jou gewone Saamry optelpunt',
+              showBack: true,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  GlassCard(
+                    padding: const EdgeInsets.all(16),
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.home_pin_rounded,
+                                color: kAccent,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _profile == null
+                                    ? 'Geen gewone pickup-adres gestel nie'
+                                    : 'Jou gewone pickup-adres',
+                                style: GoogleFonts.inter(
+                                  color: kText1,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                _profile?.beskrywing ??
+                                    'Stel dit een keer. Wanneer jy later deel van ’n nuwe Saamry-event is, word hierdie adres vooraf ingevul maar jy moet dit steeds vir daardie rit bevestig.',
+                                style: GoogleFonts.inter(
+                                  color: kText2,
+                                  fontSize: 12,
+                                  height: 1.4,
+                                ),
+                              ),
+                              if (_error != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  _error!,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.redAccent,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              GradientActionButton(
+                                label: _saving
+                                    ? 'Stoor...'
+                                    : (_profile == null
+                                        ? 'Stel Pickup-adres'
+                                        : 'Verander Pickup-adres'),
+                                onTap: _saving ? () {} : _changeAddress,
+                                height: 50,
+                              ),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -400,6 +584,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
   late final TextEditingController _addressController;
   LatLng? _draft;
   bool _saving = false;
+  bool _saveAsDefault = false;
 
   SaamryEventMemberDto? get _me {
     for (final member in _event.lede) {
@@ -458,11 +643,13 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
         latitude: point.latitude,
         longitude: point.longitude,
         beskrywing: address,
+        stoorAsVerstek: _saveAsDefault,
       );
       if (!mounted) return;
       setState(() {
         _event = updated;
         _saving = false;
+        _saveAsDefault = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Opteladres is gestoor')),
@@ -526,7 +713,9 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                         Text(
                           _event.isBestuurder
                               ? 'As Driver/Admin kan jy al die deelnemers se opteladresse sien. Tik jou eie beginadres hieronder om dit te verander.'
-                              : 'Tik jou opteladres hieronder. Ander passasiers se presiese adresse bly privaat.',
+                              : _me?.pickupLatitude != null && _me?.pickupGestel != true
+                                  ? 'Jou gewone pickup-adres is vooraf ingevul. Bevestig dit vir hierdie rit of kies ’n ander adres.'
+                                  : 'Tik jou opteladres hieronder. Ander passasiers se presiese adresse bly privaat.',
                           style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                         ),
                         if (canEdit) ...[
@@ -624,13 +813,29 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                           ),
                         ),
                         if (canEdit) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 8),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _saveAsDefault,
+                            activeColor: kAccent,
+                            checkColor: Colors.black,
+                            title: Text(
+                              'Stoor hierdie ook as my gewone pickup-adres',
+                              style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
+                            ),
+                            onChanged: _saving
+                                ? null
+                                : (value) => setState(
+                                      () => _saveAsDefault = value == true,
+                                    ),
+                          ),
+                          const SizedBox(height: 8),
                           GradientActionButton(
                             label: _saving
                                 ? 'Stoor...'
                                 : (_me?.pickupGestel == true
                                     ? 'Verander My Adres'
-                                    : 'Stoor My Adres'),
+                                    : (_draft != null ? 'Bevestig Hierdie Adres' : 'Stoor My Adres')),
                             onTap: _saving ||
                                     _draft == null ||
                                     _addressController.text.trim().isEmpty

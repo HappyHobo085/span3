@@ -1160,3 +1160,47 @@ def run_migrations(engine):
             f"(Saamry event pickup pins) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 023: Gewone/default pickup-profiel + event-adres bevestiging
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS saamry_pickup_profiel (
+                    "Gebruiker_ID" INT PRIMARY KEY
+                        REFERENCES gebruikers("Gebruiker_ID") ON DELETE CASCADE,
+                    "Pickup_Latitude" DOUBLE PRECISION NOT NULL,
+                    "Pickup_Longitude" DOUBLE PRECISION NOT NULL,
+                    "Pickup_Beskrywing" VARCHAR(200) NOT NULL,
+                    "Geskep_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "Gewysig_Op" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            _conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name = 'saamry_event_lid'
+                          AND column_name = 'Pickup_Bevestig'
+                    ) THEN
+                        ALTER TABLE saamry_event_lid
+                        ADD COLUMN "Pickup_Bevestig" BOOLEAN NOT NULL DEFAULT FALSE;
+
+                        -- Step 26 se reeds-gestoorde pins was deur die gebruiker gestel.
+                        UPDATE saamry_event_lid
+                        SET "Pickup_Bevestig" = TRUE
+                        WHERE "Pickup_Latitude" IS NOT NULL
+                          AND "Pickup_Longitude" IS NOT NULL;
+                    END IF;
+                END $$;
+            """))
+            _conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_saamry_pickup_profiel_gebruiker
+                ON saamry_pickup_profiel ("Gebruiker_ID")
+            """))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 023 "
+            f"(Saamry default pickup + bevestiging) het misluk: {_migrasie_fout}"
+        )
+
