@@ -506,8 +506,8 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(
-                                Icons.home_pin_rounded,
+                              Icon(
+                                Icons.location_on_rounded,
                                 color: kAccent,
                                 size: 40,
                               ),

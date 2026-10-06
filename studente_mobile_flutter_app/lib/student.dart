@@ -1823,7 +1823,7 @@ class _SaamryTabState extends State<SaamryTab> {
               IconButton(
                 tooltip: 'My pickup-adres',
                 onPressed: _openDefaultPickup,
-                icon: const Icon(Icons.home_pin_rounded, color: kAccent),
+                icon: const Icon(Icons.location_on_rounded, color: kAccent),
               ),
               Stack(
                 clipBehavior: Clip.none,
