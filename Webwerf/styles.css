@@ -771,25 +771,6 @@ img,svg,video{max-width:100%}
 .module-badge{background:rgba(123,97,255,0.15);color:#7b61ff}
 .groep-badge{background:rgba(16,185,129,0.15);color:#10b981}
 
-/* ─── Studente per module (personeel.html linkerpaneel) ───────────────── */
-.module-list-kop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
-.module-list-kop .viz-caption{margin:0}
-.module-student-list{margin-top:10px;max-height:420px}
-.user-card--bywoning{flex-direction:column;align-items:stretch;gap:8px}
-.user-card-ry{display:flex;align-items:center;gap:12px}
-.bywoning-balk-ry{display:flex;align-items:center;gap:10px}
-.bywoning-balk{flex:1;position:relative;height:8px;border-radius:4px;overflow:hidden;
-  background:var(--surface-1);border:1px solid var(--border)}
-.bywoning-balk-vul{height:100%;border-radius:4px;background:var(--series-1);transition:width .3s}
-.bywoning-balk-vul--middel{background:#f59e0b}
-.bywoning-balk-vul--laag{background:var(--error)}
-.bywoning-pct{font-family:var(--font-mono);font-size:11px;font-weight:600;min-width:40px;text-align:right;color:var(--text-1)}
-.bywoning-detail{font-size:10px;color:var(--text-muted);white-space:nowrap}
-.dag-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
-  padding:2px 8px;border-radius:4px;white-space:nowrap;flex-shrink:0}
-.dag-status--in{background:rgba(47,191,143,0.15);color:var(--success)}
-.dag-status--uit{background:rgba(229,99,108,0.15);color:var(--error)}
-.dag-status--geen{background:var(--surface-1);color:var(--text-muted);border:1px solid var(--border)}
 .admin-user-row .admin-user-roles .module-badge{font-size:9px}
 
 /* ─── Role checkbox group (multi-select) ──────────────────────────────── */
@@ -1016,66 +997,5 @@ img,svg,video{max-width:100%}
   .action-bar-right{flex-wrap:wrap}
   /* Die grafiek-tooltip mag nie breër as die skerm wees nie */
   .viz-tooltip{max-width:calc(100vw - 24px)}
-}
-
-/* ─── Personeel (My Klasse): geen bladsy-blaai; net die lyste blaai ─────── */
-/* Die bladsy vul presies die skerm: boonste balk + inhoud = 100vh. Die
-   panele deel die oorblywende hoogte; binne elke paneel is die grafiek,
-   kalender en soekveld vas en die lys (studente links, klasregister regs)
-   vul die res en blaai. */
-body.personeel-blad{height:100vh;height:100dvh;min-height:0;overflow:hidden}
-body.personeel-blad .topbar{flex-shrink:0}
-#personeel-page{
-  box-sizing:border-box;
-  height:calc(100vh - var(--tb-h));height:calc(100dvh - var(--tb-h));
-  min-height:0;overflow:hidden;
-}
-#personeel-page .top-controls,
-#personeel-page .stat-grid{flex-shrink:0}
-#personeel-page .panels{
-  flex:1 1 auto;min-height:0;
-  grid-template-rows:minmax(0,1fr);
-}
-#personeel-page .panel{
-  display:flex;flex-direction:column;
-  min-height:0;overflow:hidden;box-sizing:border-box;
-}
-#personeel-page .panel h2{flex-shrink:0}
-/* Linkerpaneel */
-#personeel-page .dashboard-grid{
-  flex:1 1 auto;min-height:0;
-  display:flex;flex-direction:column;gap:10px;
-}
-#personeel-page #dash-stats-card,
-#personeel-page #dash-student-card{flex-shrink:0}
-#personeel-page #dash-module-card{flex:1 1 auto;min-height:120px;overflow:hidden}
-#personeel-page .module-student-list{flex:1 1 auto;min-height:0;max-height:none}
-/* Regterpaneel */
-#personeel-page .kalender,
-#personeel-page .list-search{flex-shrink:0}
-#personeel-page #roster-list{flex:1 1 auto;min-height:80px;max-height:none}
-
-@media (max-width:1100px){
-  /* Panele onder mekaar: elk kry die helfte van die hoogte, lyste blaai steeds */
-  #personeel-page .panels{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
-}
-
-/* Selfoon en tablet (die sybalk is weggesteek): die "geen bladsy-blaai"
-   reël geld NET op 'n rekenaar. Hier blaai die bladsy soos gewoonlik sodat
-   niks afgesny word nie; net die twee lang studentelyste bly beperk en
-   blaai binne hul kaart sodat die bladsy nie eindeloos lank word nie. */
-@media (max-width:900px){
-  body.personeel-blad{height:auto;min-height:100vh;overflow:visible}
-  #personeel-page{height:auto;overflow:visible}
-  #personeel-page .panels{grid-template-rows:none}
-  #personeel-page .panel{overflow:visible;min-height:0}
-  #personeel-page .dashboard-grid{flex:none}
-  #personeel-page #dash-module-card{flex:none;overflow:visible}
-  #personeel-page .module-student-list{
-    flex:none;max-height:50vh;max-height:50dvh;overflow-y:auto;
-  }
-  #personeel-page #roster-list{
-    flex:none;max-height:50vh;max-height:50dvh;overflow-y:auto;
-  }
 }
 
