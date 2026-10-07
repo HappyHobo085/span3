@@ -1030,6 +1030,51 @@ def skep_klas(
     return schemas.APIResponse(sukses=True, data=_klas_na_dict(klas))
 
 
+
+@router.delete("/klasse/{klas_id}")
+def verwyder_klas(
+    klas_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Verwyder 'n roosterklas veilig nadat direkte Klas_ID-koppelings skoongemaak is."""
+    klas = db.query(models.Klas).filter(models.Klas.Klas_ID == klas_id).first()
+    if not klas:
+        raise HTTPException(status_code=404, detail="Klas nie gevind nie")
+
+    klas_groep_aantal = (
+        db.query(models.Klas_Groep)
+        .filter(models.Klas_Groep.Klas_ID == klas_id)
+        .delete(synchronize_session=False)
+    )
+    student_klas_aantal = (
+        db.query(models.Student_Klas)
+        .filter(models.Student_Klas.Klas_ID == klas_id)
+        .delete(synchronize_session=False)
+    )
+    personeel_klas_aantal = (
+        db.query(models.Personeel_Klas)
+        .filter(models.Personeel_Klas.Klas_ID == klas_id)
+        .delete(synchronize_session=False)
+    )
+
+    detail = _klas_na_dict(klas)
+    db.delete(klas)
+    db.commit()
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Verwyder": True,
+            "Klas_ID": klas_id,
+            "Klas": detail,
+            "Klas_Groep_Koppelings_Verwyder": int(klas_groep_aantal or 0),
+            "Student_Klas_Koppelings_Verwyder": int(student_klas_aantal or 0),
+            "Personeel_Klas_Koppelings_Verwyder": int(personeel_klas_aantal or 0),
+        },
+    )
+
+
 @router.put("/klasse/{klas_id}/lokasie")
 def koppel_lokasie_aan_roosterklas(
     klas_id: int,
