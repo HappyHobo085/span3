@@ -21,5 +21,16 @@ if [ "${RUN_SEED:-false}" = "true" ]; then
   python seed.py
 fi
 
+echo "🏫 Berei lokaalgebruik ML voor..."
+if python scripts/bootstrap_lokaalgebruik_ml.py; then
+  echo "✅ Lokaalgebruik ML bootstrap klaar"
+else
+  echo "❌ Lokaalgebruik ML bootstrap het misluk"
+  if [ "${LOKAALGEBRUIK_ML_STRICT:-false}" = "true" ]; then
+    exit 1
+  fi
+  echo "⚠️ Backend begin sonder lokaalgebruik ML predictions"
+fi
+
 echo "🚀 Begin toepassing..."
 exec uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
