@@ -1,0 +1,20 @@
+{
+    "seed": 42,
+    "weke": 14,
+    "daaglikse_verstellings": {
+        "Monday": 1.0,
+        "Tuesday": 1.0,
+        "Wednesday": 1.0,
+        "Thursday": 0.95,
+        "Friday": 0.85
+    },
+    "tyd_verstellings": {
+        "08:00": 0.85,
+        "16:00": 0.90
+    },
+    "gewoonte_basis_gemiddeld": 0.80,
+    "gewoonte_basis_std": 0.1,
+    "semester_verval_faktor": 0.02,
+    "ruis_swaar_stert_kans": 0.10,
+    "ruis_swaar_stert_skaal": 0.3
+}

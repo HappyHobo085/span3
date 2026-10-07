@@ -1204,3 +1204,21 @@ def run_migrations(engine):
             f"(Saamry default pickup + bevestiging) het misluk: {_migrasie_fout}"
         )
 
+    # Migrasie 024: LOK_Kapasiteit byvoeg
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('ALTER TABLE lokasie ADD COLUMN IF NOT EXISTS "LOK_Kapasiteit" INT NULL'))
+            _conn.execute(text('''
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_lokasie_kapasiteit'
+                    ) THEN
+                        ALTER TABLE lokasie
+                        ADD CONSTRAINT ck_lokasie_kapasiteit CHECK ("LOK_Kapasiteit" > 0);
+                    END IF;
+                END $$;
+            '''))
+    except Exception as _migrasie_fout:
+        print(f"Waarskuwing: migrasie 024 (LOK_Kapasiteit) het misluk: {_migrasie_fout}")
+

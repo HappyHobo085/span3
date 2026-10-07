@@ -190,6 +190,7 @@ class Lokasie(Base):
     LOK_Naam   = Column(String(100), nullable=False)
     LOK_Tipe   = Column(String(50),  nullable=False)
     Kampus_ID  = Column(Integer, ForeignKey('kampus.Kampus_ID'), nullable=False)
+    LOK_Kapasiteit = Column(Integer, nullable=True)
 
     kampus    = relationship("Kampus", back_populates="lokasies", lazy="selectin")
     nfc_tags  = relationship("NFC_Tags", back_populates="lokasie", lazy="selectin")
