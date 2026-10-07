@@ -55,7 +55,7 @@
   }
 
   // Hierdie funksie skryf 'n tyd as HH:MM:SS.
-  function fmtTime(d) {
+  function fmtTimeVerstek(d) {
     function pad(n) { return (n < 10 ? '0' : '') + n; }
     return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
@@ -298,7 +298,10 @@
 
   /**
    * Tendens-lyngrafiek — wys hoe 'n telling oor tyd verander (regstreeks).
-   * opts = { times: [Date], series: [{ label, color, values: [getal] }], height }
+   * opts = { times: [Date], series: [{ label, color, values: [getal] }], height,
+   *          fmtTime, fmtValue, yMax, emptyText }
+   * fmtTime/fmtValue is opsioneel (verstek: HH:MM:SS en die getal self);
+   * yMax maak die y-as vas (bv. 100 vir persentasies).
    * Die lyn is 2px, die endpunt kry 'n kol met 'n ring in die agtergrond-kleur,
    * en die jongste waarde staan direk langs die lyn se ent.
    */
@@ -307,10 +310,12 @@
 
     var times = opts.times || [];
     var series = opts.series || [];
+    var fmtTime = opts.fmtTime || fmtTimeVerstek;
+    var fmtValue = opts.fmtValue || String;
     container.innerHTML = '';
 
     if (times.length < 2) {
-      renderEmpty(container, 'Versamel data — wag ’n paar sekondes…');
+      renderEmpty(container, opts.emptyText || 'Versamel data — wag ’n paar sekondes…');
       return;
     }
 
@@ -323,7 +328,7 @@
     series.forEach(function (s) {
       s.values.forEach(function (v) { if (v > maxV) maxV = v; });
     });
-    var yMax = niceMax(maxV);
+    var yMax = opts.yMax || niceMax(maxV);
 
     function X(i) { return padL + i * (w - padL - padR) / (n - 1); }
     function Y(v) { return padT + (1 - v / yMax) * (h - padT - padB); }
@@ -332,7 +337,7 @@
       width: w, height: h, viewBox: '0 0 ' + w + ' ' + h,
       'class': 'viz-svg', role: 'img',
       'aria-label': 'Tendens-grafiek: ' + series.map(function (s) {
-        return s.label + ' tans ' + s.values[n - 1];
+        return s.label + ' tans ' + fmtValue(s.values[n - 1]);
       }).join(', ')
     });
 
@@ -348,7 +353,7 @@
         'font-size': 9, fill: COLORS.axis,
         style: 'font-variant-numeric:tabular-nums'
       });
-      tick.textContent = String(tv);
+      tick.textContent = fmtValue(tv);
       svg.appendChild(tick);
     });
 
@@ -402,7 +407,7 @@
         x: l.x + 9, y: l.y + 4, 'font-size': 10,
         'font-weight': 600, fill: COLORS.ink
       });
-      txt.textContent = String(l.v);
+      txt.textContent = fmtValue(l.v);
       svg.appendChild(txt);
     });
 
@@ -427,7 +432,7 @@
       showTip({
         title: fmtTime(times[idx]),
         rows: series.map(function (s) {
-          return { color: s.color, value: String(s.values[idx]), label: s.label };
+          return { color: s.color, value: fmtValue(s.values[idx]), label: s.label };
         })
       }, ev.clientX, ev.clientY);
     });
@@ -654,10 +659,12 @@
    * Horisontale balke — vir kategorie-tellings (bv. mense per kampus).
    * Elke balk kry dieselfde reeks-kleur (die kategorie is die etiket, nie die
    * kleur nie) en die waarde staan altyd as teks langs die balk.
-   * opts = { items: [{ label, value, detail }], color }
+   * opts = { items: [{ label, value, detail }], color, fmtValue, max }
    */
   function renderBarsH(container, opts) {
     if (!container) return;
+
+    var fmtValue = opts.fmtValue || String;
 
     var items = opts.items || [];
     container.innerHTML = '';
@@ -673,7 +680,7 @@
     var h = padT + items.length * rowH + padB;
     var color = opts.color || COLORS.series1;
 
-    var maxV = 1;
+    var maxV = opts.max || 1;
     items.forEach(function (it) {
       var v = Number(it.value) || 0;
       if (v > maxV) maxV = v;
@@ -683,7 +690,7 @@
       width: w, height: h, viewBox: '0 0 ' + w + ' ' + h,
       'class': 'viz-svg', role: 'img',
       'aria-label': 'Balke: ' + items.map(function (it) {
-        return it.label + ' ' + (Number(it.value) || 0);
+        return it.label + ' ' + fmtValue(Number(it.value) || 0);
       }).join(', ')
     });
 
@@ -722,7 +729,7 @@
         'font-size': 10.5, 'font-weight': 600, fill: COLORS.ink,
         style: 'font-variant-numeric:tabular-nums'
       });
-      val.textContent = String(v);
+      val.textContent = fmtValue(v);
       svg.appendChild(val);
 
       // Trefteiken oor die hele ry vir die tooltip.
@@ -732,7 +739,7 @@
       hit.addEventListener('pointermove', function (ev) {
         showTip({
           title: it.label,
-          rows: [{ color: color, value: String(v), label: it.detail || '' }]
+          rows: [{ color: color, value: fmtValue(v), label: it.detail || '' }]
         }, ev.clientX, ev.clientY);
       });
       hit.addEventListener('pointerleave', hideTip);
@@ -742,8 +749,119 @@
     container.appendChild(svg);
   }
 
+  /**
+   * Donut ("sirkeldiagram") — deel van 'n geheel, bv. wie is in / uit / nooit gescan.
+   * opts = { title, segments: [{ label, value, color }] }
+   * Die totaal staan in die middel; die legende langsaan wys elke segment se
+   * telling en persentasie, so kleur dra nooit alleen die boodskap nie.
+   * Segmente word met 'n 2px gaping (die kaart se agtergrond) geskei.
+   */
+  function renderDonut(container, opts) {
+    if (!container) return;
+
+    var segs = opts.segments || [];
+    var total = segs.reduce(function (s, x) { return s + (Number(x.value) || 0); }, 0);
+    container.innerHTML = '';
+
+    var wrap = document.createElement('div');
+    wrap.className = 'viz-donut';
+
+    var size = 132, stroke = 16;
+    var c = size / 2;
+    var r = (size - stroke) / 2;
+    var omtrek = 2 * Math.PI * r;
+
+    var svg = svgEl('svg', {
+      width: size, height: size, viewBox: '0 0 ' + size + ' ' + size,
+      'class': 'viz-donut-svg', role: 'img',
+      'aria-label': (opts.title ? opts.title + ': ' : '') + segs.map(function (s) {
+        return s.label + ' ' + (Number(s.value) || 0);
+      }).join(', ')
+    });
+
+    if (total === 0) {
+      svg.appendChild(svgEl('circle', {
+        cx: c, cy: c, r: r, fill: 'none', stroke: COLORS.grid, 'stroke-width': stroke
+      }));
+    } else {
+      var nieNul = segs.filter(function (s) { return (Number(s.value) || 0) > 0; }).length;
+      var gaping = nieNul > 1 ? 2 : 0;
+      var offset = 0;
+      segs.forEach(function (seg) {
+        var v = Number(seg.value) || 0;
+        if (v <= 0) return;
+        var lengte = omtrek * v / total;
+        var streep = Math.max(lengte - gaping, 0.5);
+        var pct = Math.round((v / total) * 100);
+        var boog = svgEl('circle', {
+          cx: c, cy: c, r: r, fill: 'none',
+          stroke: seg.color, 'stroke-width': stroke,
+          'stroke-dasharray': streep + ' ' + (omtrek - streep),
+          'stroke-dashoffset': -offset,
+          transform: 'rotate(-90 ' + c + ' ' + c + ')',
+          'class': 'viz-donut-seg', tabindex: 0,
+          'aria-label': seg.label + ': ' + v + ' (' + pct + '%)'
+        });
+        function segTip(x, y) {
+          showTip({
+            title: opts.title || '',
+            rows: [{ color: seg.color, value: String(v), label: seg.label + ' (' + pct + '%)' }]
+          }, x, y);
+        }
+        boog.addEventListener('pointermove', function (ev) { segTip(ev.clientX, ev.clientY); });
+        boog.addEventListener('pointerleave', hideTip);
+        boog.addEventListener('focus', function () {
+          var b = boog.getBoundingClientRect();
+          segTip(b.left + b.width / 2, b.top);
+        });
+        boog.addEventListener('blur', hideTip);
+        svg.appendChild(boog);
+        offset += lengte;
+      });
+    }
+
+    var totTxt = svgEl('text', {
+      x: c, y: c + 3, 'text-anchor': 'middle',
+      'font-size': 22, 'font-weight': 700, fill: COLORS.ink,
+      style: 'font-variant-numeric:tabular-nums'
+    });
+    totTxt.textContent = String(total);
+    svg.appendChild(totTxt);
+    var totSub = svgEl('text', {
+      x: c, y: c + 18, 'text-anchor': 'middle', 'font-size': 9, fill: COLORS.axis
+    });
+    totSub.textContent = total === 0 ? 'geen data' : 'totaal';
+    svg.appendChild(totSub);
+    wrap.appendChild(svg);
+
+    var legend = document.createElement('ul');
+    legend.className = 'viz-donut-legend';
+    segs.forEach(function (seg) {
+      var v = Number(seg.value) || 0;
+      var li = document.createElement('li');
+      var swatch = document.createElement('i');
+      swatch.style.background = seg.color;
+      li.appendChild(swatch);
+      var lab = document.createElement('span');
+      lab.className = 'viz-donut-label';
+      lab.textContent = seg.label;
+      li.appendChild(lab);
+      var b = document.createElement('b');
+      b.textContent = String(v);
+      li.appendChild(b);
+      var pct = document.createElement('span');
+      pct.className = 'viz-donut-pct';
+      pct.textContent = total ? Math.round((v / total) * 100) + '%' : '–';
+      li.appendChild(pct);
+      legend.appendChild(li);
+    });
+    wrap.appendChild(legend);
+    container.appendChild(wrap);
+  }
+
   // Maak alles beskikbaar vir die res van die webwerf.
   window.MoonStats = {
+    renderDonut: renderDonut,
     colors: COLORS,
     renderMeter: renderMeter,
     renderSplitBar: renderSplitBar,
