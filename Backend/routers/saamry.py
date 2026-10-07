@@ -183,6 +183,57 @@ def _get_group_or_404(db: Session, group_id: int) -> models.SaamryGroep:
     return group
 
 
+def _pickup_profile_for_user(
+    db: Session,
+    user_id: int,
+) -> Optional[models.SaamryPickupProfiel]:
+    return (
+        db.query(models.SaamryPickupProfiel)
+        .filter(models.SaamryPickupProfiel.Gebruiker_ID == user_id)
+        .first()
+    )
+
+
+def _pickup_profile_dict(profile: models.SaamryPickupProfiel) -> dict:
+    return {
+        "gebruiker_id": profile.Gebruiker_ID,
+        "latitude": profile.Pickup_Latitude,
+        "longitude": profile.Pickup_Longitude,
+        "beskrywing": profile.Pickup_Beskrywing,
+        "gewysig_op": profile.Gewysig_Op.isoformat() if profile.Gewysig_Op else None,
+    }
+
+
+def _upsert_pickup_profile(
+    db: Session,
+    user_id: int,
+    latitude: float,
+    longitude: float,
+    beskrywing: str,
+) -> models.SaamryPickupProfiel:
+    clean = beskrywing.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="'n Geldige pickup-adres is nodig")
+    profile = _pickup_profile_for_user(db, user_id)
+    now = datetime.utcnow()
+    if profile is None:
+        profile = models.SaamryPickupProfiel(
+            Gebruiker_ID=user_id,
+            Pickup_Latitude=latitude,
+            Pickup_Longitude=longitude,
+            Pickup_Beskrywing=clean,
+            Geskep_Op=now,
+            Gewysig_Op=now,
+        )
+        db.add(profile)
+    else:
+        profile.Pickup_Latitude = latitude
+        profile.Pickup_Longitude = longitude
+        profile.Pickup_Beskrywing = clean
+        profile.Gewysig_Op = now
+    return profile
+
+
 def _accepted_passenger_count(group: models.SaamryGroep) -> int:
     return sum(
         1
@@ -233,13 +284,60 @@ def _active_event_for_user(db: Session, user_id: int) -> Optional[models.SaamryE
 
 
 def _event_dict(event: models.SaamryEvent, viewer_id: int) -> dict:
+    viewer_is_participant = any(
+        event_member.Gebruiker_ID == viewer_id
+        for event_member in event.lede
+    )
     members = []
+    pickup_ready = 0
     for event_member in event.lede:
         if event_member.gebruiker is None:
             continue
+        pickup_available = (
+            event_member.Pickup_Latitude is not None
+            and event_member.Pickup_Longitude is not None
+        )
+        pickup_set = bool(pickup_available and event_member.Pickup_Bevestig)
+        if pickup_set:
+            pickup_ready += 1
+
+        # 'n Passasier mag sy/haar eie vooraf-ingevulde gewone adres sien om dit
+        # te bevestig/verander. Die Driver sien 'n passasier se presiese adres
+        # eers nadat daardie passasier dit vir die event bevestig het.
+        can_view_pin = bool(
+            pickup_available
+            and viewer_is_participant
+            and (
+                event_member.Gebruiker_ID == viewer_id
+                or (
+                    event_member.Gebruiker_ID == event.Bestuurder_ID
+                    and event_member.Pickup_Bevestig
+                )
+                or (
+                    viewer_id == event.Bestuurder_ID
+                    and event_member.Pickup_Bevestig
+                )
+            )
+        )
         members.append(
             {
                 "is_bestuurder": event_member.Gebruiker_ID == event.Bestuurder_ID,
+                "is_myne": event_member.Gebruiker_ID == viewer_id,
+                "pickup_gestel": pickup_set,
+                "pickup_latitude": (
+                    event_member.Pickup_Latitude if can_view_pin else None
+                ),
+                "pickup_longitude": (
+                    event_member.Pickup_Longitude if can_view_pin else None
+                ),
+                "pickup_beskrywing": (
+                    event_member.Pickup_Beskrywing if can_view_pin else None
+                ),
+                "pickup_gewysig_op": (
+                    event_member.Pickup_Gewysig_Op.isoformat()
+                    if can_view_pin and event_member.Pickup_Gewysig_Op
+                    else None
+                ),
                 "gebruiker": _user_dict(event_member.gebruiker, include_contact=True),
             }
         )
@@ -255,6 +353,9 @@ def _event_dict(event: models.SaamryEvent, viewer_id: int) -> dict:
         "bestuurder_id": event.Bestuurder_ID,
         "status": event.SAA_Status,
         "is_bestuurder": event.Bestuurder_ID == viewer_id,
+        "is_deelnemer": viewer_is_participant,
+        "pickup_gereed": pickup_ready,
+        "pickup_totaal": len(members),
         "geskep_op": event.Geskep_Op.isoformat() if event.Geskep_Op else None,
         "voltooi_op": event.Voltooi_Op.isoformat() if event.Voltooi_Op else None,
         "voltooi_rigting": event.Voltooi_Rigting,
@@ -966,6 +1067,42 @@ def leave_group(
 
 
 # ---------------------------------------------------------------------------
+# Gewone/default pickup-profiel
+# ---------------------------------------------------------------------------
+
+@router.get("/pickup-profiel")
+def get_saamry_pickup_profile(
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    profile = _pickup_profile_for_user(db, current_user.Gebruiker_ID)
+    return schemas.APIResponse(
+        sukses=True,
+        data=_pickup_profile_dict(profile) if profile is not None else None,
+    )
+
+
+@router.put("/pickup-profiel")
+def save_saamry_pickup_profile(
+    payload: schemas.SaamryPickupProfielUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    profile = _upsert_pickup_profile(
+        db,
+        current_user.Gebruiker_ID,
+        payload.latitude,
+        payload.longitude,
+        payload.beskrywing,
+    )
+    db.commit()
+    db.refresh(profile)
+    return schemas.APIResponse(sukses=True, data=_pickup_profile_dict(profile))
+
+
+# ---------------------------------------------------------------------------
 # Eenmalige Saamry-events
 # ---------------------------------------------------------------------------
 
@@ -1025,11 +1162,133 @@ def create_saamry_event(
     )
     db.add(event)
     db.flush()
-    for user_id in [group.Bestuurder_ID, *selected_ids]:
-        db.add(models.SaamryEventLid(Event_ID=event.Event_ID, Gebruiker_ID=user_id))
+    # Driver gebruik óf die adres wat vir hierdie event gestuur is, óf sy
+    # gewone/default pickup-profiel. Om die event te skep bevestig die Driver
+    # hierdie beginadres implisiet.
+    driver_profile = _pickup_profile_for_user(db, group.Bestuurder_ID)
+    has_driver_lat = payload.driver_latitude is not None
+    has_driver_lon = payload.driver_longitude is not None
+    if has_driver_lat != has_driver_lon:
+        raise HTTPException(
+            status_code=400,
+            detail="Driver latitude en longitude moet saam gestuur word",
+        )
+
+    if has_driver_lat and has_driver_lon:
+        driver_latitude = payload.driver_latitude
+        driver_longitude = payload.driver_longitude
+        driver_beskrywing = (payload.driver_pickup_beskrywing or '').strip()
+        if not driver_beskrywing:
+            raise HTTPException(status_code=400, detail="Driver se beginadres is nodig")
+        if payload.stoor_driver_as_verstek:
+            _upsert_pickup_profile(
+                db,
+                group.Bestuurder_ID,
+                driver_latitude,
+                driver_longitude,
+                driver_beskrywing,
+            )
+    elif driver_profile is not None:
+        driver_latitude = driver_profile.Pickup_Latitude
+        driver_longitude = driver_profile.Pickup_Longitude
+        driver_beskrywing = driver_profile.Pickup_Beskrywing
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Stel eers die Driver se beginadres",
+        )
+
+    now = datetime.utcnow()
+    db.add(
+        models.SaamryEventLid(
+            Event_ID=event.Event_ID,
+            Gebruiker_ID=group.Bestuurder_ID,
+            Pickup_Latitude=driver_latitude,
+            Pickup_Longitude=driver_longitude,
+            Pickup_Beskrywing=driver_beskrywing,
+            Pickup_Gewysig_Op=now,
+            Pickup_Bevestig=True,
+        )
+    )
+
+    # Passasiers se gewone pickup-adresse word slegs as 'n voorstel gekopieer.
+    # Dit bly privaat vir die Driver totdat die passasier dit bevestig.
+    for user_id in selected_ids:
+        profile = _pickup_profile_for_user(db, user_id)
+        db.add(
+            models.SaamryEventLid(
+                Event_ID=event.Event_ID,
+                Gebruiker_ID=user_id,
+                Pickup_Latitude=profile.Pickup_Latitude if profile else None,
+                Pickup_Longitude=profile.Pickup_Longitude if profile else None,
+                Pickup_Beskrywing=profile.Pickup_Beskrywing if profile else None,
+                Pickup_Gewysig_Op=profile.Gewysig_Op if profile else None,
+                Pickup_Bevestig=False,
+            )
+        )
     db.commit()
     db.refresh(event)
     return schemas.APIResponse(sukses=True, data=_event_dict(event, current_user.Gebruiker_ID))
+
+
+@router.put("/events/{event_id}/pickup")
+def update_saamry_pickup(
+    event_id: int,
+    payload: schemas.SaamryPickupUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    _require_saamry_user(db, current_user)
+    event = (
+        db.query(models.SaamryEvent)
+        .filter(models.SaamryEvent.Event_ID == event_id)
+        .first()
+    )
+    if event is None:
+        raise HTTPException(status_code=404, detail="Saamry-event is nie gevind nie")
+    if event.SAA_Status != "AKTIEF":
+        raise HTTPException(status_code=409, detail="Hierdie Saamry-event is nie meer aktief nie")
+
+    event_member = (
+        db.query(models.SaamryEventLid)
+        .filter(
+            models.SaamryEventLid.Event_ID == event_id,
+            models.SaamryEventLid.Gebruiker_ID == current_user.Gebruiker_ID,
+        )
+        .first()
+    )
+    if event_member is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Jy is nie deel van hierdie Saamry-event nie",
+        )
+
+    clean_address = (payload.beskrywing or '').strip()
+    if not clean_address:
+        raise HTTPException(status_code=400, detail="Kies eers 'n geldige pickup-adres")
+
+    event_member.Pickup_Latitude = payload.latitude
+    event_member.Pickup_Longitude = payload.longitude
+    event_member.Pickup_Beskrywing = clean_address
+    event_member.Pickup_Gewysig_Op = datetime.utcnow()
+    event_member.Pickup_Bevestig = True
+
+    if payload.stoor_as_verstek:
+        _upsert_pickup_profile(
+            db,
+            current_user.Gebruiker_ID,
+            payload.latitude,
+            payload.longitude,
+            clean_address,
+        )
+
+    db.commit()
+    db.refresh(event)
+
+    return schemas.APIResponse(
+        sukses=True,
+        data=_event_dict(event, current_user.Gebruiker_ID),
+    )
 
 
 @router.post("/events/{event_id}/kanselleer")

@@ -767,9 +767,27 @@ class SaamryBestuurderOordragRequest(BaseModel):
     nuwe_bestuurder_id: int
 
 
+class SaamryPickupProfielUpdate(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    beskrywing: str = Field(..., min_length=3, max_length=200)
+
+
 class SaamryEventCreate(BaseModel):
     groep_id: int
     gebruiker_ids: List[int]
+    # Driver kan 'n nuwe adres stuur, of die backend kan sy gewone pickup-profiel gebruik.
+    driver_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    driver_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    driver_pickup_beskrywing: Optional[str] = Field(default=None, max_length=200)
+    stoor_driver_as_verstek: bool = False
+
+
+class SaamryPickupUpdate(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    beskrywing: Optional[str] = Field(default=None, max_length=200)
+    stoor_as_verstek: bool = False
 
 
 class SaamryBoodskapCreate(BaseModel):

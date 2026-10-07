@@ -516,6 +516,44 @@
     },
 
     /**
+     * GET /verslae/bywoning/export?van=&tot=&kampus_id=
+     * Excel-bywoningsverslag (Admin, Kampus_Opsigter, Personeel).
+     * Gee { ok, status, blob, leernaam, fout } terug.
+     */
+    exportBywoningVerslag: async function (van, tot, kampusId) {
+      const url = new URL(API_BASE_URL + '/verslae/bywoning/export');
+      if (van) url.searchParams.set('van', van);
+      if (tot) url.searchParams.set('tot', tot);
+      if (kampusId) url.searchParams.set('kampus_id', kampusId);
+
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+      });
+      hanteerOngemagtig(response, '/verslae/bywoning/export');
+
+      if (!response.ok) {
+        let fout = 'Fout ' + response.status;
+        try {
+          const body = await response.json();
+          fout = body.fout || body.detail || fout;
+        } catch (e) { /* nie JSON nie */ }
+        return { ok: false, status: response.status, blob: null, leernaam: null, fout };
+      }
+
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      return {
+        ok: true,
+        status: response.status,
+        blob: await response.blob(),
+        leernaam: match ? match[1] : 'moon_bywoning.xlsx',
+        fout: null,
+      };
+    },
+
+    /**
      * GET /admin/csv/export?table=
      */
     exportCsvTable: async function (table) {
