@@ -38,7 +38,10 @@ def kry_instelling(
     return schemas.APIResponse(sukses=True, data=instelling)
 
 
-@router.put("/instellings/{sleutel}", response_model=schemas.APIResponse[schemas.InstellingRead])
+@router.put(
+    "/instellings/{sleutel}",
+    response_model=schemas.APIResponse[schemas.InstellingRead]
+)
 def werk_instelling_by(
     sleutel: str,
     instelling_in: schemas.InstellingUpdate,
@@ -49,17 +52,26 @@ def werk_instelling_by(
         models.Instelling.Sleutel == sleutel
     ).first()
 
+    # As die instelling nog nie bestaan nie, skep hom.
     if not instelling:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Instelling '{sleutel}' nie gevind nie"
+        instelling = models.Instelling(
+            Sleutel=sleutel,
+            Waarde=instelling_in.Waarde,
+            Beskrywing=instelling_in.Beskrywing,
         )
+        db.add(instelling)
 
-    instelling.Waarde = instelling_in.Waarde
-    if instelling_in.Beskrywing is not None:
-        instelling.Beskrywing = instelling_in.Beskrywing
+    else:
+        # Indien dit reeds bestaan, werk dit by.
+        instelling.Waarde = instelling_in.Waarde
+
+        if instelling_in.Beskrywing is not None:
+            instelling.Beskrywing = instelling_in.Beskrywing
 
     db.commit()
     db.refresh(instelling)
 
-    return schemas.APIResponse(sukses=True, data=instelling)
+    return schemas.APIResponse(
+        sukses=True,
+        data=instelling
+    )
