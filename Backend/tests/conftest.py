@@ -2,6 +2,9 @@ import os
 import sys
 from pathlib import Path
 
+os.environ.setdefault("SECRET_KEY", "toets_geheim_sleutel_vir_toetse_123456789")
+os.environ.setdefault("ENVIRONMENT", "testing")
+
 import pytest
 
 # Die toetse oefen die werklike auth-paaie uit. 'n Plaaslike .env met
