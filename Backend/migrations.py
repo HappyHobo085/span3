@@ -21,6 +21,15 @@ def run_pre_migrations(engine):
                        AND to_regclass('public.funskie_besoekers') IS NOT NULL THEN
                         ALTER TABLE public.funskie_besoekers RENAME TO funksie_besoekers;
                     END IF;
+
+                    -- Herstel 'n bestaande lokasie-tabel wat ouer is as die
+                    -- huidige SQLAlchemy model. Dit MOET voor create_all()
+                    -- gebeur, anders kan eager-loading van Kampus.lokasies
+                    -- op die ontbrekende kolom faal.
+                    IF to_regclass('public.lokasie') IS NOT NULL THEN
+                        ALTER TABLE public.lokasie
+                        ADD COLUMN IF NOT EXISTS "LOK_Kapasiteit" INTEGER;
+                    END IF;
                 END $$;
             """))
     except Exception as _migrasie_fout:
