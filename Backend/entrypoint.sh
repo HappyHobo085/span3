@@ -1,6 +1,18 @@
 #!/bin/sh
 set -e
 
+echo "🧠 Kontroleer ML runtime..."
+if python scripts/check_ml_runtime.py; then
+  echo "✅ ML runtime kontrole geslaag"
+else
+  echo "❌ ML runtime kontrole het misluk"
+  if [ "${ML_STRICT_STARTUP:-true}" = "true" ]; then
+    echo "🛑 ML_STRICT_STARTUP=true — backend gaan nie met 'n gebreekte ML runtime begin nie"
+    exit 1
+  fi
+  echo "⚠️ ML_STRICT_STARTUP=false — backend begin met die bestaande fallback gedrag"
+fi
+
 echo "⏳ Skep of werk databasis-tabelle by..."
 python -c "from main import models; from database import engine; models.Base.metadata.create_all(bind=engine)"
 

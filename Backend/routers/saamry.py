@@ -39,6 +39,7 @@ from services.compatibiliteit_service import (
     bou_student_saamry_data_van_db,
     bereken_saamry_versoenbaarheid,
 )
+from services.ml_service import kry_ml_runtime_status
 
 
 router = APIRouter(prefix="/saamry", tags=["Saamry"])
@@ -2048,6 +2049,39 @@ def confirm_group_at_gate(
 
 
 # ---------------------------------------------------------------------------
+# ML Runtime Status — slegs Administrateur
+# ---------------------------------------------------------------------------
+
+@router.get("/ml-status")
+def kry_saamry_ml_status(
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    is_admin: bool = Depends(auth.check_admin),
+):
+    """Minimale ML health check.
+
+    Geen interne recommendation-formule, gewigte of berekeningswaardes
+    word deur hierdie endpoint blootgestel nie.
+    """
+    status_data = kry_ml_runtime_status()
+    if not status_data["runtime_ok"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Saamry ML runtime is nie gereed nie",
+        )
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "runtime_ok": True,
+            "model_file_exists": status_data["model_file_exists"],
+            "model_loaded": status_data["model_loaded"],
+            "fallback_active": status_data["fallback_active"],
+            "model_type": status_data["model_type"],
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Saamry Profiel & Versoenbaarheidsalgoritme (Saamry-Algo)
 # ---------------------------------------------------------------------------
 
@@ -2258,5 +2292,3 @@ def kry_kandidaat_versoenbaarheid(
         print(f"Waarskuwing: PROFIEL_OOP recommendation log kon nie gestoor word nie: {exc}")
 
     return schemas.APIResponse(sukses=True, data=data)
-
-

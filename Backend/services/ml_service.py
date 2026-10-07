@@ -103,3 +103,24 @@ def voorspel_aankomstyd_offset(vroegste_klas_minuut: int, kluster: Optional[str]
         
     return _voorspel_met_kas(vroegste_klas_minuut, kluster, rol, is_koshuis)
 
+def kry_ml_runtime_status() -> dict:
+    """Gee 'n minimale runtime-status sonder interne berekeningsdetail.
+
+    Hierdie helper is bedoel vir Railway startup checks en die Admin-only
+    /saamry/ml-status endpoint. Dit publiseer nie scoring-gewigte, mediane,
+    sigma of ander recommendation-berekeninge nie.
+    """
+    _laai_model()
+
+    model_file_exists = os.path.isfile(MODEL_PATH)
+    model_is_dict = isinstance(_model, dict)
+    model_type = _model.get("type") if model_is_dict else None
+
+    return {
+        "runtime_ok": bool(model_file_exists and _model_loaded and model_is_dict),
+        "model_file_exists": bool(model_file_exists),
+        "model_loaded": bool(_model_loaded and model_is_dict),
+        "fallback_active": bool(_model_load_failed or not _model_loaded),
+        "model_type": str(model_type) if model_type is not None else None,
+    }
+
