@@ -304,11 +304,12 @@
       }
     }
 
-    // Hide/show Tabel selection - only for regular import/export
+    // Hide/show Tabel selection - only for regular import/export (not for import-all/export-all)
     if (csvTableSelect) {
       const tableGroup = csvTableSelect.closest('.field');
       if (tableGroup) {
-        tableGroup.style.display = isImport ? '' : 'none';
+        const isExport = action === 'export';
+        tableGroup.style.display = (isImport || isExport) ? '' : 'none';
       }
     }
 
