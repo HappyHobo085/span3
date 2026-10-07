@@ -3,8 +3,9 @@
  *
  * Wat dit doen, in eenvoudige woorde:
  *   - Laai die lys van kampusse in die keuselys bo-aan die bladsy.
- *   - Wys op die paneelbord hoeveel studente en personeel in- en uitgeteken is.
- *   - Wys lyste van studente en personeel wat mens kan deursoek.
+ *   - Wys op die paneelbord hoeveel studente en personeel in- en uitgeteken is,
+ *     met sirkeldiagramme en 'n regstreekse tendens-grafiek.
+ *   - Wys soekbare tabelle: wie is nou op die kampus, en almal op die stelsel.
  *   - Laat die gebruiker 'n nuwe klaskamer skep deur 'n klein venster (modal).
  *
  * Dit het main.js nodig (wat eerste moet laai) om met die bediener te praat.
@@ -13,8 +14,6 @@
 // Alles word in een blok toegedraai sodat die veranderlikes nie met ander lêers bots nie.
 (function () {
   // ----- Kry die belangrike dele van die bladsy en hou hulle byderhand -----
-  const listSearch = document.getElementById('list-search');
-  const dataList = document.getElementById('data-list');
   const openClassModalButton = document.getElementById('open-class-modal');
   const closeClassModalButton = document.getElementById('close-class-modal');
   const createClassButton = document.getElementById('create-class-button');
@@ -29,198 +28,162 @@
   var pollingInterval = null;   // Die "horlosie" wat die paneelbord gereeld opdateer
   var trendHistory = {};        // Per kampus: monsters van {t, stu, per} vir die tendens-grafiek
 
-  /**
-   * Hierdie funksie bou 'n klein kaartjie vir een persoon.
-   * Die kaartjie wys die naam, 'n reël daaronder (bv. studentenommer of e-pos)
-   * en 'n klein kenteken met die persoon se rol (Student of Personeel).
-   */
-  function createUserCard(user, subtitle, rolNaam) {
-    var card = document.createElement('div');
-    card.className = 'user-card';
-    // Stoor die naam en van as soekwoorde sodat die soekblokkie die kaartjie kan vind
-    card.dataset.search = ((user.GEB_Naam || '') + ' ' + (user.GEB_Van || '') + ' ' + (subtitle || '')).toLowerCase();
+  // ----- Gedeelde hulpfunksies -----
 
-    var infoDiv = document.createElement('div');
-    infoDiv.className = 'admin-user-info';
-
-    // Sit die persoon se naam en van op die kaartjie
-    var nameDiv = document.createElement('div');
-    nameDiv.className = 'admin-user-name';
-    nameDiv.textContent = (user.GEB_Naam || '') + ' ' + (user.GEB_Van || '');
-    infoDiv.appendChild(nameDiv);
-
-    // Sit die tweede reël (bv. nommer of e-pos) onder die naam
-    var subDiv = document.createElement('div');
-    subDiv.className = 'admin-user-email';
-    subDiv.textContent = subtitle || '';
-    infoDiv.appendChild(subDiv);
-
-    card.appendChild(infoDiv);
-
-    // As die persoon 'n rol het, wys dit as 'n klein kenteken
-    if (rolNaam) {
-      var rolesDiv = document.createElement('div');
-      rolesDiv.className = 'admin-user-roles';
-      var badge = document.createElement('span');
-      badge.className = 'role-badge role-badge--' + rolNaam.toLowerCase().replace(/[\s_]+/g, '');
-      badge.textContent = rolNaam;
-      rolesDiv.appendChild(badge);
-      card.appendChild(rolesDiv);
-    }
-
-    return card;
+  // Tye van die bediener sonder 'n tydsone is UTC; maak 'n plaaslike Date.
+  function leesTyd(iso) {
+    if (!iso) return null;
+    var s = String(iso);
+    if (!/[zZ]|[+-]\d\d:?\d\d$/.test(s)) s += 'Z';
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
   }
 
-  /**
-   * Hierdie funksie neem 'n lys van mense en sit vir elkeen 'n kaartjie in 'n houer op die bladsy.
-   * As die lys leeg is, wys dit 'n boodskap dat daar geen gebruikers is nie.
-   */
-  function renderUserList(container, users) {
-    if (!container) return;
-    container.innerHTML = '';
-    // As daar niemand in die lys is nie, wys 'n "leeg" boodskap
-    if (!users || users.length === 0) {
-      var empty = document.createElement('div');
-      empty.className = 'user-card';
-      var info = document.createElement('div');
-      info.className = 'admin-user-info';
-      var msg = document.createElement('div');
-      msg.className = 'admin-user-email';
-      msg.textContent = 'Geen gebruikers nie';
-      info.appendChild(msg);
-      empty.appendChild(info);
-      container.appendChild(empty);
-      return;
-    }
-    // Maak vir elke persoon 'n kaartjie en sit dit in die houer
-    users.forEach(function (u) {
-      var rolNaam = u.Rol_Naam || '';
-      container.appendChild(createUserCard(u, u.GEB_Epos || rolNaam, rolNaam));
+  function volleNaam(u) {
+    return ((u.GEB_Naam || '') + ' ' + (u.GEB_Van || '')).trim();
+  }
+
+  // Vriendelike rolname vir die tabelle (bv. "Kampus_Opsigter" -> "Kampus Opsigter").
+  function rolTeks(rol) {
+    return String(rol || '').replace(/_/g, ' ');
+  }
+
+  // ----- Tabelle (stats.js se gedeelde tabel) -----
+  var nouTabel = null;     // wie is nou in en uit by die gekose kampus
+  var almalTabel = null;   // al die gebruikers op die stelsel
+
+  function maakTabelle() {
+    if (!window.MoonStats) return;
+    nouTabel = MoonStats.createTable(document.getElementById('nou-tabel'), {
+      columns: [
+        { name: 'Naam', format: 'teks' },
+        { name: 'E-pos', format: 'teks' },
+        { name: 'Rol', format: 'teks' },
+        { name: 'Status', format: 'status' },
+        { name: 'Laaste skandering', format: 'datumtyd' },
+        { name: 'Metode', format: 'teks' }
+      ],
+      searchPlaceholder: 'Soek persoon…',
+      emptyText: 'Nog niemand het by hierdie kampus gescan nie.',
+      filters: [
+        { label: 'Almal' },
+        { label: 'Op kampus', test: function (r) { return r.inn; } },
+        { label: 'Van kampus af', test: function (r) { return !r.inn; } },
+        { label: 'Studente', test: function (r) { return r.rol === 'Student'; } },
+        { label: 'Personeel', test: function (r) { return r.rol === 'Personeel'; } }
+      ]
+    });
+    almalTabel = MoonStats.createTable(document.getElementById('almal-tabel'), {
+      columns: [
+        { name: 'Naam', format: 'teks' },
+        { name: 'Nommer', format: 'teks' },
+        { name: 'E-pos', format: 'teks' },
+        { name: 'Rol', format: 'teks' },
+        { name: 'Status', format: 'status' }
+      ],
+      searchPlaceholder: 'Soek gebruiker…',
+      emptyText: 'Laai gebruikers…',
+      filters: [
+        { label: 'Almal' },
+        { label: 'Studente', test: function (r) { return r.rol === 'Student'; } },
+        { label: 'Personeel', test: function (r) { return r.rol === 'Personeel'; } },
+        { label: 'Ander rolle', test: function (r) { return r.rol !== 'Student' && r.rol !== 'Personeel'; } }
+      ]
     });
   }
 
+  function stelTelling(id, n) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = n === null ? '' : String(n);
+  }
+
   /**
-   * Hierdie funksie laai al die gebruikers vanaf die bediener (net een keer).
-   * Studente gaan na die studente-lys en personeel na die personeel-lys aan die regterkant.
+   * Hierdie funksie laai al die gebruikers vanaf die bediener (net een keer)
+   * en wys hulle in die "Almal op die stelsel" tabel.
    */
   async function loadGebruikersLys() {
-    if (!window.MoonApi) return;
+    if (!window.MoonApi || !almalTabel) return;
 
-    // Vra die bediener vir al die gebruikers
     var json = await window.MoonApi.fetchGebruikers();
-
-    // As iets verkeerd gegaan het, wys 'n foutboodskap in albei lyste
     if (!json || !json.sukses || !Array.isArray(json.data)) {
-      if (dataList) {
-        dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie gebruikers laai nie.</div></div></div>';
-      }
-      var personeelListErr = document.getElementById('personeel-list');
-      if (personeelListErr) {
-        personeelListErr.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Kon nie personeel laai nie.</div></div></div>';
-      }
+      almalTabel.setRows([]);
+      almalTabel.setNote('Kon nie gebruikers laai nie.');
       return;
     }
 
-    // Skei die studente uit die volle lys uit
-    var students = json.data.filter(function (g) {
-      return g.Rol_Naam === 'Student';
-    });
-
-    // Skei die personeel uit die volle lys uit
-    var personeel = json.data.filter(function (g) {
-      return g.Rol_Naam === 'Personeel';
-    });
-
-    // Sit die studente se kaartjies in die studente-lys
-    if (dataList) {
-      dataList.innerHTML = '';
-      if (students.length === 0) {
-        dataList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Geen studente nie</div></div></div>';
-      } else {
-        students.forEach(function (g) {
-          var subtitle = g.STU_Nommer || g.GEB_Epos || '';
-          dataList.appendChild(createUserCard(g, subtitle, 'Student'));
-        });
-      }
-    }
-
-    // Sit die personeel se kaartjies in die personeel-lys
-    var personeelList = document.getElementById('personeel-list');
-    if (personeelList) {
-      personeelList.innerHTML = '';
-      if (personeel.length === 0) {
-        personeelList.innerHTML = '<div class="user-card"><div class="admin-user-info"><div class="admin-user-email">Geen personeel nie</div></div></div>';
-      } else {
-        personeel.forEach(function (g) {
-          var subtitle = g.PER_Nommer || g.GEB_Epos || '';
-          personeelList.appendChild(createUserCard(g, subtitle, 'Personeel'));
-        });
-      }
-    }
+    stelTelling('almal-telling', json.data.length);
+    almalTabel.setRows(json.data.map(function (g) {
+      var rol = g.Rol_Naam || '';
+      return {
+        key: g.Gebruiker_ID,
+        rol: rol,
+        cells: [
+          volleNaam(g),
+          g.STU_Nommer || g.PER_Nommer || g.KAMO_Nommer || g.SEK_Nommer || null,
+          g.GEB_Epos || null,
+          rolTeks(rol),
+          g.Is_Aktief === false
+            ? { label: 'Onaktief', tone: 'sleg' }
+            : { label: 'Aktief', tone: 'goed' }
+        ]
+      };
+    }));
   }
 
   /**
    * Hierdie funksie vra die bediener wie tans in- en uitgeteken is by 'n kampus,
-   * en werk dan die tellings en lyste op die paneelbord by.
+   * en werk dan die tellings, grafieke en die "nou" tabel by.
    */
   async function refreshDashboard(kampusId) {
     if (!kampusId || !window.MoonApi) return;
 
-    // Vra die bediener vir die nuutste in/uit-inligting van hierdie kampus
     var json = await window.MoonApi.fetchKampusStatus(kampusId);
 
-    // Klein hulpfunksie: as iets fout gaan, wys strepies in plaas van getalle
-    function resetCounts() {
+    // As die bediener nie geantwoord het nie, wys strepies en stop hier
+    if (!json || !json.sukses || !json.data) {
       ['dash-student-in-count', 'dash-student-out-count',
        'dash-personeel-in-count', 'dash-personeel-out-count'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.textContent = '--';
       });
-    }
-
-    // As die bediener nie geantwoord het nie, wys strepies en stop hier
-    if (!json || !json.sukses || !json.data) {
-      resetCounts();
       return;
     }
 
     var data = json.data;
-
-    // Verdeel die mense wat in en uit is tussen studente en personeel
-    var studentIn = (data.scanned_in || []).filter(function (u) {
-      return u.Rol_Naam === 'Student';
-    });
-    var studentOut = (data.scanned_out || []).filter(function (u) {
-      return u.Rol_Naam === 'Student';
-    });
-    var personeelIn = (data.scanned_in || []).filter(function (u) {
-      return u.Rol_Naam === 'Personeel';
-    });
-    var personeelOut = (data.scanned_out || []).filter(function (u) {
-      return u.Rol_Naam === 'Personeel';
-    });
-
-    // Werk die vier telling-blokkies op die paneelbord by
-    var stuInCount = document.getElementById('dash-student-in-count');
-    var stuOutCount = document.getElementById('dash-student-out-count');
-    var perInCount = document.getElementById('dash-personeel-in-count');
-    var perOutCount = document.getElementById('dash-personeel-out-count');
+    var inn = data.scanned_in || [];
+    var uit = data.scanned_out || [];
+    function tel(lys, rol) { return lys.filter(function (u) { return u.Rol_Naam === rol; }).length; }
+    var stuIn = tel(inn, 'Student'), stuUit = tel(uit, 'Student');
+    var perIn = tel(inn, 'Personeel'), perUit = tel(uit, 'Personeel');
 
     // Die KPI-teëls wys net die syfer — die etiket staan reeds op die teël.
-    if (stuInCount) stuInCount.textContent = studentIn.length;
-    if (stuOutCount) stuOutCount.textContent = studentOut.length;
-    if (perInCount) perInCount.textContent = personeelIn.length;
-    if (perOutCount) perOutCount.textContent = personeelOut.length;
+    document.getElementById('dash-student-in-count').textContent = stuIn;
+    document.getElementById('dash-student-out-count').textContent = stuUit;
+    document.getElementById('dash-personeel-in-count').textContent = perIn;
+    document.getElementById('dash-personeel-out-count').textContent = perUit;
 
-    // Werk die vier naamlyste op die paneelbord by
-    renderUserList(document.getElementById('dash-student-in-list'), studentIn);
-    renderUserList(document.getElementById('dash-student-out-list'), studentOut);
-    renderUserList(document.getElementById('dash-personeel-in-list'), personeelIn);
-    renderUserList(document.getElementById('dash-personeel-out-list'), personeelOut);
+    // Een tabel vir almal: die statusfilter vervang die vier aparte lyste.
+    if (nouTabel) {
+      var rye = inn.map(function (u) { return [u, true]; }).concat(uit.map(function (u) { return [u, false]; }));
+      rye.sort(function (a, b) { return (b[1] - a[1]) || volleNaam(a[0]).localeCompare(volleNaam(b[0])); });
+      stelTelling('nou-telling', inn.length + ' in · ' + uit.length + ' uit');
+      nouTabel.setRows(rye.map(function (p) {
+        var u = p[0];
+        return {
+          key: u.Gebruiker_ID,
+          inn: p[1],
+          rol: u.Rol_Naam,
+          cells: [
+            volleNaam(u), u.GEB_Epos || null, rolTeks(u.Rol_Naam),
+            p[1] ? { label: 'Op kampus', tone: 'goed' } : { label: 'Van kampus af', tone: 'neutraal' },
+            leesTyd(u.Tydstempel), u.Metode || null
+          ]
+        };
+      }));
+    }
 
-    // Werk die statistieke by: die twee verdeling-balke en die tendens-grafiek
-    recordTrendSample(kampusId, studentIn.length, personeelIn.length);
-    renderStats(kampusId, studentIn.length, studentOut.length, personeelIn.length, personeelOut.length);
+    recordTrendSample(kampusId, stuIn, perIn);
+    renderStats(kampusId, stuIn, stuUit, perIn, perUit);
   }
 
   /**
@@ -236,48 +199,46 @@
     if (arr.length > 60) arr.shift();
   }
 
+  // Die jongste syfers, sodat die grafieke oorgeteken kan word (venstergrootte/tema).
+  var laasteStats = null;
+
   /**
-   * Hierdie funksie teken die statistieke-paneel met stats.js:
-   * verdeling-balke vir studente en personeel, en die tendens-grafiek.
+   * Hierdie funksie teken die grafieke met stats.js: 'n sirkeldiagram vir
+   * studente en vir personeel (in teenoor uit), en die tendens-grafiek.
    */
   function renderStats(kampusId, stuIn, stuOut, perIn, perOut) {
     if (!window.MoonStats) return;
+    laasteStats = [kampusId, stuIn, stuOut, perIn, perOut];
+    var c = MoonStats.colors;
 
-    // Verdeling-balk: studente in (blou) teenoor uit (dowwe grys)
-    MoonStats.renderSplitBar(document.getElementById('stat-studente-split'), {
+    MoonStats.renderDonut(document.getElementById('stat-studente-donut'), {
       title: 'Studente in / uit',
       segments: [
-        { label: 'Ingeteken', value: stuIn, color: MoonStats.colors.series1 },
-        { label: 'Uitgeteken', value: stuOut, color: MoonStats.colors.dim }
+        { label: 'Ingeteken', value: stuIn, color: c.series1 },
+        { label: 'Uitgeteken', value: stuOut, color: c.dim }
       ]
     });
-
-    // Verdeling-balk: personeel in (pers) teenoor uit (dowwe grys)
-    MoonStats.renderSplitBar(document.getElementById('stat-personeel-split'), {
+    MoonStats.renderDonut(document.getElementById('stat-personeel-donut'), {
       title: 'Personeel in / uit',
       segments: [
-        { label: 'Ingeteken', value: perIn, color: MoonStats.colors.series2 },
-        { label: 'Uitgeteken', value: perOut, color: MoonStats.colors.dim }
+        { label: 'Ingeteken', value: perIn, color: c.series2 },
+        { label: 'Uitgeteken', value: perOut, color: c.dim }
       ]
     });
 
-    // Tendens-grafiek: studente en personeel op kampus oor die afgelope tyd
     var hist = trendHistory[String(kampusId)] || [];
     MoonStats.renderTrend(document.getElementById('stat-trend'), {
       times: hist.map(function (p) { return p.t; }),
+      height: 180,
       series: [
-        {
-          label: 'Studente',
-          color: MoonStats.colors.series1,
-          values: hist.map(function (p) { return p.stu; })
-        },
-        {
-          label: 'Personeel',
-          color: MoonStats.colors.series2,
-          values: hist.map(function (p) { return p.per; })
-        }
+        { label: 'Studente', color: c.series1, values: hist.map(function (p) { return p.stu; }) },
+        { label: 'Personeel', color: c.series2, values: hist.map(function (p) { return p.per; }) }
       ]
     });
+  }
+
+  function herteken() {
+    if (laasteStats) renderStats.apply(null, laasteStats);
   }
 
   /**
@@ -287,12 +248,9 @@
   async function loadPageKampusDropdown() {
     if (!dataSelect || !window.MoonApi) return;
 
-    // Vra die bediener vir die lys van kampusse
     var json = await window.MoonApi.fetchKampusse();
-
     if (!json || !json.sukses || !Array.isArray(json.data)) return;
 
-    // Sit elke kampus as 'n keuse in die keuselys
     dataSelect.innerHTML = '';
     json.data.forEach(function (k) {
       var opt = document.createElement('option');
@@ -318,34 +276,6 @@
     pollingInterval = setInterval(function () {
       refreshDashboard(currentKampusId);
     }, 5000);
-  }
-
-  // Hierdie funksie steek studente-kaartjies weg wat nie by die soekwoord pas nie.
-  function applyListFilter() {
-    if (!listSearch || !dataList) return;
-    var query = listSearch.value.trim().toLowerCase();
-    var rows = dataList.querySelectorAll('.user-card');
-
-    // Gaan deur elke kaartjie: wys dit net as die soekwoord daarin voorkom
-    rows.forEach(function (row) {
-      var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
-      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
-    });
-  }
-
-  // Hierdie funksie steek personeel-kaartjies weg wat nie by die soekwoord pas nie.
-  function applyPersoneelFilter() {
-    var bottomSearch = document.getElementById('bottom-search');
-    var personeelList = document.getElementById('personeel-list');
-    if (!bottomSearch || !personeelList) return;
-    var query = bottomSearch.value.trim().toLowerCase();
-    var rows = personeelList.querySelectorAll('.user-card');
-
-    // Gaan deur elke kaartjie: wys dit net as die soekwoord daarin voorkom
-    rows.forEach(function (row) {
-      var searchable = row.dataset.search || (row.textContent || '').toLowerCase();
-      row.style.display = (query === '' || searchable.includes(query)) ? '' : 'none';
-    });
   }
 
   // Hierdie funksie maak die "nuwe klas" venster oop op die skerm.
@@ -418,18 +348,6 @@
     alert((json && json.fout) || 'Kon nie klas skep nie.');
   }
 }
-
-  // ----- Koppel die soekblokkies aan hulle funksies -----
-  // As die gebruiker in die studente-soekblokkie tik, filtreer die studente-lys.
-  if (listSearch) {
-    listSearch.addEventListener('input', applyListFilter);
-  }
-
-  // As die gebruiker in die onderste soekblokkie tik, filtreer die personeel-lys.
-  var bottomSearch = document.getElementById('bottom-search');
-  if (bottomSearch) {
-    bottomSearch.addEventListener('input', applyPersoneelFilter);
-  }
 
   // ----- Koppel die kampus-keuselys -----
   // As die gebruiker 'n ander kampus kies, laai daardie kampus se paneelbord.
@@ -584,9 +502,20 @@
 
   // Wanneer die bladsy klaar gelaai het, begin alles: laai die keuselyste en die naamlyste.
   document.addEventListener('DOMContentLoaded', function () {
+    maakTabelle();              // bou die twee soekbare tabelle
     loadKampusDropdown();       // vul die kampus-keuselys in die "nuwe klas" venster
     loadPageKampusDropdown();   // vul die keuselys bo-aan die bladsy en laai die paneelbord
-    loadGebruikersLys();        // vul die studente- en personeel-lyste aan die regterkant
+    loadGebruikersLys();        // vul die "Almal op die stelsel" tabel
+
+    // Teken die grafieke oor as die venster verander of die tema wissel.
+    var grootteTyd = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(grootteTyd);
+      grootteTyd = setTimeout(herteken, 150);
+    });
+    new MutationObserver(herteken).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-theme']
+    });
     
     // Initialiseer lokaalgebruik vir die eerste kampus as daar een is
     setTimeout(() => {

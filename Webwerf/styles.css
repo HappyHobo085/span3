@@ -627,16 +627,18 @@ img,svg,video{max-width:100%}
 .verslag-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px 4px 0 0}
 
 .verslag-inhoud{display:flex;flex-direction:column;gap:var(--panel-gap);transition:opacity .2s}
-/* Wye tabelle blaai binne hul kaart; die blad self blaai nooit sywaarts nie */
-#verslag-page,.verslag-inhoud,.verslag-inhoud>*,.verslag-grafieke>*{min-width:0}
-.verslag-inhoud .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .verslag-inhoud.is-besig{opacity:.5}
 .verslag-laai{color:var(--text-2);font-size:13px}
 .verslag-beskrywing{font-size:12.5px;color:var(--text-2);margin:0}
 
-.verslag-grafieke{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--panel-gap)}
-.verslag-grafiek--lyn{grid-column:1/-1}
-.verslag-grafiek h2{margin-bottom:10px}
+/* ─── Gedeelde paneelbord-boublokke (alle blaaie; stats.js) ──────────────── */
+/* Wye tabelle blaai binne hul kaart; die blad self blaai nooit sywaarts nie */
+.page,.page>*,.verslag-inhoud>*,.dash-grafieke>*,.panels>*{min-width:0}
+.stat-grid.dash-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+.dash-grafieke{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--panel-gap)}
+.dash-grafiek h2{margin-bottom:10px}
+.dash-grafiek[hidden]{display:none}
 
 .viz-donut{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
 .viz-donut-svg{display:block;flex-shrink:0}
@@ -651,37 +653,48 @@ img,svg,video{max-width:100%}
 .viz-donut-legend b{color:var(--text-1);font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
 .viz-donut-pct{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums}
 
-.verslag-insigte{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.5;color:var(--text-2)}
+.dash-insigte{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.5;color:var(--text-2)}
 
-.verslag-soek{max-width:320px;margin-bottom:10px}
-.verslag-tabel-houer{
+.dash-tabel-beheer{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.dash-soek{flex:1 1 220px;max-width:320px}
+.dash-filter{flex:0 0 180px;width:180px}
+.dash-tabel-houer{
   max-height:480px;overflow:auto;
   border:1px solid var(--border);border-radius:var(--r-sm);
 }
-.verslag-tabel{width:100%;border-collapse:collapse;font-size:12px}
-.verslag-tabel th{
+.dash-tabel{width:100%;border-collapse:collapse;font-size:12px}
+.dash-tabel th{
   position:sticky;top:0;z-index:1;
   padding:8px 10px;text-align:left;white-space:nowrap;
   background:var(--surface-2);border-bottom:1px solid var(--border);
   font-family:var(--font-mono);font-size:9.5px;font-weight:500;
   text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);
 }
-.verslag-tabel td{padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--divider);color:var(--text-1)}
-.verslag-tabel tbody tr:hover td{background:var(--surface-2)}
-.verslag-tabel .is-getal{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-.verslag-tabel td.is-laag{color:var(--error);font-weight:600}
-.verslag-tabel td.verslag-geen{text-align:center;white-space:normal;color:var(--text-muted)}
-.verslag-lys-voet{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px}
+.dash-tabel td{padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--divider);color:var(--text-1)}
+.dash-tabel tbody tr:hover td{background:var(--surface-2)}
+.dash-tabel .is-getal{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.dash-tabel td.is-laag{color:var(--error);font-weight:600}
+.dash-tabel td.dash-geen{text-align:center;white-space:normal;color:var(--text-muted);padding:16px 10px}
+.dash-tabel--klikbaar tbody tr{cursor:pointer}
+.dash-tabel--klikbaar tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.dash-tabel tbody tr.is-gekies td{background:var(--accent-soft)}
+.dash-tabel tbody tr.is-gekies td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.dash-lys-voet{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px}
+.dash-lys-voet [hidden]{display:none}
+.dash-lys-voet:has(.viz-caption:empty):has(button[hidden]){display:none}
+/* Vul-modus: die tabel vul 'n houer met 'n vaste hoogte en blaai binne-in */
+.dash-tabel-wortel--vul{display:flex;flex-direction:column;height:100%;min-height:0}
+.dash-tabel-wortel--vul .dash-tabel-houer{flex:1 1 auto;min-height:0;max-height:none}
 
 @media (max-width:640px){
   .verslag-filters{width:100%}
   .verslag-filters input[type="date"]{width:100%}
   .aflaai-kieser,#aflaai-knoppie{width:100%}
   .aflaai-menu{left:0;right:0;min-width:0}
-  .verslag-grafieke{grid-template-columns:minmax(0,1fr)}
-  .verslag-inhoud .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-grafieke{grid-template-columns:minmax(0,1fr)}
+  .stat-grid.dash-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
   .verslag-tab{flex:1 1 0;padding:10px 6px}
-  .verslag-soek{max-width:none}
+  .dash-soek,.dash-filter{max-width:none;flex:1 1 100%;width:100%}
 }
 
 .modal-status{
@@ -1065,3 +1078,4 @@ body.personeel-blad .topbar{flex-shrink:0}
     flex:none;max-height:50vh;max-height:50dvh;overflow-y:auto;
   }
 }
+
