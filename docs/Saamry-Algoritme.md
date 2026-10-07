@@ -43,9 +43,9 @@ Ligging word op voorstad-klustervlak vergelyk om by te dra tot die ooreenstemmin
 
 Om die **Tyd** te bereken, moet die algoritme 'n skatting maak van wanneer elke student by die kampus aankom of vertrek.
 * **Empiriese Hek-logs**: Die algoritme ontleed slegs logs van die afgelope 60 dae. Sodra 'n student ten minste 3 logs vir 'n spesifieke weeksdag het, word die ware gemiddelde aankomstyd en die standaardafwyking direk uit die hek-logs bereken.
-* **Koue-Begin (Geen hek-logs)**: Aan die begin van die semester is daar geen hek-logs nie. 'n Gradient Boosting ML-Model is vroeër op 100 selfgerapporteerde opname-antwoorde geëvalueer. Uit hierdie kruisvalidasie het geblyk dat ingewikkelde ML modelle nie 'n aantoonbare voordeel bo 'n eenvoudige globale mediaan inhou nie.
+* **Koue-Begin (Geen hek-logs)**: Aan die begin van die semester is daar geen hek-logs nie. 'n Gradient Boosting ML-Model is vroeër op 100 selfgerapporteerde opname-antwoorde geëvalueer (die steekproef dek begintye van 07:00 tot 12:00 en verteenwoordig nie die middag-begintye in die rooster nie). Uit hierdie kruisvalidasie het geblyk dat ingewikkelde ML modelle nie 'n aantoonbare voordeel bo 'n eenvoudige globale mediaan inhou nie.
 * Die stelsel maak daarom 'n voorlopige skatting deur wiskundig terug te val op die mediaan-reël: **Daar word 'n skatting gemaak dat die student 30 minute voor hul eerste klas aankom, met 'n ingeboude onsekerheid (standaardafwyking $\sigma = 22.2$ minute).** 
-* Vir *vertrektye* by koue-begin studente, word die laaste klas van die dag geïdentifiseer en as skatting word die student 15 minute na daardie klas ontslaan. Hierdie aanname is nie deur die opname getoets nie (aangesien slegs aankomstye gemeet is), maar dit gebruik dieselfde onsekerheid ($\sigma = 22.2$) as die aankoms.
+* Vir *vertrektye* by koue-begin studente, word die laaste klas van die dag geïdentifiseer en as skatting word die student 15 minute na daardie klas ontslaan (die eindtyd van die laaste klas word direk uit die databasis se rooster gelees). Hierdie aanname is nie deur die opname getoets nie (aangesien slegs aankomstye gemeet is), maar dit gebruik dieselfde onsekerheid ($\sigma = 22.2$) as die aankoms.
 
 ---
 
@@ -57,7 +57,7 @@ Tydversoenbaarheid word *per gemeenskaplike dag* bereken:
    gesamentlike_afwyking = (sigma_A + sigma_B) / 2
    effektiewe_verskil = sqrt((minuut_verskil)^2 + (gesamentlike_afwyking)^2)
    ```
-   *Voorbeeld:* As twee nuwe koue-begin studente (albei met $\sigma = 22.2$) op presies dieselfde tyd klas het (0 minuut verskil), is hul gesamentlike afwyking steeds $22.2$. Die effektiewe verskil is $\sqrt{0^2 + 22.2^2} = 22.2$ minute. Weens hierdie ingeboude onsekerheid kry hulle $\sim 75.6\%$ vir daardie dag se aankomspunt en nie 100% nie. Gevolg: pare sonder hek-logs kan nie die hoogste punte behaal nie, wat slegs log-data later kan verbeter.
+   *Voorbeeld:* As twee nuwe koue-begin studente (albei met $\sigma = 22.2$) op presies dieselfde tyd klas het (0 minuut verskil), is hul gesamentlike afwyking steeds $22.2$. Die effektiewe verskil is $\sqrt{0^2 + 22.2^2} = 22.2$ minute. Weens hierdie ingeboude onsekerheid kry hulle $\sim 75.6\%$ vir daardie dag se aankomspunt en nie 100% nie. Gevolg: pare sonder hek-logs kan nie die hoogste punte behaal nie. Hierdie wiskunde, gekombineer met die feit dat roosterklasse uurliks begin, beteken koue-begin tellings groepeer baie duidelik: pare in dieselfde uur kry 'n 75.6% basis, terwyl pare wie se aankoms- of vertrektye met een of meer ure verskil direk na 0% val.
 2. **Telling-verval**:
    - $0 - 10 \text{ min}$: 100% verenigbaar
    - $10 - 30 \text{ min}$: Daal lineêr van 100% af na 60%
