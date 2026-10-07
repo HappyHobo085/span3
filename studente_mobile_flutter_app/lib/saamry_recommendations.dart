@@ -158,7 +158,7 @@ class _SaamryRecommendationPreviewState
             ],
           ),
           Text(
-            'Gebaseer op tyd, ligging, rol en betroubaarheid.',
+            'Pasmaats wat volgens jou Saamry-profiel aanbeveel word.',
             style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
           ),
           if (_profileIncomplete) ...[
@@ -432,10 +432,8 @@ class SaamryRecommendationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = item.factor('tyd_telling');
-    final location = item.factor('ligging_telling');
     final commonDays = item.gemeenskaplikeDae.isEmpty
-        ? 'Geen dae'
+        ? 'Geen gemeenskaplike dae'
         : item.gemeenskaplikeDae.join(', ');
 
     return Container(
@@ -472,14 +470,20 @@ class SaamryRecommendationCard extends StatelessWidget {
                       '${item.saamryRol} · ${item.voorstad}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 10.5),
+                      style: GoogleFonts.inter(
+                        color: kTextMuted,
+                        fontSize: 10.5,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: _qualityColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(12),
@@ -511,246 +515,63 @@ class SaamryRecommendationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              _MiniStat(icon: Icons.schedule, label: 'Tyd ${time.toStringAsFixed(0)}%'),
-              _MiniStat(
-                icon: Icons.location_on,
-                label: 'Ligging ${location.toStringAsFixed(0)}%',
-              ),
-              _MiniStat(icon: Icons.event, label: commonDays),
-            ],
-          ),
-          const SizedBox(height: 10),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Icon(
+                Icons.event_available_rounded,
+                color: kAccent,
+                size: 17,
+              ),
+              const SizedBox(width: 7),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push<void>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SaamryRecommendationDetailPage(
-                          initial: item,
-                          pending: pending,
-                          onFriendRequest: onFriendRequest,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.info_outline, size: 17),
-                  label: const Text('Hoekom?'),
+                child: Text(
+                  'Gemeenskaplike kampusdae: $commonDays',
+                  style: GoogleFonts.inter(
+                    color: kText2,
+                    fontSize: 10.5,
+                    height: 1.35,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: item.isReedsVriend
-                    ? const _FriendStateButton(label: 'Reeds vriende')
-                    : pending
-                        ? const _FriendStateButton(label: 'Versoek gestuur')
-                        : ElevatedButton.icon(
-                            onPressed: onFriendRequest,
-                            icon: const Icon(Icons.person_add, size: 17),
-                            label: const Text('Voeg as vriend'),
-                          ),
-              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class SaamryRecommendationDetailPage extends StatefulWidget {
-  final SaamryRecommendationDto initial;
-  final bool pending;
-  final VoidCallback? onFriendRequest;
-
-  const SaamryRecommendationDetailPage({
-    super.key,
-    required this.initial,
-    required this.pending,
-    this.onFriendRequest,
-  });
-
-  @override
-  State<SaamryRecommendationDetailPage> createState() =>
-      _SaamryRecommendationDetailPageState();
-}
-
-class _SaamryRecommendationDetailPageState
-    extends State<SaamryRecommendationDetailPage> {
-  late SaamryRecommendationDto _item;
-  bool _loading = true;
-  bool _requestSent = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _item = widget.initial;
-    _loadDetail();
-  }
-
-  Future<void> _loadDetail() async {
-    try {
-      final item = await MoonApi.fetchSaamryCompatibility(_item.gebruikerId);
-      if (!mounted) return;
-      setState(() {
-        _item = item;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dayEntries = _item.perDagAfbreking.entries.toList();
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            AppScreenHeader(
-              title: _item.volleNaam,
-              subtitle: 'Hoekom hierdie pasmaat?',
-              showBack: true,
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_loading) const LinearProgressIndicator(),
-                  if (_error != null) ...[
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 10),
-                  ],
-                  GlassCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${_item.totaleTelling.toStringAsFixed(0)}% · ${_item.gehalte}',
-                                style: GoogleFonts.inter(
-                                  color: kAccent,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _item.saamryRol,
-                              style: GoogleFonts.inter(
-                                color: kText2,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _item.aanbevelingTeks,
-                          style: GoogleFonts.inter(
-                            color: kText2,
-                            fontSize: 12,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Beste dag: ${_item.besteDag ?? 'Geen'}',
-                          style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Gemeenskaplike dae: ${_item.gemeenskaplikeDae.join(', ')}',
-                          style: GoogleFonts.inter(color: kTextMuted, fontSize: 10.5),
-                        ),
-                      ],
+          if (item.besteDag != null && item.besteDag!.trim().isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                const Icon(
+                  Icons.star_outline_rounded,
+                  color: kTextMuted,
+                  size: 16,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Beste gemeenskaplike dag: ${item.besteDag}',
+                    style: GoogleFonts.inter(
+                      color: kTextMuted,
+                      fontSize: 10.5,
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  GlassCard(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'TELLING-AFBREKING',
-                          style: GoogleFonts.inter(
-                            color: kTextMuted,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _FactorBar(label: 'Tyd · 40%', value: _item.factor('tyd_telling')),
-                        _FactorBar(label: 'Ligging · 30%', value: _item.factor('ligging_telling')),
-                        _FactorBar(label: 'Rol · 15%', value: _item.factor('rol_telling')),
-                        _FactorBar(
-                          label: 'Betroubaarheid · 15%',
-                          value: _item.factor('betroubaarheid_telling'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (dayEntries.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      'PER DAG',
-                      style: GoogleFonts.inter(
-                        color: kTextMuted,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...dayEntries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _DayBreakdownCard(
-                          day: entry.key,
-                          data: entry.value,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  if (_item.isReedsVriend)
-                    const _FriendStateButton(label: 'Julle is reeds vriende')
-                  else if (widget.pending || _requestSent)
-                    const _FriendStateButton(label: 'Vriendskapversoek is hangend')
-                  else
-                    GradientActionButton(
-                      label: 'Voeg as Vriend',
-                      onTap: () {
-                        if (widget.onFriendRequest == null) return;
-                        setState(() => _requestSent = true);
-                        widget.onFriendRequest!.call();
-                      },
-                      height: 48,
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
-        ),
+          const SizedBox(height: 11),
+          SizedBox(
+            width: double.infinity,
+            child: item.isReedsVriend
+                ? const _FriendStateButton(label: 'Reeds vriende')
+                : pending
+                    ? const _FriendStateButton(label: 'Versoek gestuur')
+                    : ElevatedButton.icon(
+                        onPressed: onFriendRequest,
+                        icon: const Icon(Icons.person_add, size: 17),
+                        label: const Text('Voeg as vriend'),
+                      ),
+          ),
+        ],
       ),
     );
   }
@@ -1020,145 +841,8 @@ class _SaamryProfileSettingsPageState
   }
 }
 
-class _MiniStat extends StatelessWidget {
-  final IconData icon;
-  final String label;
 
-  const _MiniStat({required this.icon, required this.label});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: kTextMuted),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.inter(color: kText2, fontSize: 9.5),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FactorBar extends StatelessWidget {
-  final String label;
-  final double value;
-
-  const _FactorBar({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final safe = value.clamp(0.0, 100.0);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: GoogleFonts.inter(color: kText2, fontSize: 11),
-                ),
-              ),
-              Text(
-                '${safe.toStringAsFixed(0)}%',
-                style: GoogleFonts.inter(
-                  color: kText1,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: LinearProgressIndicator(
-              value: safe / 100.0,
-              minHeight: 7,
-              backgroundColor: Colors.white10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DayBreakdownCard extends StatelessWidget {
-  final String day;
-  final SaamryDayBreakdownDto data;
-
-  const _DayBreakdownCard({required this.day, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  day,
-                  style: GoogleFonts.inter(
-                    color: kText1,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                '${data.telling.toStringAsFixed(0)}%',
-                style: GoogleFonts.inter(
-                  color: kAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'Aankomsverskil: ${data.aankomsVerskilMin ?? '-'} min · Vertrekverskil: ${data.vertrekVerskilMin ?? '-'} min',
-            style: GoogleFonts.inter(color: kText2, fontSize: 10.5),
-          ),
-          if (data.aankomsGeskat != null || data.vertrekGeskat != null) ...[
-            const SizedBox(height: 3),
-            Text(
-              'Kandidaat: ${data.aankomsGeskat ?? '-'} tot ${data.vertrekGeskat ?? '-'}',
-              style: GoogleFonts.inter(color: kTextMuted, fontSize: 10),
-            ),
-          ],
-          if (data.verduideliking.trim().isNotEmpty) ...[
-            const SizedBox(height: 7),
-            Text(
-              data.verduideliking,
-              style: GoogleFonts.inter(
-                color: kTextMuted,
-                fontSize: 9.5,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 class _FriendStateButton extends StatelessWidget {
   final String label;

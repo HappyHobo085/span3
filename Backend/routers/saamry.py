@@ -2194,7 +2194,29 @@ def kry_saamry_voorstelle(
         db.rollback()
         print(f"Waarskuwing: GESIEN recommendation logs kon nie gestoor word nie: {exc}")
 
-    return schemas.APIResponse(sukses=True, data={"voorstelle": voorstelle, "totaal": len(voorstelle)})
+    # Hou die wiskundige afbreking intern. Die mobiele kliënt kry slegs
+    # die finale aanbeveling en praktiese gebruikersinligting.
+    publieke_voorstelle = []
+    for voorstel in voorstelle:
+        publieke_voorstelle.append({
+            "gebruiker_id": voorstel.get("gebruiker_id"),
+            "naam": voorstel.get("naam"),
+            "van": voorstel.get("van"),
+            "foto_url": voorstel.get("foto_url"),
+            "saamry_rol": voorstel.get("saamry_rol"),
+            "voorstad": voorstel.get("voorstad"),
+            "totale_telling": voorstel.get("totale_telling"),
+            "gehalte": voorstel.get("gehalte"),
+            "is_geskik": True,
+            "gemeenskaplike_dae": voorstel.get("gemeenskaplike_dae", []),
+            "beste_dag": voorstel.get("beste_dag"),
+            "is_reeds_vriend": voorstel.get("is_reeds_vriend", False),
+        })
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={"voorstelle": publieke_voorstelle, "totaal": len(publieke_voorstelle)},
+    )
 
 
 @router.get("/versoenbaarheid/{kandidaat_id}")
@@ -2203,7 +2225,7 @@ def kry_kandidaat_versoenbaarheid(
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
-    """Bereken 'n volledige wiskundige en per-dag afbreking vir 'n spesifieke student."""
+    """Gee 'n publieke versoenbaarheidsopsomming vir 'n spesifieke Saamry-kandidaat."""
     _require_saamry_user(db, current_user)
 
     kandidaat = db.query(models.Gebruikers).filter(
@@ -2235,9 +2257,6 @@ def kry_kandidaat_versoenbaarheid(
         "gemeenskaplike_dae": res.gemeenskaplike_dae,
         "beste_dag": res.beste_dag,
         "is_reeds_vriend": is_vriend,
-        "faktore": res.faktore,
-        "per_dag_afbreking": res.per_dag_afbreking,
-        "aanbeveling_teks": res.aanbeveling_teks,
     }
 
     try:

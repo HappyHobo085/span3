@@ -1849,13 +1849,6 @@ class _SaamryTabState extends State<SaamryTab> {
             ],
           ),
           const SizedBox(height: 16),
-          SaamryRecommendationPreview(
-            pendingFriendIds: status.outgoingRequests
-                .map((request) => request.gebruiker.gebruikerId)
-                .toSet(),
-            onFriendChanged: _load,
-          ),
-          const SizedBox(height: 16),
           if (status.groups.isEmpty)
             GlassCard(
               padding: const EdgeInsets.all(18),
@@ -1871,6 +1864,13 @@ class _SaamryTabState extends State<SaamryTab> {
             label: 'Nuwe Groep',
             onTap: _openCreateGroup,
             height: 48,
+          ),
+          const SizedBox(height: 16),
+          SaamryRecommendationPreview(
+            pendingFriendIds: status.outgoingRequests
+                .map((request) => request.gebruiker.gebruikerId)
+                .toSet(),
+            onFriendChanged: _load,
           ),
         ],
       ),
