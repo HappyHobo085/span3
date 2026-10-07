@@ -668,17 +668,25 @@ def lys_rooster_lokaal_koppelings(
     db: Session = Depends(get_db),
     _: bool = Depends(auth.check_admin),
 ):
-    """Unieke Lantiv-lokale met hul gestoorde MOON-klaskamer/NFC-koppeling."""
-    bron_rye = (
-        db.query(models.Klas.KLA_Lokaal, func.count(models.Klas.Klas_ID))
+    """Wys unieke fisiese roosterlokale volgens die werklike Klas.Lokasie_ID.
+
+    Ou Lantiv-name soos ``GH117 A (50)`` en nuwe MOON-name soos ``GH117 A``
+    word as dieselfde bronlokaal gegroepeer. Die direkte Lokasie_ID op Klas is
+    nou die primêre waarheid; Rooster_Lokaal_Koppeling is slegs 'n legacy
+    fallback vir ou data wat nog geen direkte koppeling het nie.
+    """
+    klasse = (
+        db.query(models.Klas)
+        .options(
+            joinedload(models.Klas.lokasie).joinedload(models.Lokasie.kampus),
+            joinedload(models.Klas.lokasie).joinedload(models.Lokasie.nfc_tags),
+        )
         .filter(models.Klas.KLA_Lokaal.isnot(None))
-        .group_by(models.Klas.KLA_Lokaal)
-        .order_by(models.Klas.KLA_Lokaal)
         .all()
     )
 
     mappings = {
-        m.KLA_Lokaal: m
+        _normaliseer_lokaal_naam(m.KLA_Lokaal): m
         for m in (
             db.query(models.Rooster_Lokaal_Koppeling)
             .options(
@@ -691,23 +699,192 @@ def lys_rooster_lokaal_koppelings(
         )
     }
 
+    gegroepeer: dict[str, list[models.Klas]] = {}
+    for klas in klasse:
+        sleutel = _normaliseer_lokaal_naam(klas.KLA_Lokaal)
+        if sleutel:
+            gegroepeer.setdefault(sleutel, []).append(klas)
+
     data = []
-    for bron_lokaal, klas_aantal in bron_rye:
-        mapping = mappings.get(bron_lokaal)
-        lokasie = mapping.lokasie if mapping else None
+    for sleutel in sorted(gegroepeer):
+        groep_klasse = gegroepeer[sleutel]
+        # Verkies die skoon naam sonder die ou kapasiteit-agtervoegsel.
+        skoon_name = [
+            k.KLA_Lokaal for k in groep_klasse
+            if _normaliseer_lokaal_naam(k.KLA_Lokaal) == sleutel
+            and not re.search(r"\s*\([^)]*\)\s*$", k.KLA_Lokaal or "")
+        ]
+        bron_lokaal = skoon_name[0] if skoon_name else re.sub(
+            r"\s*\([^)]*\)\s*$", "", groep_klasse[0].KLA_Lokaal or ""
+        ).strip()
+
+        lokasie_ids = {k.Lokasie_ID for k in groep_klasse if getattr(k, "Lokasie_ID", None)}
+        lokasie = None
+        if len(lokasie_ids) == 1:
+            lokasie_id = next(iter(lokasie_ids))
+            lokasie = next(
+                (k.lokasie for k in groep_klasse if k.Lokasie_ID == lokasie_id and k.lokasie),
+                None,
+            )
+        elif not lokasie_ids:
+            # Legacy fallback vir data wat nog nie deur die MOON importer herstel is nie.
+            mapping = mappings.get(sleutel)
+            lokasie = mapping.lokasie if mapping else None
+
         data.append({
             "KLA_Lokaal": bron_lokaal,
-            "Klas_Aantal": int(klas_aantal or 0),
-            "Gekoppel": bool(mapping and lokasie),
-            "Lokasie_ID": mapping.Lokasie_ID if mapping else None,
+            "Klas_Aantal": len(groep_klasse),
+            "Gekoppel": bool(lokasie),
+            "Lokasie_ID": lokasie.Lokasie_ID if lokasie else None,
             "LOK_Naam": lokasie.LOK_Naam if lokasie else None,
             "Kampus_ID": lokasie.Kampus_ID if lokasie else None,
             "KAM_Naam": lokasie.kampus.KAM_Naam if lokasie and lokasie.kampus else None,
             "NFC_UID": _aktiewe_lokasie_nfc_uid(lokasie),
             "NFC_Gekoppel": bool(lokasie and _aktiewe_lokasie_nfc_uid(lokasie)),
+            "Konflik": len(lokasie_ids) > 1,
         })
 
     return schemas.APIResponse(sukses=True, data=data)
+
+
+class KlasDuplikaatKonsolideerRequest(BaseModel):
+    bevestig: bool = False
+
+
+def _skuif_klas_koppeling(
+    db: Session,
+    model,
+    gebruiker_of_groep_kolom,
+    bron_klas_id: int,
+    teiken_klas_id: int,
+) -> int:
+    """Skuif composite-PK Klas-koppelings sonder om duplicates te skep."""
+    rye = db.query(model).filter(model.Klas_ID == bron_klas_id).all()
+    geskuif = 0
+    for ry in rye:
+        ander_id = getattr(ry, gebruiker_of_groep_kolom)
+        bestaande = db.query(model).filter(
+            model.Klas_ID == teiken_klas_id,
+            getattr(model, gebruiker_of_groep_kolom) == ander_id,
+        ).first()
+        if bestaande:
+            db.delete(ry)
+        else:
+            ry.Klas_ID = teiken_klas_id
+        geskuif += 1
+    return geskuif
+
+
+def _klas_duplikaat_sleutel(klas: models.Klas) -> tuple:
+    return (
+        klas.Module_ID,
+        _normaliseer_lokaal_naam(klas.KLA_Lokaal),
+        (klas.KLA_Dag or "").strip().casefold(),
+        (klas.KLA_Begin_Tyd or "").strip(),
+        (klas.KLA_Eind_Tyd or "").strip(),
+    )
+
+
+def _kies_kanonieke_klas(klasse: list[models.Klas]) -> models.Klas:
+    """Verkies direkte Lokasie_ID, dan 'n skoon MOON-lokaalnaam, dan laagste ID."""
+    def rang(klas: models.Klas):
+        het_lokasie = 1 if getattr(klas, "Lokasie_ID", None) else 0
+        skoon_naam = 0 if re.search(r"\s*\([^)]*\)\s*$", klas.KLA_Lokaal or "") else 1
+        return (het_lokasie, skoon_naam, -int(klas.Klas_ID or 0))
+    return max(klasse, key=rang)
+
+
+@router.post("/klasse/konsolideer-duplikate")
+def konsolideer_klas_duplikate(
+    data: KlasDuplikaatKonsolideerRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(auth.check_admin),
+):
+    """Preview of merge ou Lantiv/MOON duplicate klasse.
+
+    'n Duplicate beteken dieselfde module + genormaliseerde lokaal + dag +
+    begin/eind-tyd. ``bevestig=false`` verander niks en gee slegs 'n preview.
+    Met ``bevestig=true`` word Klas_Groep, Student_Klas en Personeel_Klas
+    veilig na die kanonieke Klas_ID geskuif voordat die duplicate Klas verwyder word.
+    """
+    klasse = db.query(models.Klas).order_by(models.Klas.Klas_ID).all()
+    groepe: dict[tuple, list[models.Klas]] = {}
+    for klas in klasse:
+        sleutel = _klas_duplikaat_sleutel(klas)
+        if sleutel[1]:
+            groepe.setdefault(sleutel, []).append(klas)
+
+    duplikaat_groepe = [g for g in groepe.values() if len(g) > 1]
+    preview = []
+    totaal_verwyder = 0
+    totaal_klas_groep = 0
+    totaal_student_klas = 0
+    totaal_personeel_klas = 0
+
+    try:
+        for duplikate in duplikaat_groepe:
+            kanoniek = _kies_kanonieke_klas(duplikate)
+
+            # Indien net een van die duplicates reeds 'n Lokasie_ID het, dra dit oor.
+            lokasie_ids = {k.Lokasie_ID for k in duplikate if getattr(k, "Lokasie_ID", None)}
+            if len(lokasie_ids) == 1 and not kanoniek.Lokasie_ID:
+                kanoniek.Lokasie_ID = next(iter(lokasie_ids))
+
+            skoon_naam = re.sub(r"\s*\([^)]*\)\s*$", "", kanoniek.KLA_Lokaal or "").strip()
+            if skoon_naam:
+                kanoniek.KLA_Lokaal = skoon_naam
+
+            verwyder_ids = [k.Klas_ID for k in duplikate if k.Klas_ID != kanoniek.Klas_ID]
+            preview.append({
+                "Kanonieke_Klas_ID": kanoniek.Klas_ID,
+                "Module_ID": kanoniek.Module_ID,
+                "KLA_Lokaal": kanoniek.KLA_Lokaal,
+                "KLA_Dag": kanoniek.KLA_Dag,
+                "KLA_Begin_Tyd": kanoniek.KLA_Begin_Tyd,
+                "KLA_Eind_Tyd": kanoniek.KLA_Eind_Tyd,
+                "Lokasie_ID": kanoniek.Lokasie_ID,
+                "Verwyder_Klas_IDs": verwyder_ids,
+            })
+
+            if not data.bevestig:
+                continue
+
+            for oud in duplikate:
+                if oud.Klas_ID == kanoniek.Klas_ID:
+                    continue
+                totaal_klas_groep += _skuif_klas_koppeling(
+                    db, models.Klas_Groep, "Groep_ID", oud.Klas_ID, kanoniek.Klas_ID
+                )
+                totaal_student_klas += _skuif_klas_koppeling(
+                    db, models.Student_Klas, "Gebruiker_ID", oud.Klas_ID, kanoniek.Klas_ID
+                )
+                totaal_personeel_klas += _skuif_klas_koppeling(
+                    db, models.Personeel_Klas, "Gebruiker_ID", oud.Klas_ID, kanoniek.Klas_ID
+                )
+                db.flush()
+                db.delete(oud)
+                totaal_verwyder += 1
+
+        if data.bevestig:
+            db.commit()
+        else:
+            db.rollback()  # Preview mag geen naam/Lokasie verandering behou nie.
+    except Exception:
+        db.rollback()
+        raise
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={
+            "Preview": not data.bevestig,
+            "Duplikaat_Groepe": len(duplikaat_groepe),
+            "Klasse_Saamgevoeg": totaal_verwyder,
+            "Klas_Groep_Koppelings_Verwerk": totaal_klas_groep,
+            "Student_Klas_Koppelings_Verwerk": totaal_student_klas,
+            "Personeel_Klas_Koppelings_Verwerk": totaal_personeel_klas,
+            "Groep_Detail": preview,
+        },
+    )
 
 
 @router.post("/lokaal-koppelings")
@@ -1537,20 +1714,30 @@ async def importeer_klasse(
                 .first()
             )
 
-            # Backwards-compatible fallback: 'n bestaande klas kan nog die
-            # ou Lantiv-lokaalkode hê maar nog nie 'n Lokasie_ID nie.
+            # Backwards-compatible fallback: 'n bestaande klas kan nog 'n
+            # ou Lantiv-naam soos "GH117 A (50)" hê en nog geen Lokasie_ID nie.
+            # Soek dus eers op module/dag/tyd en vergelyk die GENORMALISEERDE
+            # lokaalnaam, sodat die nuwe CSV nie 'n tweede klas skep nie.
             if not klas:
-                klas = (
+                tyd_kandidate = (
                     db.query(models.Klas)
                     .filter(
                         models.Klas.Module_ID == module.Module_ID,
-                        models.Klas.KLA_Lokaal == (ry["lokaal"] or None),
                         models.Klas.KLA_Dag == (ry["dag"] or None),
                         models.Klas.KLA_Begin_Tyd == (ry["from"] or None),
                         models.Klas.KLA_Eind_Tyd == (ry["to"] or None),
                     )
-                    .first()
+                    .all()
                 )
+                verlangde_lokaal = _normaliseer_lokaal_naam(
+                    ry["lokaal"] or ry["lokaal_naam"]
+                )
+                matches = [
+                    kandidaat for kandidaat in tyd_kandidate
+                    if _normaliseer_lokaal_naam(kandidaat.KLA_Lokaal) == verlangde_lokaal
+                ]
+                if len(matches) == 1:
+                    klas = matches[0]
 
             if not klas:
                 klas = models.Klas(
@@ -1565,11 +1752,13 @@ async def importeer_klasse(
                 db.flush()
                 resultaat.klasse_geskep += 1
             else:
-                # Her-invoer herstel ook ou klasse wat nog nie direk gekoppel was nie.
+                # Her-invoer herstel ook ou klasse wat nog nie direk gekoppel was nie
+                # en skoon die ou kapasiteit-agtervoegsel uit KLA_Lokaal op.
                 if klas.Lokasie_ID != lokasie.Lokasie_ID:
                     klas.Lokasie_ID = lokasie.Lokasie_ID
-                if not klas.KLA_Lokaal:
-                    klas.KLA_Lokaal = ry["lokaal"] or ry["lokaal_naam"] or None
+                nuwe_lokaal = ry["lokaal"] or ry["lokaal_naam"] or None
+                if nuwe_lokaal and _normaliseer_lokaal_naam(klas.KLA_Lokaal) == _normaliseer_lokaal_naam(nuwe_lokaal):
+                    klas.KLA_Lokaal = nuwe_lokaal
 
             # Koppel elke groep aan dieselfde klas sonder duplicate Klas_Groep-rye.
             groepe = [g.strip() for g in ry["groep"].replace(";", ",").split(",") if g.strip()]
