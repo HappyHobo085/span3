@@ -10,11 +10,10 @@
   <title>MOON — My Klasse</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261007verslag">
+  <link rel="stylesheet" href="styles.css?v=20261007personeel">
   <script src="theme.js?v=20260819"></script>
 </head>
-<!-- personeel-blad: die bladsy self blaai nie; net die lyste in die panele blaai -->
-<body class="personeel-blad">
+<body>
   <!-- Personeel toegang: slegs Personeel-rol (hek in main.js) -->
   <!-- Gedeelde raamwerk: sybalk + boonste balk -->
   <div id="site-header"></div>
@@ -37,7 +36,7 @@
     </section>
 
     <!-- KPI-teëls: die gekose dag se bywoning -->
-    <div class="stat-grid" aria-label="Bywoning tellings">
+    <div class="stat-grid dash-kpi" aria-label="Bywoning tellings">
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
         <div class="stat-label">Ingeskandeer</div>
@@ -53,50 +52,23 @@
         <div class="stat-label">Totaal studente</div>
         <div class="stat-value" id="dash-total-count">--</div>
       </div>
-      <!-- Bywoning as 'n persentasie-sirkel (stats.js: renderPercentRing) -->
-      <div class="glass-card stat-card viz-ring-card" id="dash-percent-count">Bywoning: --</div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-2)"></span>
+        <div class="stat-label">Bywoning</div>
+        <div class="stat-value" id="dash-percent-count">--</div>
+      </div>
     </div>
 
-    <!-- Twee panele langs mekaar: links die bywoning, regs die kalender en klaslys -->
-    <section class="panels">
-      <!-- Links: bywoning dashboard -->
-      <article class="glass-card panel" aria-label="Bywoning Dashboard">
-        <h2>Klas Bywoning</h2>
-        <div class="dashboard-grid">
-          <!-- Statistieke: bywoning oor die laaste 10 klasdae (stats.js);
-               klik op 'n kolom om daardie dag se bywoning te sien -->
-          <div class="card wide viz-block" id="dash-stats-card">
-            <strong>Bywoning — laaste 10 klasdae</strong>
-            <div id="stat-bywoning-chart" class="viz-chart"></div>
-            <div id="stat-bywoning-avg" class="viz-caption"></div>
-          </div>
-          <!-- Studente per module: elke student in die gekose klas se register
-               met 'n vorderingsbalk van sy/haar bywoning vir hierdie module
-               (laaste klasdae) en die gekose dag se status. Klik op 'n student
-               om sy/haar bywoningstatistieke hieronder te sien. -->
-          <div class="card wide viz-block" id="dash-module-card"
-               style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-            <div class="module-list-kop">
-              <strong id="module-student-titel">Studente — bywoning per module</strong>
-              <span class="viz-caption" id="module-student-caption"></span>
-            </div>
-            <div id="module-student-list" class="admin-list module-student-list"
-                 aria-label="Studente per module met bywoning"></div>
-          </div>
-          <!-- Studentbywoning: verskyn wanneer 'n student gekies word (links of in
-               die klasregister regs); wys bygewoon vs gemis vir hierdie module -->
-          <div class="card wide viz-block" id="dash-student-card" hidden>
-            <strong id="student-stats-titel">Studentbywoning</strong>
-            <div id="stat-student-split" class="viz-chart"></div>
-            <div id="stat-student-caption" class="viz-caption"></div>
-          </div>
-        </div>
+    <!-- Grafieke: die gekose dag, die kalender en die gekose student -->
+    <section class="dash-grafieke" aria-label="Statistieke">
+      <article class="glass-card panel dash-grafiek">
+        <h2>Gekose dag</h2>
+        <div id="stat-dag-donut" class="viz-chart"></div>
+        <p class="viz-caption" id="stat-dag-caption" style="margin-top:10px"></p>
       </article>
-
-      <!-- Regs: kalender + klasregister -->
-      <article class="glass-card panel" aria-label="Kalender en Klasregister">
+      <!-- Kalender: klik op 'n dag om daardie dag se bywoning te sien -->
+      <article class="glass-card panel dash-grafiek" aria-label="Kalender">
         <h2>Kalender</h2>
-        <!-- Kalender: klik op 'n dag om daardie dag se bywoning te sien -->
         <div class="kalender">
           <div class="kalender-header">
             <button class="btn-outline btn-sm" id="kal-prev" type="button" aria-label="Vorige maand">&larr;</button>
@@ -105,16 +77,27 @@
           </div>
           <div class="kalender-grid" id="kal-grid"></div>
         </div>
-
-        <!-- Klasregister: volle klaslys met 'n soekblokkie -->
-        <h2 style="margin-top:16px">Klasregister</h2>
-        <div class="list-search">
-          <input class="glass-input" type="search" id="roster-search"
-                 aria-label="Soek student" placeholder="Soek student...">
-        </div>
-        <div id="roster-list" class="admin-list" aria-label="Klasregister lys"></div>
+      </article>
+      <!-- Studentbywoning: kies 'n student in die klasregister hieronder -->
+      <article class="glass-card panel dash-grafiek" id="dash-student-card">
+        <h2 id="student-stats-titel">Studentbywoning</h2>
+        <div id="stat-student-donut" class="viz-chart"></div>
+        <p class="viz-caption" id="stat-student-caption" style="margin-top:10px"></p>
       </article>
     </section>
+
+    <!-- Bywoning oor die laaste 10 klasdae; klik op 'n kolom om daardie dag te kies -->
+    <article class="glass-card panel dash-grafiek" id="dash-stats-card">
+      <h2>Bywoning — laaste 10 klasdae</h2>
+      <div id="stat-bywoning-chart" class="viz-chart"></div>
+      <p class="viz-caption" id="stat-bywoning-avg" style="margin-top:10px"></p>
+    </article>
+
+    <!-- Klasregister: soekbare tabel met elke student se status en bywoning -->
+    <article class="glass-card panel" aria-label="Klasregister">
+      <h2 id="register-titel">Klasregister <span class="panel-count" id="register-telling"></span></h2>
+      <div id="register-tabel"></div>
+    </article>
   </main>
 
   <!-- Skripte: website_api_calls.js (praat met die bediener; eksplisiet gelaai
@@ -122,7 +105,7 @@
        main.js (aanmelding en toegang) en personeel.js (hierdie bladsy se logika) -->
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
-  <script src="stats.js?v=20260902"></script>
-  <script src="personeel.js?v=20260916live2"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="personeel.js?v=20261007dash"></script>
 </body>
 </html>
