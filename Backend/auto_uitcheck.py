@@ -1,112 +1,126 @@
-"""Outomatiese uitcheck — APScheduler agtergrondtaak."""
+"""Outomatiese kampus-uitcheck — APScheduler agtergrondtaak.
 
-from datetime import datetime
+Skep een outomatiese UIT-log vir 'n nie-koshuisstudent wie se jongste
+kampushek-status steeds IN is wanneer die ingestelde uitcheck-tyd bereik word.
+"""
+
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy.orm import Session, aliased
 
 import database, models
+
+
+_SA_TZ = ZoneInfo("Africa/Johannesburg")
 
 
 def _kry_uitcheck_tydstip(db: Session) -> str:
     """Haal die uitcheck-tydstip uit instellings."""
     instelling = db.query(models.Instelling).filter(
-        models.Instelling.Sleutel == 'auto_uitcheck_tydstip'
+        models.Instelling.Sleutel == "auto_uitcheck_tydstip"
     ).first()
-    return instelling.Waarde if instelling else '22:00'
+    return instelling.Waarde.strip() if instelling and instelling.Waarde else "22:00"
 
 
 def _vind_oop_sessies(db: Session) -> list[dict]:
-    """Vind gebruikers met oop IN-sessies (IN sonder ooreenstemmende UIT).
+    """Vind nie-koshuisstudente met 'n oop kampus-IN-sessie.
 
-    Geoptimaliseer: gebruik NOT EXISTS subquery in plaas van per-gebruiker queries.
+    'n Sessie is oop wanneer daar ná die IN-log geen latere kampus-UIT-log vir
+    dieselfde gebruiker bestaan nie. Slegs lokasies met LOK_Tipe='Kampus' tel,
+    sodat klaskamer-NFC skanderings nooit deur hierdie taak geraak word nie.
+
+    As 'n gebruiker om enige rede meer as een IN sonder 'n latere UIT het,
+    gebruik ons net die jongste IN sodat hoogstens een outo-UIT geskep word.
     """
-    # Vind IN-logte waar daar GEEN volgende UIT-log is nie
-    # Dit is 'n korrekte anti-join patroon wat die N+1 probleem oplos
-    uit_subq = (
-        db.query(models.ToegangsLogs.Log_ID)
+    in_log = aliased(models.ToegangsLogs)
+    uit_log = aliased(models.ToegangsLogs)
+    in_lokasie = aliased(models.Lokasie)
+    uit_lokasie = aliased(models.Lokasie)
+
+    latere_kampus_uit_bestaan = (
+        db.query(uit_log.Log_ID)
+        .join(uit_lokasie, uit_lokasie.Lokasie_ID == uit_log.Lokasie_ID)
         .filter(
-            models.ToegangsLogs.Gebruiker_ID == models.ToegangsLogs.Gebruiker_ID,
-            models.ToegangsLogs.TOE_Rigting == "UIT",
-            models.ToegangsLogs.TOE_Tydstempel > models.ToegangsLogs.TOE_Tydstempel,
+            uit_log.Gebruiker_ID == in_log.Gebruiker_ID,
+            uit_log.TOE_Rigting == "UIT",
+            uit_log.TOE_Tydstempel > in_log.TOE_Tydstempel,
+            uit_lokasie.LOK_Tipe == "Kampus",
         )
-        .correlate(models.ToegangsLogs)
+        .correlate(in_log)
         .exists()
     )
 
     oop_logs = (
-        db.query(models.ToegangsLogs)
+        db.query(in_log)
+        .join(in_lokasie, in_lokasie.Lokasie_ID == in_log.Lokasie_ID)
+        .join(models.Student, models.Student.Gebruiker_ID == in_log.Gebruiker_ID)
         .filter(
-            models.ToegangsLogs.TOE_Rigting == "IN",
-            ~uit_subq,
+            in_log.TOE_Rigting == "IN",
+            in_lokasie.LOK_Tipe == "Kampus",
+            models.Student.STU_Is_Koshuis == False,  # noqa: E712
+            ~latere_kampus_uit_bestaan,
         )
+        .order_by(in_log.TOE_Tydstempel.desc(), in_log.Log_ID.desc())
         .all()
     )
+
+    # Een oop sessie per student: die jongste kampus-IN.
+    jongste_per_gebruiker: dict[int, object] = {}
+    for log in oop_logs:
+        if log.Gebruiker_ID not in jongste_per_gebruiker:
+            jongste_per_gebruiker[log.Gebruiker_ID] = log
 
     return [
         {
-            'Gebruiker_ID': log.Gebruiker_ID,
-            'Lokasie_ID': log.Lokasie_ID,
-            'NFC_Tags_ID': log.NFC_Tags_ID,
-            'IN_Tydstempel': log.TOE_Tydstempel,
+            "Gebruiker_ID": log.Gebruiker_ID,
+            "Lokasie_ID": log.Lokasie_ID,
+            "NFC_Tags_ID": log.NFC_Tags_ID,
+            "IN_Tydstempel": log.TOE_Tydstempel,
         }
-        for log in oop_logs
+        for log in jongste_per_gebruiker.values()
     ]
 
 
-def _is_koshuis_student(db: Session, gebruiker_ids: list[int]) -> set[int]:
-    """Kyk watter gebruikers koshuisstudente is — een query vir almal."""
-    if not gebruiker_ids:
-        return set()
-    rows = (
-        db.query(models.Student.Gebruiker_ID)
-        .filter(
-            models.Student.Gebruiker_ID.in_(gebruiker_ids),
-            models.Student.STU_Is_Koshuis == True,
-        )
-        .all()
-    )
-    return {row.Gebruiker_ID for row in rows}
-
-
 def outo_uitcheck_job():
-    """Hoof-taak: skep OUT-logte vir oop sessies buite koshuis."""
+    """Skep OUT-logte vir oop kampus-sessies van nie-koshuisstudente."""
     db = database.SessionLocal()
     try:
-        tydstip = datetime.now().strftime('%H:%M')
+        nou_sa = datetime.now(_SA_TZ)
+        huidige_tyd = nou_sa.strftime("%H:%M")
+        gestelde_tyd = _kry_uitcheck_tydstip(db)
 
-        gestelde_tydstip = _kry_uitcheck_tydstip(db)
-        if tydstip != gestelde_tydstip:
+        if huidige_tyd != gestelde_tyd:
             return
 
         oop_sessies = _vind_oop_sessies(db)
         if not oop_sessies:
+            print(f"[Auto-Uitcheck] {huidige_tyd} — geen oop kampus-sessies nie")
             return
 
-        # Haal koshuisstudente in een slag op (een query)
-        alle_gebruiker_ids = list({s['Gebruiker_ID'] for s in oop_sessies})
-        koshuis_ids = _is_koshuis_student(db, alle_gebruiker_ids)
-
         aantal_geskep = 0
-        for sessie in oop_sessies:
-            if sessie['Gebruiker_ID'] in koshuis_ids:
-                continue
+        nou_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
+        for sessie in oop_sessies:
             nuwe_log = models.ToegangsLogs(
-                Gebruiker_ID=sessie['Gebruiker_ID'],
-                Lokasie_ID=sessie['Lokasie_ID'],
-                NFC_Tags_ID=sessie['NFC_Tags_ID'],
+                Gebruiker_ID=sessie["Gebruiker_ID"],
+                Lokasie_ID=sessie["Lokasie_ID"],
+                NFC_Tags_ID=sessie["NFC_Tags_ID"],
                 TOE_Rigting="UIT",
                 TOE_Metode="HANDMATIG",
                 TOE_Auto_Uitgecheck=True,
-                TOE_Tydstempel=datetime.utcnow(),
+                TOE_Tydstempel=nou_utc,
             )
             db.add(nuwe_log)
             aantal_geskep += 1
 
-        if aantal_geskep > 0:
+        if aantal_geskep:
             db.commit()
-            print(f"[Auto-Uitcheck] {aantal_geskep} outomatiese UIT-logte geskep")
+            print(
+                f"[Auto-Uitcheck] {aantal_geskep} student(e) om "
+                f"{huidige_tyd} SA-tyd outomaties uitgecheck"
+            )
 
     except Exception as fout:
         db.rollback()
@@ -117,16 +131,18 @@ def outo_uitcheck_job():
 
 def maak_scheduler_aan() -> BackgroundScheduler:
     """Skep en begin die APScheduler met die uitcheck-taak."""
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone=_SA_TZ)
     scheduler.add_job(
         outo_uitcheck_job,
-        'interval',
+        "interval",
         minutes=1,
-        id='auto_uitcheck',
+        id="auto_uitcheck",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
     scheduler.start()
-    print("[Auto-Uitcheck] Scheduler gestart — loop elke minuut")
+    print("[Auto-Uitcheck] Scheduler gestart — loop elke minuut (Africa/Johannesburg)")
     return scheduler
 
 
