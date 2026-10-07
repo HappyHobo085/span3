@@ -687,8 +687,6 @@ class SaamryProfileDto {
   final String voorstad;
   final String? soneKode;
   final int? kampusId;
-  final String? geslag;
-  final String geslagVoorkeur;
   final int maksOmpadMinute;
   final bool isAktiefSaamryer;
 
@@ -698,8 +696,6 @@ class SaamryProfileDto {
     required this.voorstad,
     this.soneKode,
     this.kampusId,
-    this.geslag,
-    required this.geslagVoorkeur,
     required this.maksOmpadMinute,
     required this.isAktiefSaamryer,
   });
@@ -711,8 +707,6 @@ class SaamryProfileDto {
       voorstad: json['voorstad']?.toString() ?? '',
       soneKode: json['sone_kode']?.toString(),
       kampusId: (json['kampus_id'] as num?)?.toInt(),
-      geslag: json['geslag']?.toString(),
-      geslagVoorkeur: json['geslag_voorkeur']?.toString() ?? 'ENIGE',
       maksOmpadMinute: (json['maks_ompad_minute'] as num?)?.toInt() ?? 15,
       isAktiefSaamryer: json['is_aktief_saamryer'] != false,
     );
@@ -3030,7 +3024,6 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     required String rolTipe,
     required String voorstad,
     required int? kampusId,
-    required String geslagVoorkeur,
     required int maksOmpadMinute,
     required bool isAktiefSaamryer,
   }) async {
@@ -3041,7 +3034,6 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
         'rol_tipe': rolTipe,
         'voorstad': voorstad.trim(),
         'kampus_id': kampusId,
-        'geslag_voorkeur': geslagVoorkeur,
         'maks_ompad_minute': maksOmpadMinute,
         'is_aktief_saamryer': isAktiefSaamryer,
       }),

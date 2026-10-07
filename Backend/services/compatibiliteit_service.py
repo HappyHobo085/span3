@@ -31,8 +31,6 @@ class StudentSaamryData:
     naam: str
     van: str
     saamry_rol: str = "BEIDE"  # "BESTUURDER", "PASSASIER", "BEIDE"
-    geslag: Optional[str] = None  # "MANLIK", "VROULIK", "ANDER"
-    geslag_voorkeur: str = "ENIGE"  # "ENIGE", "DIESELFDE"
     voorstad: Optional[str] = None
     kampus_id: Optional[int] = None
     foto_url: Optional[str] = None
@@ -263,26 +261,6 @@ def bereken_rol_telling(rol_a: str, rol_b: str) -> float:
     return 50.0
 
 
-def toets_geslag_versoenbaarheid(
-    student_a: StudentSaamryData,
-    student_b: StudentSaamryData,
-) -> bool:
-    """Verifieer geslagsvoorkeure vir veiligheid en gemoedsrus."""
-    ga = (student_a.geslag or "").strip().upper()
-    gb = (student_b.geslag or "").strip().upper()
-
-    va = (student_a.geslag_voorkeur or "ENIGE").strip().upper()
-    vb = (student_b.geslag_voorkeur or "ENIGE").strip().upper()
-
-    if va == "DIESELFDE":
-        if ga and gb and ga != gb:
-            return False
-
-    if vb == "DIESELFDE":
-        if gb and ga and gb != ga:
-            return False
-
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -321,20 +299,6 @@ def bereken_saamry_versoenbaarheid(
             faktore={"tyd_telling": 0.0, "ligging_telling": 0.0, "rol_telling": 0.0, "betroubaarheid_telling": 0.0},
             per_dag_afbreking={},
             aanbeveling_teks="Studente reis na verskillende kampusse.",
-        )
-
-    # Geslagsvoorkeur
-    if not toets_geslag_versoenbaarheid(student, kandidaat):
-        return VersoenbaarheidResultaat(
-            kandidaat_id=kandidaat.gebruiker_id,
-            totale_telling=0.0,
-            is_geskik=False,
-            gehalte="ONVERSOENBAAR",
-            gemeenskaplike_dae=[],
-            beste_dag=None,
-            faktore={"tyd_telling": 0.0, "ligging_telling": 0.0, "rol_telling": 0.0, "betroubaarheid_telling": 0.0},
-            per_dag_afbreking={},
-            aanbeveling_teks="Voldoen nie aan geslagsvoorkeur nie.",
         )
 
     # Roltelling
@@ -592,16 +556,6 @@ def _na_sa_tyd(ts: datetime) -> datetime:
     return ts.astimezone(SA_TZ)
 
 
-def herlei_geslag_uit_id(id_nommer: Optional[str]) -> Optional[str]:
-    """Herlei geslag uit 'n 13-syfer Suid-Afrikaanse ID-nommer (syfers 7-10)."""
-    if not id_nommer or len(id_nommer.strip()) != 13:
-        return None
-    try:
-        reeks = int(id_nommer.strip()[6:10])
-        return "MANLIK" if reeks >= 5000 else "VROULIK"
-    except Exception:
-        return None
-
 
 def _parse_tyd_na_minute(tyd_str: Optional[str]) -> Optional[int]:
     """Skakel '08:00' of '8:00' om na 480 minute."""
@@ -636,8 +590,6 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
     saamry_rol = profiel.Rol_Tipe if profiel else "BEIDE"
     voorstad = profiel.Voorstad if profiel else None
     kampus_id = profiel.Kampus_ID if profiel else None
-    geslag = profiel.Geslag if (profiel and profiel.Geslag) else herlei_geslag_uit_id(gebruiker.GEB_ID_Nommer)
-    geslag_voorkeur = profiel.Geslag_Voorkeur if profiel else "ENIGE"
 
     # Haal slegs KAMPUSHEK-logs van die afgelope 60 dae op. Koshuis-, klas-
     # en ander lokasie-scans mag nie die pendel-aankomstyd beïnvloed nie.
@@ -779,8 +731,6 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
         naam=gebruiker.GEB_Naam,
         van=gebruiker.GEB_Van,
         saamry_rol=saamry_rol,
-        geslag=geslag,
-        geslag_voorkeur=geslag_voorkeur,
         voorstad=voorstad,
         kampus_id=kampus_id,
         foto_url=gebruiker.GEB_Profiel_Foto,

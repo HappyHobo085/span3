@@ -2064,8 +2064,6 @@ def _saamry_profiel_out_dict(profiel: models.SaamryProfiel) -> dict:
         "voorstad": profiel.Voorstad,
         "sone_kode": profiel.Sone_Kode,
         "kampus_id": profiel.Kampus_ID,
-        "geslag": profiel.Geslag,
-        "geslag_voorkeur": profiel.Geslag_Voorkeur,
         "maks_ompad_minute": profiel.Maks_Ompad_Minute,
         "is_aktief_saamryer": profiel.Is_Aktief_Saamryer,
     }
@@ -2085,13 +2083,9 @@ def kry_saamry_profiel(
     ).first()
 
     if not profiel:
-        from services.compatibiliteit_service import herlei_geslag_uit_id
-        geslag = herlei_geslag_uit_id(current_user.GEB_ID_Nommer)
         profiel = models.SaamryProfiel(
             Gebruiker_ID=current_user.Gebruiker_ID,
             Rol_Tipe="BEIDE",
-            Geslag=geslag,
-            Geslag_Voorkeur="ENIGE",
             Maks_Ompad_Minute=15,
             Is_Aktief_Saamryer=True,
         )
@@ -2139,15 +2133,6 @@ def werk_saamry_profiel_by(
             if not kampus:
                 raise HTTPException(status_code=400, detail="Kampus bestaan nie")
         profiel.Kampus_ID = data["kampus_id"]
-
-    if "geslag" in data and data["geslag"]:
-        profiel.Geslag = data["geslag"].strip().upper()
-
-    if "geslag_voorkeur" in data and data["geslag_voorkeur"]:
-        voorkeur = data["geslag_voorkeur"].strip().upper()
-        if voorkeur not in ("ENIGE", "DIESELFDE"):
-            raise HTTPException(status_code=400, detail="Ongeldige geslag_voorkeur. Kies ENIGE of DIESELFDE.")
-        profiel.Geslag_Voorkeur = voorkeur
 
     if "maks_ompad_minute" in data and data["maks_ompad_minute"] is not None:
         if data["maks_ompad_minute"] < 0 or data["maks_ompad_minute"] > 120:

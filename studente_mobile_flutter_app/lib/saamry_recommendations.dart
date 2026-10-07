@@ -592,7 +592,6 @@ class _SaamryProfileSettingsPageState
   bool _saving = false;
   String? _error;
   String _role = 'BEIDE';
-  String _genderPreference = 'ENIGE';
   int? _campusId;
   int _maxDetour = 15;
   bool _active = true;
@@ -621,7 +620,6 @@ class _SaamryProfileSettingsPageState
       setState(() {
         _suburbController.text = profile.voorstad;
         _role = profile.rolTipe;
-        _genderPreference = profile.geslagVoorkeur;
         _campusId = profile.kampusId;
         _maxDetour = profile.maksOmpadMinute;
         _active = profile.isAktiefSaamryer;
@@ -658,7 +656,6 @@ class _SaamryProfileSettingsPageState
         rolTipe: _role,
         voorstad: suburb,
         kampusId: _campusId,
-        geslagVoorkeur: _genderPreference,
         maksOmpadMinute: _maxDetour,
         isAktiefSaamryer: _active,
       );
@@ -716,7 +713,7 @@ class _SaamryProfileSettingsPageState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Jou rol, voorstad, kampus en geslagsvoorkeur word vir recommendations gebruik. Maksimum ompad word reeds gestoor vir latere roetebeplanning. Jou event se pickup-adres bly apart.',
+                                'Jou rol, voorstad en kampus word vir recommendations gebruik. Maksimum ompad word reeds gestoor vir latere roetebeplanning. Jou event se pickup-adres bly apart.',
                                 style: GoogleFonts.inter(
                                   color: kText2,
                                   fontSize: 11.5,
@@ -770,26 +767,6 @@ class _SaamryProfileSettingsPageState
                                     setState(() => _campusId = value),
                               ),
                               const SizedBox(height: 12),
-                              DropdownButtonFormField<String>(
-                                value: _genderPreference,
-                                dropdownColor: const Color(0xFF111827),
-                                decoration: _decoration('Geslagsvoorkeur'),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'ENIGE',
-                                    child: Text('Enige geslag'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'DIESELFDE',
-                                    child: Text('Dieselfde geslag'),
-                                  ),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() => _genderPreference = value);
-                                  }
-                                },
-                              ),
                               const SizedBox(height: 16),
                               Text(
                                 'Maksimum ompad: $_maxDetour minute',
