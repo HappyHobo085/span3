@@ -1204,3 +1204,20 @@ def run_migrations(engine):
             f"(Saamry default pickup + bevestiging) het misluk: {_migrasie_fout}"
         )
 
+
+    # Migrasie 024: Recommendation interaction logging indexes
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_voorstel_log_pair_tyd
+                ON "SaamryVoorstelLog" ("Gebruiker_ID", "Kandidaat_ID", "Tydstempel")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_voorstel_log_aksie_tyd
+                ON "SaamryVoorstelLog" ("Aksie", "Tydstempel")
+            '''))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 024 "
+            f"(Saamry recommendation logging indexes) het misluk: {_migrasie_fout}"
+        )

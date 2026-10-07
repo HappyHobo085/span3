@@ -474,10 +474,19 @@ def bereken_saamry_versoenbaarheid(
     # Minimum gemiddelde monsters oor die gemeenskaplike dae
     gem_monsters = min(totale_monsters_s, totale_monsters_k) / float(aantal_dae)
 
-    bron_s = next((d.bron for d in skedule_s.values() if d.het_aktiwiteit and d.dag_naam in gemeenskaplike_dae), "LOGS")
-    bron_k = next((d.bron for d in skedule_k.values() if d.het_aktiwiteit and d.dag_naam in gemeenskaplike_dae), "LOGS")
+    # Volgens die tegniese spesifikasie moet betroubaarheid 40% wees sodra
+    # ENIGE gemeenskaplike dag vir ENIGE persoon geskat is. Die vorige kode
+    # het net die eerste gemeenskaplike dag se bron nagegaan.
+    student_het_geskatte_dag = any(
+        skedule_s.get(dag) is not None and skedule_s[dag].bron in _ESTIMATED_BRONNE
+        for dag in gemeenskaplike_dae
+    )
+    kandidaat_het_geskatte_dag = any(
+        skedule_k.get(dag) is not None and skedule_k[dag].bron in _ESTIMATED_BRONNE
+        for dag in gemeenskaplike_dae
+    )
 
-    if bron_s in ["ML_MODEL", "MEDIAAN", "KLASROOSTER"] or bron_k in ["ML_MODEL", "MEDIAAN", "KLASROOSTER"]:
+    if student_het_geskatte_dag or kandidaat_het_geskatte_dag:
         monster_faktor = 0.40
     else:
         if gem_monsters >= 10:
@@ -564,9 +573,23 @@ def bereken_saamry_versoenbaarheid(
 # Databasis Skedule-Aggregator (Stap 4)
 # ---------------------------------------------------------------------------
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import models
+
+SA_TZ = ZoneInfo("Africa/Johannesburg")
+_ESTIMATED_BRONNE = {"ML_MODEL", "MEDIAAN", "KLASROOSTER"}
+
+
+def _na_sa_tyd(ts: datetime) -> datetime:
+    """Interpreteer databasis-tydstempels as UTC en skakel dit na SA plaaslike tyd om."""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    else:
+        ts = ts.astimezone(timezone.utc)
+    return ts.astimezone(SA_TZ)
 
 
 def herlei_geslag_uit_id(id_nommer: Optional[str]) -> Optional[str]:
@@ -616,39 +639,60 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
     geslag = profiel.Geslag if (profiel and profiel.Geslag) else herlei_geslag_uit_id(gebruiker.GEB_ID_Nommer)
     geslag_voorkeur = profiel.Geslag_Voorkeur if profiel else "ENIGE"
 
-    # Haal logs op van die afgelope 60 dae vir hierdie gebruiker
+    # Haal slegs KAMPUSHEK-logs van die afgelope 60 dae op. Koshuis-, klas-
+    # en ander lokasie-scans mag nie die pendel-aankomstyd beïnvloed nie.
     vanaf_datum = datetime.utcnow() - timedelta(days=60)
-    logs = (
+    logs_query = (
         db.query(models.ToegangsLogs)
+        .join(models.Lokasie, models.Lokasie.Lokasie_ID == models.ToegangsLogs.Lokasie_ID)
         .filter(
             models.ToegangsLogs.Gebruiker_ID == gebruiker.Gebruiker_ID,
             models.ToegangsLogs.TOE_Tydstempel >= vanaf_datum,
             models.ToegangsLogs.TOE_Rigting.in_(["IN", "UIT"]),
+            func.lower(func.trim(models.Lokasie.LOK_Tipe)) == "kampus",
         )
-        .all()
     )
+    if kampus_id is not None:
+        logs_query = logs_query.filter(models.Lokasie.Kampus_ID == kampus_id)
+    logs = logs_query.all()
 
     # Groepeer logs per weeksdag (0=Maandag .. 4=Vrydag)
     dag_in_logs: Dict[str, List[int]] = {dag: [] for dag in DAE_VAN_DIE_WEEK}
     dag_uit_logs: Dict[str, List[int]] = {dag: [] for dag in DAE_VAN_DIE_WEEK}
 
     for log in logs:
-        wd = log.TOE_Tydstempel.weekday()
+        plaaslike_tyd = _na_sa_tyd(log.TOE_Tydstempel)
+        wd = plaaslike_tyd.weekday()
         if wd in DAG_INDEKS_NAAM:
             dag_naam = DAG_INDEKS_NAAM[wd]
-            minuut = log.TOE_Tydstempel.hour * 60 + log.TOE_Tydstempel.minute
+            minuut = plaaslike_tyd.hour * 60 + plaaslike_tyd.minute
             if log.TOE_Rigting == "IN":
                 dag_in_logs[dag_naam].append(minuut)
             elif log.TOE_Rigting == "UIT":
                 dag_uit_logs[dag_naam].append(minuut)
 
-    # Haal die student se geregistreerde klasse op
-    klasse = (
+    # Haal beide Student- EN Personeel-roosters op. Saamry is vir albei rolle
+    # beskikbaar; die vorige implementasie het personeelklasse geïgnoreer.
+    klasse_by_id = {}
+    student_klasse = (
         db.query(models.Klas)
         .join(models.Student_Klas, models.Student_Klas.Klas_ID == models.Klas.Klas_ID)
         .filter(models.Student_Klas.Gebruiker_ID == gebruiker.Gebruiker_ID)
         .all()
     )
+    personeel_klasse = (
+        db.query(models.Klas)
+        .join(models.Personeel_Klas, models.Personeel_Klas.Klas_ID == models.Klas.Klas_ID)
+        .filter(models.Personeel_Klas.Gebruiker_ID == gebruiker.Gebruiker_ID)
+        .all()
+    )
+    for klas in student_klasse + personeel_klasse:
+        # Indien die gebruiker 'n spesifieke Saamry-kampus gekies het en die
+        # klas het 'n bekende lokasie op 'n ander kampus, ignoreer daardie klas.
+        if kampus_id is not None and klas.lokasie is not None and klas.lokasie.Kampus_ID != kampus_id:
+            continue
+        klasse_by_id[klas.Klas_ID] = klas
+    klasse = list(klasse_by_id.values())
 
     # Groepeer klastye per dag
     dag_klasse: Dict[str, List[models.Klas]] = {dag: [] for dag in DAE_VAN_DIE_WEEK}
@@ -693,8 +737,7 @@ def bou_student_saamry_data_van_db(db: Session, gebruiker: models.Gebruikers) ->
             laaste_uit = max(geldige_eind) if geldige_eind else (vroegste_in + 360)
             
             kluster = _vind_kluster(voorstad) if voorstad else None
-            # Veronderstel dat is_koshuis beskikbaar is (anders gee ons 0)
-            is_koshuis = 0
+            is_koshuis = 1 if (gebruiker.student is not None and gebruiker.student.STU_Is_Koshuis) else 0
             offset, sigma, bron = voorspel_aankomstyd_offset(vroegste_in, kluster, saamry_rol, is_koshuis)
 
             geskat_in = max(0, vroegste_in - offset)
@@ -752,6 +795,12 @@ def vind_saamry_voorstelle(
     min_telling: float = 50.0,
 ) -> List[dict]:
     """Soek en rangskik versoenbare saamry-kandidate vir die huidige gebruiker."""
+    current_profiel = db.query(models.SaamryProfiel).filter(
+        models.SaamryProfiel.Gebruiker_ID == current_user.Gebruiker_ID
+    ).first()
+    if current_profiel is not None and current_profiel.Is_Aktief_Saamryer is False:
+        return []
+
     student_data = bou_student_saamry_data_van_db(db, current_user)
 
     kandidate = (
@@ -782,6 +831,8 @@ def vind_saamry_voorstelle(
             vriende_ids.add(vriend_id)
 
     for kandidaat in kandidate:
+        if kandidaat.student is None and kandidaat.personeel is None:
+            continue
         kandidaat_data = bou_student_saamry_data_van_db(db, kandidaat)
         res = bereken_saamry_versoenbaarheid(student_data, kandidaat_data)
 
