@@ -757,8 +757,8 @@ class NoodgevalKennisname(Base):
 class SaamryVoorstelLog(Base):
     __tablename__ = 'SaamryVoorstelLog'
     Log_ID = Column(Integer, primary_key=True, index=True)
-    Gebruiker_ID = Column(Integer, ForeignKey('Gebruikers.Gebruiker_ID'), nullable=False)
-    Kandidaat_ID = Column(Integer, ForeignKey('Gebruikers.Gebruiker_ID'), nullable=False)
+    Gebruiker_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
+    Kandidaat_ID = Column(Integer, ForeignKey('gebruikers.Gebruiker_ID'), nullable=False)
     Voorspelde_Telling = Column(Float, nullable=False)
     Aksie = Column(String(50), nullable=False) # bv. GESIEN, GESTUUR
     Tydstempel = Column(DateTime, default=datetime.utcnow)
