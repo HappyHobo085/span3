@@ -279,6 +279,20 @@ class LokasieNFCTagUpdate(BaseModel):
     """Body vir PUT /lokasies/{id}/nfc-tag: die nuwe fisiese tag-UID."""
     NFC_UID: str
 
+# --- Lokaal Gebruik (Opsigter) ---
+class LokaalGebruikGleuf(BaseModel):
+    Vak: str
+    Lokaal: str
+    Dag: str
+    Begin: str
+    Einde: str
+    Inskrywing: int
+    Kapasiteit: Optional[int]
+    Verwagte_Skanderings: int
+    Vulgraad: Optional[float]
+    Bron: str
+    Konflik: bool
+
 # --- Klas Skep (Lokasie + NFC in een stap) ---
 class KlasSkep(BaseModel):
     """Data om 'n nuwe klas (lokasie + NFC vir die saal) in een stap te skep."""

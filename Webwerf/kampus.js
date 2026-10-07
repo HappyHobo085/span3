@@ -469,10 +469,130 @@
     });
   }
 
+  // ----- Lokaalgebruik Voorspelling / Hittekaart -----
+  let huidigeLokaalGebruik = [];
+  
+  async function loadLokaalGebruik(kampusId) {
+    if (!kampusId) return;
+    try {
+      const response = await window.app.api.get(`/kampusse/${kampusId}/lokaalgebruik`);
+      if (response.sukses) {
+        huidigeLokaalGebruik = response.data;
+        renderLokaalGebruik();
+      }
+    } catch (error) {
+      console.error('Fout met die laai van lokaalgebruik:', error);
+    }
+  }
+
+  function getStatusKleur(vulgraad) {
+    if (vulgraad === null) return 'var(--border-dim)';
+    if (vulgraad <= 0.5) return 'var(--success-color, #4CAF50)';
+    if (vulgraad <= 0.8) return 'var(--warning-color, #FFEB3B)';
+    if (vulgraad <= 1.0) return 'var(--primary-color, #FF9800)';
+    return 'var(--danger-color, #F44336)';
+  }
+
+  function renderLokaalGebruik() {
+    const container = document.getElementById('lokaalgebruik-container');
+    const dagSelect = document.getElementById('lokaalgebruik-dag-select');
+    if (!container || !dagSelect) return;
+
+    const gekoseDag = dagSelect.value;
+    const gleuwe = huidigeLokaalGebruik.filter(g => g.Dag === gekoseDag);
+
+    if (gleuwe.length === 0) {
+      container.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted)">Geen voorspellings data vir ${gekoseDag} nie.</p>`;
+      return;
+    }
+
+    // Unieke lokale en unieke ure om die matriks te bou
+    const lokale = [...new Set(gleuwe.map(g => g.Lokaal))].sort();
+    const ure = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]; // Standaard akademiese ure (08:00 tot 17:00)
+
+    let html = `<table class="admin-table" style="width: 100%; text-align: center; border-collapse: collapse; margin-top: 15px;">`;
+    
+    // Opskrifte
+    html += `<thead><tr><th style="text-align:left; border-bottom: 2px solid var(--border-dim);">Lokaal</th>`;
+    ure.forEach(u => {
+      html += `<th style="border-bottom: 2px solid var(--border-dim); width: 8%;">${u.toString().padStart(2, '0')}:00</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    // Rye vir elke lokaal
+    lokale.forEach(lokaal => {
+      html += `<tr><td style="text-align:left; font-weight: bold; border-bottom: 1px solid var(--border-dim); padding: 8px;">${lokaal}</td>`;
+      ure.forEach(uur => {
+        // Soek 'n gleuf wat oorvleuel met hierdie uur
+        const match = gleuwe.find(g => {
+          if (g.Lokaal !== lokaal) return false;
+          const beginUur = parseInt(g.Begin.split(':')[0], 10);
+          const eindeUur = parseInt(g.Einde.split(':')[0], 10);
+          return uur >= beginUur && uur < eindeUur;
+        });
+
+        if (match) {
+          const vulTeks = match.Vulgraad !== null ? Math.round(match.Vulgraad * 100) + '%' : 'Onbekend';
+          const agtergrond = getStatusKleur(match.Vulgraad);
+          const grens = match.Konflik ? '2px solid red' : '1px solid var(--border-dim)';
+          const flits = match.Konflik || (match.Vulgraad > 1.0) ? 'animation: pulse 2s infinite;' : '';
+          
+          html += `
+            <td style="border: ${grens}; background: ${agtergrond}; color: #000; padding: 4px; position: relative; ${flits}" title="Vak: ${match.Vak}&#10;Tyd: ${match.Begin} - ${match.Einde}&#10;Inskrywing: ${match.Inskrywing}&#10;Voorspel: ${match.Verwagte_Skanderings}&#10;Kapasiteit: ${match.Kapasiteit}&#10;Bron: ${match.Bron}">
+              <div style="font-size: 0.75em; font-weight:bold;">${match.Vak}</div>
+              <div style="font-size: 0.85em;">${vulTeks}</div>
+              ${match.Konflik ? '<span style="color:red;font-weight:900;" title="Bespreekings konflik!">&#9888;</span>' : ''}
+            </td>
+          `;
+        } else {
+          html += `<td style="border-bottom: 1px solid var(--border-dim); border-right: 1px solid var(--border-dim);">&nbsp;</td>`;
+        }
+      });
+      html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    
+    // Voeg effense pulse animasie by CSS as dit nie daar is nie
+    html += `
+      <style>
+        @keyframes pulse {
+          0% { box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0.7); }
+          50% { box-shadow: inset 0 0 5px 2px rgba(255, 0, 0, 0.7); }
+          100% { box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0.7); }
+        }
+      </style>
+    `;
+
+    container.innerHTML = html;
+  }
+
+  // Voeg 'n event listener by die dag seleksie sodat dit onmiddellik herteken as mens verander
+  const lokaalDagSelect = document.getElementById('lokaalgebruik-dag-select');
+  if (lokaalDagSelect) {
+    lokaalDagSelect.addEventListener('change', renderLokaalGebruik);
+  }
+
+  // Koppel loadLokaalGebruik in die dataSelect ('Kies Kampus' dropdown) veranderingslus
+  if (dataSelect) {
+    dataSelect.addEventListener('change', function () {
+      const geselekteerdeKampus = this.value;
+      if (geselekteerdeKampus) {
+        loadLokaalGebruik(geselekteerdeKampus);
+      }
+    });
+  }
+
   // Wanneer die bladsy klaar gelaai het, begin alles: laai die keuselyste en die naamlyste.
   document.addEventListener('DOMContentLoaded', function () {
     loadKampusDropdown();       // vul die kampus-keuselys in die "nuwe klas" venster
     loadPageKampusDropdown();   // vul die keuselys bo-aan die bladsy en laai die paneelbord
     loadGebruikersLys();        // vul die studente- en personeel-lyste aan die regterkant
+    
+    // Initialiseer lokaalgebruik vir die eerste kampus as daar een is
+    setTimeout(() => {
+      if (dataSelect && dataSelect.value) {
+        loadLokaalGebruik(dataSelect.value);
+      }
+    }, 1000);
   });
 })();

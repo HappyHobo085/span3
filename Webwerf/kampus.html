@@ -104,6 +104,30 @@
         </div>
       </div>
     </section>
+
+    <!-- Lokaalgebruik Voorspelling / Hittekaart -->
+    <section class="panels" style="margin-top:20px;">
+      <article class="glass-card panel" aria-label="Lokaalgebruik" style="flex: 1 1 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2>Lokaalgebruik Voorspelling (Kapasiteit & Vulgraad)</h2>
+          <div style="display: flex; gap: 10px;">
+            <select class="glass-select" id="lokaalgebruik-dag-select">
+              <option value="Monday">Maandag</option>
+              <option value="Tuesday">Dinsdag</option>
+              <option value="Wednesday">Woensdag</option>
+              <option value="Thursday">Donderdag</option>
+              <option value="Friday">Vrydag</option>
+            </select>
+          </div>
+        </div>
+        <div style="color: var(--viz-dim); font-size: 0.85em; margin-bottom: 10px;">
+          <em>Nota: Slegs sigbaar vir geselekteerde kampus. Gebruik moontlik sintetiese data-voorspellings indien bron aangedui as SINTETIES/ML.</em>
+        </div>
+        <div id="lokaalgebruik-container" style="overflow-x: auto;">
+          <!-- Heatmap word hier gelaai via kampus.js -->
+        </div>
+      </article>
+    </section>
   </main>
 
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
