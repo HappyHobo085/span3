@@ -142,7 +142,10 @@ def maak_scheduler_aan() -> BackgroundScheduler:
         max_instances=1,
     )
     scheduler.start()
-    print("[Auto-Uitcheck] Scheduler gestart — loop elke minuut (Africa/Johannesburg)")
+    print(
+    "[Auto-Uitcheck] Scheduler gestart — loop elke minuut (Africa/Johannesburg)",
+    flush=True,
+    )
     return scheduler
 
 
