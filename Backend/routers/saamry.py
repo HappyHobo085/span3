@@ -2051,6 +2051,27 @@ def confirm_group_at_gate(
 # Saamry Profiel & Versoenbaarheidsalgoritme (Saamry-Algo)
 # ---------------------------------------------------------------------------
 
+
+def _saamry_profiel_out_dict(profiel: models.SaamryProfiel) -> dict:
+    """Serialiseer SaamryProfiel na die lowercase API-kontrak.
+
+    Die SQLAlchemy model gebruik legacy Title_Case kolomname, terwyl die
+    Pydantic/Flutter API lowercase snake_case verwag.
+    """
+    return {
+        "gebruiker_id": profiel.Gebruiker_ID,
+        "rol_tipe": profiel.Rol_Tipe,
+        "voorstad": profiel.Voorstad,
+        "sone_kode": profiel.Sone_Kode,
+        "kampus_id": profiel.Kampus_ID,
+        "geslag": profiel.Geslag,
+        "geslag_voorkeur": profiel.Geslag_Voorkeur,
+        "maks_ompad_minute": profiel.Maks_Ompad_Minute,
+        "is_aktief_saamryer": profiel.Is_Aktief_Saamryer,
+    }
+
+
+
 @router.get("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
 def kry_saamry_profiel(
     db: Session = Depends(database.get_db),
@@ -2078,7 +2099,7 @@ def kry_saamry_profiel(
         db.commit()
         db.refresh(profiel)
 
-    return schemas.APIResponse(sukses=True, data=profiel)
+    return schemas.APIResponse(sukses=True, data=_saamry_profiel_out_dict(profiel))
 
 
 @router.put("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
@@ -2140,7 +2161,7 @@ def werk_saamry_profiel_by(
     db.commit()
     db.refresh(profiel)
 
-    return schemas.APIResponse(sukses=True, data=profiel)
+    return schemas.APIResponse(sukses=True, data=_saamry_profiel_out_dict(profiel))
 
 
 @router.get("/voorstelle")

@@ -469,7 +469,7 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
         _saving = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gewone pickup-adres is gestoor')),
+        SnackBar(content: Text('Gewone pickup-adres is gestoor')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -490,7 +490,7 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppScreenHeader(
+            AppScreenHeader(
               title: 'My Pickup-adres',
               subtitle: 'Jou gewone Saamry optelpunt',
               showBack: true,
@@ -502,7 +502,7 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
                   GlassCard(
                     padding: const EdgeInsets.all(16),
                     child: _loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? Center(child: CircularProgressIndicator())
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

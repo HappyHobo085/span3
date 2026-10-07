@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'saamry_pickup_map.dart';
+import 'saamry_recommendations.dart';
 
 
 ThemeData _moonPickerTheme(BuildContext context) {
@@ -761,7 +762,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
   Future<void> _openDefaultPickup() async {
     await Navigator.push<void>(
       context,
-      MaterialPageRoute(builder: (_) => const SaamryDefaultPickupPage()),
+      MaterialPageRoute(builder: (_) => SaamryDefaultPickupPage()),
     );
   }
 
@@ -1558,7 +1559,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
               IconButton(
                 tooltip: 'My pickup-adres',
                 onPressed: _openDefaultPickup,
-                icon: const Icon(Icons.location_on_rounded, color: kAccent),
+                icon: Icon(Icons.location_on, color: kAccent),
               ),
               Stack(
                 clipBehavior: Clip.none,
@@ -1581,6 +1582,13 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                 icon: const Icon(Icons.refresh_rounded, color: kAccent),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          SaamryRecommendationPreview(
+            pendingFriendIds: status.outgoingRequests
+                .map((request) => request.gebruiker.gebruikerId)
+                .toSet(),
+            onFriendChanged: _load,
           ),
           const SizedBox(height: 16),
           if (status.groups.isEmpty)

@@ -679,6 +679,161 @@ class SaamryStatusDto {
   }
 }
 
+
+
+class SaamryProfileDto {
+  final int gebruikerId;
+  final String rolTipe;
+  final String voorstad;
+  final String? soneKode;
+  final int? kampusId;
+  final String? geslag;
+  final String geslagVoorkeur;
+  final int maksOmpadMinute;
+  final bool isAktiefSaamryer;
+
+  SaamryProfileDto({
+    required this.gebruikerId,
+    required this.rolTipe,
+    required this.voorstad,
+    this.soneKode,
+    this.kampusId,
+    this.geslag,
+    required this.geslagVoorkeur,
+    required this.maksOmpadMinute,
+    required this.isAktiefSaamryer,
+  });
+
+  factory SaamryProfileDto.fromJson(Map<String, dynamic> json) {
+    return SaamryProfileDto(
+      gebruikerId: (json['gebruiker_id'] as num?)?.toInt() ?? 0,
+      rolTipe: json['rol_tipe']?.toString() ?? 'BEIDE',
+      voorstad: json['voorstad']?.toString() ?? '',
+      soneKode: json['sone_kode']?.toString(),
+      kampusId: (json['kampus_id'] as num?)?.toInt(),
+      geslag: json['geslag']?.toString(),
+      geslagVoorkeur: json['geslag_voorkeur']?.toString() ?? 'ENIGE',
+      maksOmpadMinute: (json['maks_ompad_minute'] as num?)?.toInt() ?? 15,
+      isAktiefSaamryer: json['is_aktief_saamryer'] != false,
+    );
+  }
+}
+
+class SaamryDayBreakdownDto {
+  final int? aankomsVerskilMin;
+  final int? vertrekVerskilMin;
+  final double telling;
+  final String? aankomsGeskat;
+  final String? vertrekGeskat;
+  final double gesamentlikeVariansie;
+  final String verduideliking;
+
+  SaamryDayBreakdownDto({
+    this.aankomsVerskilMin,
+    this.vertrekVerskilMin,
+    required this.telling,
+    this.aankomsGeskat,
+    this.vertrekGeskat,
+    required this.gesamentlikeVariansie,
+    required this.verduideliking,
+  });
+
+  factory SaamryDayBreakdownDto.fromJson(Map<String, dynamic> json) {
+    return SaamryDayBreakdownDto(
+      aankomsVerskilMin: (json['aankoms_verskil_min'] as num?)?.toInt(),
+      vertrekVerskilMin: (json['vertrek_verskil_min'] as num?)?.toInt(),
+      telling: (json['telling'] as num?)?.toDouble() ?? 0.0,
+      aankomsGeskat: json['aankoms_geskat']?.toString(),
+      vertrekGeskat: json['vertrek_geskat']?.toString(),
+      gesamentlikeVariansie:
+          (json['gesamentlike_variansie'] as num?)?.toDouble() ?? 0.0,
+      verduideliking: json['verduideliking']?.toString() ?? '',
+    );
+  }
+}
+
+class SaamryRecommendationDto {
+  final int gebruikerId;
+  final String naam;
+  final String van;
+  final String? fotoUrl;
+  final String saamryRol;
+  final String voorstad;
+  final double totaleTelling;
+  final String gehalte;
+  final bool isGeskik;
+  final List<String> gemeenskaplikeDae;
+  final String? besteDag;
+  final bool isReedsVriend;
+  final Map<String, double> faktore;
+  final Map<String, SaamryDayBreakdownDto> perDagAfbreking;
+  final String aanbevelingTeks;
+
+  SaamryRecommendationDto({
+    required this.gebruikerId,
+    required this.naam,
+    required this.van,
+    this.fotoUrl,
+    required this.saamryRol,
+    required this.voorstad,
+    required this.totaleTelling,
+    required this.gehalte,
+    required this.isGeskik,
+    required this.gemeenskaplikeDae,
+    this.besteDag,
+    required this.isReedsVriend,
+    required this.faktore,
+    required this.perDagAfbreking,
+    required this.aanbevelingTeks,
+  });
+
+  String get volleNaam => '$naam $van'.trim();
+
+  double factor(String key) => faktore[key] ?? 0.0;
+
+  factory SaamryRecommendationDto.fromJson(Map<String, dynamic> json) {
+    final rawFactors = json['faktore'] is Map
+        ? Map<String, dynamic>.from(json['faktore'] as Map)
+        : <String, dynamic>{};
+    final factors = <String, double>{};
+    rawFactors.forEach((key, value) {
+      if (value is num) factors[key] = value.toDouble();
+    });
+
+    final rawDays = json['per_dag_afbreking'] is Map
+        ? Map<String, dynamic>.from(json['per_dag_afbreking'] as Map)
+        : <String, dynamic>{};
+    final days = <String, SaamryDayBreakdownDto>{};
+    rawDays.forEach((key, value) {
+      if (value is Map) {
+        days[key] = SaamryDayBreakdownDto.fromJson(
+          Map<String, dynamic>.from(value),
+        );
+      }
+    });
+
+    return SaamryRecommendationDto(
+      gebruikerId: (json['gebruiker_id'] as num?)?.toInt() ?? 0,
+      naam: json['naam']?.toString() ?? '',
+      van: json['van']?.toString() ?? '',
+      fotoUrl: json['foto_url']?.toString(),
+      saamryRol: json['saamry_rol']?.toString() ?? 'BEIDE',
+      voorstad: json['voorstad']?.toString() ?? 'Onbekend',
+      totaleTelling: (json['totale_telling'] as num?)?.toDouble() ?? 0.0,
+      gehalte: json['gehalte']?.toString() ?? 'ONBEKEND',
+      isGeskik: json['is_geskik'] == null ? true : json['is_geskik'] == true,
+      gemeenskaplikeDae: ((json['gemeenskaplike_dae'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      besteDag: json['beste_dag']?.toString(),
+      isReedsVriend: json['is_reeds_vriend'] == true,
+      faktore: factors,
+      perDagAfbreking: days,
+      aanbevelingTeks: json['aanbeveling_teks']?.toString() ?? '',
+    );
+  }
+}
+
 class SaamryMessageDto {
   final int boodskapId;
   final int stuurderId;
@@ -2857,6 +3012,81 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
     final data = _decodeSaamryResponse(response);
     return SaamryStatusDto.fromJson(Map<String, dynamic>.from(data as Map));
   }
+
+
+
+  static Future<SaamryProfileDto> fetchSaamryProfile() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/saamry/profiel'),
+      headers: _saamryHeaders(),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryProfileDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<SaamryProfileDto> updateSaamryProfile({
+    required String rolTipe,
+    required String voorstad,
+    required int? kampusId,
+    required String geslagVoorkeur,
+    required int maksOmpadMinute,
+    required bool isAktiefSaamryer,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/saamry/profiel'),
+      headers: _saamryHeaders(jsonBody: true),
+      body: jsonEncode({
+        'rol_tipe': rolTipe,
+        'voorstad': voorstad.trim(),
+        'kampus_id': kampusId,
+        'geslag_voorkeur': geslagVoorkeur,
+        'maks_ompad_minute': maksOmpadMinute,
+        'is_aktief_saamryer': isAktiefSaamryer,
+      }),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryProfileDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
+  static Future<List<SaamryRecommendationDto>> fetchSaamryRecommendations({
+    int limiet = 10,
+    double minTelling = 50.0,
+  }) async {
+    final uri = Uri.parse('$baseUrl/saamry/voorstelle').replace(
+      queryParameters: {
+        'limiet': limiet.toString(),
+        'min_telling': minTelling.toStringAsFixed(1),
+      },
+    );
+    final response = await http.get(uri, headers: _saamryHeaders());
+    final data = _decodeSaamryResponse(response);
+    final map = Map<String, dynamic>.from(data as Map);
+    return ((map['voorstelle'] as List?) ?? const [])
+        .map(
+          (e) => SaamryRecommendationDto.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
+  }
+
+  static Future<SaamryRecommendationDto> fetchSaamryCompatibility(
+    int kandidaatId,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/saamry/versoenbaarheid/$kandidaatId'),
+      headers: _saamryHeaders(),
+    );
+    final data = _decodeSaamryResponse(response);
+    return SaamryRecommendationDto.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
+  }
+
 
   static Future<List<SaamryUserDto>> searchSaamryUsers(String query) async {
     final clean = query.trim();
