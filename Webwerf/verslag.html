@@ -1,0 +1,94 @@
+<!-- verslag.html — Die Verslag-bladsy. Wys 'n oorsig van die data wat uitgevoer gaan word (grafieke, sirkeldiagramme en lyste) en laat die gebruiker die verslag aflaai as Excel, PDF, Word of teks. -->
+<!DOCTYPE html>
+<html lang="af">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOON — Verslag</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20261007verslag">
+  <script src="theme.js?v=20260819"></script>
+</head>
+<body>
+  <!-- Gedeelde raamwerk: sybalk + boonste balk -->
+  <div id="site-header"></div>
+
+  <main class="page" id="verslag-page">
+    <!-- Boonste beheer: tydperk links, aflaai-knoppie regs-bo -->
+    <section class="top-controls space-between verslag-beheer" aria-label="Verslag-opsies">
+      <div class="verslag-filters">
+        <div class="control-group">
+          <label class="field-label" for="verslag-van">Van</label>
+          <input class="glass-input" type="date" id="verslag-van">
+        </div>
+        <div class="control-group">
+          <label class="field-label" for="verslag-tot">Tot</label>
+          <input class="glass-input" type="date" id="verslag-tot">
+        </div>
+        <div class="control-group" id="verslag-kampus-veld" hidden>
+          <label class="field-label" for="verslag-kampus">Kampus</label>
+          <select class="glass-select" id="verslag-kampus" style="width:200px">
+            <option value="">Alle kampusse</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <span class="field-label" id="verslag-vinnig-etiket">Vinnige keuse</span>
+          <div class="verslag-voorafstellings" role="group" aria-labelledby="verslag-vinnig-etiket">
+            <button type="button" class="btn-outline" data-dae="0">Vandag</button>
+            <button type="button" class="btn-outline" data-dae="7">7 dae</button>
+            <button type="button" class="btn-outline" data-dae="30">30 dae</button>
+            <button type="button" class="btn-outline" data-dae="maand">Hierdie maand</button>
+            <button type="button" class="btn-outline" data-dae="90">90 dae</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aflaai: kies die lêertipe in die keuselys -->
+      <div class="aflaai-kieser" id="aflaai-kieser">
+        <button type="button" class="btn-primary" id="aflaai-knoppie"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="aflaai-menu">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/>
+          </svg>
+          <span>Laai verslag af</span>
+          <svg viewBox="0 0 12 12" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M6 8L1 3h10z"/></svg>
+        </button>
+        <div class="aflaai-menu" id="aflaai-menu" role="menu" aria-label="Kies lêertipe" hidden>
+          <button type="button" role="menuitem" data-formaat="xlsx">
+            <span class="aflaai-tipe">XLSX</span>
+            <span class="aflaai-teks"><b>Excel</b><span id="aflaai-excel-detail">Een tab per afdeling</span></span>
+          </button>
+          <button type="button" role="menuitem" data-formaat="pdf">
+            <span class="aflaai-tipe">PDF</span>
+            <span class="aflaai-teks"><b>PDF</b><span>Met grafieke, gereed om te druk</span></span>
+          </button>
+          <button type="button" role="menuitem" data-formaat="docx">
+            <span class="aflaai-tipe">DOCX</span>
+            <span class="aflaai-teks"><b>Word</b><span>Wysigbare dokument met tabelle</span></span>
+          </button>
+          <button type="button" role="menuitem" data-formaat="txt">
+            <span class="aflaai-tipe">TXT</span>
+            <span class="aflaai-teks"><b>Teks</b><span>Gewone teks, enige toestel</span></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <p class="verslag-omvang" id="verslag-omvang" aria-live="polite"></p>
+    <div class="modal-status" id="verslag-status" role="status"></div>
+
+    <!-- Afdelings (Kampus / Koshuis / Events, of Klas) — dieselfde as die Excel-tabs -->
+    <div class="verslag-tabs" id="verslag-tabs" role="tablist" aria-label="Verslag-afdelings"></div>
+    <div id="verslag-inhoud" class="verslag-inhoud">
+      <div class="glass-card panel verslag-laai">Verslag word gelaai…</div>
+    </div>
+  </main>
+
+  <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
+  <script src="website_api_calls.js?v=20261007verslag"></script>
+  <script src="main.js?v=20261007verslag"></script>
+  <script src="stats.js?v=20261007verslag"></script>
+  <script src="verslag.js?v=20261007verslag"></script>
+</body>
+</html>

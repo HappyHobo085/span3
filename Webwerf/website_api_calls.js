@@ -516,15 +516,31 @@
     },
 
     /**
-     * GET /verslae/bywoning/export?van=&tot=&kampus_id=
-     * Excel-bywoningsverslag (Admin, Kampus_Opsigter, Personeel).
+     * GET /verslae/bywoning/oorsig?van=&tot=&kampus_id=
+     * Die verslag se data (afdelings met kernsyfers, grafieke en tabelle)
+     * vir die Verslag-blad. Gee { ok, status, body } terug.
+     */
+    fetchVerslagOorsig: async function (van, tot, kampusId) {
+      const params = new URLSearchParams();
+      if (van) params.set('van', van);
+      if (tot) params.set('tot', tot);
+      if (kampusId) params.set('kampus_id', kampusId);
+      const r = await apiRequest('/verslae/bywoning/oorsig?' + params.toString(), { method: 'GET' });
+      return { ok: r.ok, status: r.status, body: r.body };
+    },
+
+    /**
+     * GET /verslae/bywoning/export?van=&tot=&kampus_id=&formaat=
+     * Bywoningsverslag as lêer (Admin, Kampus_Opsigter, Personeel).
+     * formaat: 'xlsx' (verstek), 'pdf', 'docx' of 'txt'.
      * Gee { ok, status, blob, leernaam, fout } terug.
      */
-    exportBywoningVerslag: async function (van, tot, kampusId) {
+    exportBywoningVerslag: async function (van, tot, kampusId, formaat) {
       const url = new URL(API_BASE_URL + '/verslae/bywoning/export');
       if (van) url.searchParams.set('van', van);
       if (tot) url.searchParams.set('tot', tot);
       if (kampusId) url.searchParams.set('kampus_id', kampusId);
+      url.searchParams.set('formaat', formaat || 'xlsx');
 
       const token = localStorage.getItem('access_token');
       const response = await fetch(url.toString(), {
@@ -548,7 +564,7 @@
         ok: true,
         status: response.status,
         blob: await response.blob(),
-        leernaam: match ? match[1] : 'moon_bywoning.xlsx',
+        leernaam: match ? match[1] : 'moon_bywoning.' + (formaat || 'xlsx'),
         fout: null,
       };
     },
