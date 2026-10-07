@@ -1204,21 +1204,42 @@ def run_migrations(engine):
             f"(Saamry default pickup + bevestiging) het misluk: {_migrasie_fout}"
         )
 
-    # Migrasie 024: LOK_Kapasiteit byvoeg
+
+    # Migrasie 024: Recommendation interaction logging indexes
     try:
         with engine.begin() as _conn:
-            _conn.execute(text('ALTER TABLE lokasie ADD COLUMN IF NOT EXISTS "LOK_Kapasiteit" INT NULL'))
             _conn.execute(text('''
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_lokasie_kapasiteit'
-                    ) THEN
-                        ALTER TABLE lokasie
-                        ADD CONSTRAINT ck_lokasie_kapasiteit CHECK ("LOK_Kapasiteit" > 0);
-                    END IF;
-                END $$;
+                CREATE INDEX IF NOT EXISTS ix_saamry_voorstel_log_pair_tyd
+                ON "SaamryVoorstelLog" ("Gebruiker_ID", "Kandidaat_ID", "Tydstempel")
+            '''))
+            _conn.execute(text('''
+                CREATE INDEX IF NOT EXISTS ix_saamry_voorstel_log_aksie_tyd
+                ON "SaamryVoorstelLog" ("Aksie", "Tydstempel")
             '''))
     except Exception as _migrasie_fout:
-        print(f"Waarskuwing: migrasie 024 (LOK_Kapasiteit) het misluk: {_migrasie_fout}")
+        print(
+            "Waarskuwing: migrasie 024 "
+            f"(Saamry recommendation logging indexes) het misluk: {_migrasie_fout}"
+        )
 
+    # Migrasie 025: Verwyder geslag uit Saamry recommendation-profiel
+    # Recommendation matching gebruik nou net kampus, tyd, ligging, rol en betroubaarheid.
+    try:
+        with engine.begin() as _conn:
+            _conn.execute(text("""
+                ALTER TABLE saamry_profiel
+                DROP CONSTRAINT IF EXISTS ck_saamry_profiel_geslag_voorkeur
+            """))
+            _conn.execute(text("""
+                ALTER TABLE saamry_profiel
+                DROP COLUMN IF EXISTS "Geslag"
+            """))
+            _conn.execute(text("""
+                ALTER TABLE saamry_profiel
+                DROP COLUMN IF EXISTS "Geslag_Voorkeur"
+            """))
+    except Exception as _migrasie_fout:
+        print(
+            "Waarskuwing: migrasie 025 "
+            f"(verwyder Saamry geslagvelde) het misluk: {_migrasie_fout}"
+        )

@@ -25,15 +25,15 @@ def _voorspel_met_kas(vroegste_klas_minuut: int, kluster: Optional[str], rol: st
     if not _model_loaded or _model is None:
         # Dit veronderstel _laai_model is reeds tevore geroep en het geslaag as ons hier kom
         # maar just in case
-        return (15, 10.0, "KLASROOSTER")
+        return (30, 22.2, "MEDIAAN")
 
     model_type = _model.get("type", "MEDIAAN")
     known_clusters = _model.get("known_clusters", [])
 
     if kluster is None or kluster not in known_clusters:
         # Onbekende kluster: val terug op globale mediaan met bron MEDIAAN
-        offset = int(_model.get("global_median", 15.0))
-        sigma = float(_model.get("sigma", 10.0))
+        offset = int(_model.get("global_median", 30.0))
+        sigma = float(_model.get("sigma", 22.2))
         return (offset, sigma, "MEDIAAN")
 
     if model_type == "ML":
@@ -66,14 +66,14 @@ def _voorspel_met_kas(vroegste_klas_minuut: int, kluster: Optional[str], rol: st
         except Exception as e:
             print(f"ML voorspelling misluk: {e}")
             # Fallback op globale mediaan indien model uitsondering gooi (bv onverwagte tipe)
-            offset = int(_model.get("global_median", 15.0))
-            return (offset, 10.0, "MEDIAAN")
+            offset = int(_model.get("global_median", 30.0))
+            return (offset, float(_model.get("sigma", 22.2)), "MEDIAAN")
 
     else:
         # MEDIAAN TIPE
         rule = _model.get("rule", "GLOBAL")
-        global_med = _model.get("global_median", 15.0)
-        sigma = _model.get("sigma", 10.0)
+        global_med = _model.get("global_median", 30.0)
+        sigma = _model.get("sigma", 22.2)
         
         if rule == "CLUSTER":
             group_medians = _model.get("group_medians", {})
@@ -99,7 +99,7 @@ def voorspel_aankomstyd_offset(vroegste_klas_minuut: int, kluster: Optional[str]
     
     if _model_load_failed:
         # Gaan nie kas in as die model ontbreek nie
-        return (15, 10.0, "KLASROOSTER")
+        return (30, 22.2, "MEDIAAN")
         
     return _voorspel_met_kas(vroegste_klas_minuut, kluster, rol, is_koshuis)
 

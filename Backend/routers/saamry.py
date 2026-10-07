@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import (
@@ -71,6 +71,81 @@ def _require_saamry_user(db: Session, current_user: models.Gebruikers) -> None:
             status_code=403,
             detail="Saamry is slegs vir studente en personeel beskikbaar",
         )
+
+
+def _recommendation_score_for_pair(
+    db: Session,
+    gebruiker_id: int,
+    kandidaat_id: int,
+) -> Optional[float]:
+    """Bereken die huidige recommendation score vir logging; logging mag kernfunksies nie breek nie."""
+    if gebruiker_id == kandidaat_id:
+        return None
+    try:
+        gebruiker = db.query(models.Gebruikers).filter(
+            models.Gebruikers.Gebruiker_ID == gebruiker_id,
+            models.Gebruikers.Is_Aktief.is_(True),
+        ).first()
+        kandidaat = db.query(models.Gebruikers).filter(
+            models.Gebruikers.Gebruiker_ID == kandidaat_id,
+            models.Gebruikers.Is_Aktief.is_(True),
+        ).first()
+        if gebruiker is None or kandidaat is None:
+            return None
+        if (gebruiker.student is None and gebruiker.personeel is None) or (
+            kandidaat.student is None and kandidaat.personeel is None
+        ):
+            return None
+        gebruiker_data = bou_student_saamry_data_van_db(db, gebruiker)
+        kandidaat_data = bou_student_saamry_data_van_db(db, kandidaat)
+        return bereken_saamry_versoenbaarheid(gebruiker_data, kandidaat_data).totale_telling
+    except Exception as exc:
+        print(f"Waarskuwing: recommendation score vir log kon nie bereken word nie: {exc}")
+        return None
+
+
+def _voeg_recommendation_log_by(
+    db: Session,
+    gebruiker_id: int,
+    kandidaat_id: int,
+    telling: Optional[float],
+    aksie: str,
+    *,
+    dedupe_ure: Optional[int] = None,
+) -> bool:
+    """Voeg 'n recommendation interaction by. Gee False terug indien dit veilig oorgeslaan word."""
+    if gebruiker_id == kandidaat_id or telling is None:
+        return False
+
+    aksie = (aksie or "").strip().upper()
+    if not aksie:
+        return False
+
+    if dedupe_ure:
+        sedert = datetime.utcnow() - timedelta(hours=dedupe_ure)
+        bestaand = (
+            db.query(models.SaamryVoorstelLog)
+            .filter(
+                models.SaamryVoorstelLog.Gebruiker_ID == gebruiker_id,
+                models.SaamryVoorstelLog.Kandidaat_ID == kandidaat_id,
+                models.SaamryVoorstelLog.Aksie == aksie,
+                models.SaamryVoorstelLog.Tydstempel >= sedert,
+            )
+            .first()
+        )
+        if bestaand is not None:
+            return False
+
+    db.add(
+        models.SaamryVoorstelLog(
+            Gebruiker_ID=gebruiker_id,
+            Kandidaat_ID=kandidaat_id,
+            Voorspelde_Telling=float(telling),
+            Aksie=aksie,
+            Tydstempel=datetime.utcnow(),
+        )
+    )
+    return True
 
 
 def _user_dict(user: models.Gebruikers, *, include_contact: bool = False) -> dict:
@@ -658,6 +733,13 @@ def send_friend_request(
         )
         db.add(friendship)
 
+    telling = _recommendation_score_for_pair(
+        db, current_user.Gebruiker_ID, payload.ontvanger_id
+    )
+    _voeg_recommendation_log_by(
+        db, current_user.Gebruiker_ID, payload.ontvanger_id, telling, "VERSOEK_GESTUUR"
+    )
+
     db.commit()
     db.refresh(friendship)
     return schemas.APIResponse(
@@ -689,6 +771,12 @@ def accept_friend_request(
         raise HTTPException(status_code=409, detail="Hierdie versoek is nie meer hangend nie")
     friendship.SAA_Status = "AANVAAR"
     friendship.Gewysig_Op = datetime.utcnow()
+    telling = _recommendation_score_for_pair(
+        db, friendship.Versoeker_ID, friendship.Ontvanger_ID
+    )
+    _voeg_recommendation_log_by(
+        db, friendship.Versoeker_ID, friendship.Ontvanger_ID, telling, "AANVAAR"
+    )
     db.commit()
     return schemas.APIResponse(sukses=True, data={"boodskap": "Vriend aanvaar"})
 
@@ -711,6 +799,12 @@ def decline_friend_request(
         raise HTTPException(status_code=403, detail="Jy mag nie hierdie versoek weier nie")
     friendship.SAA_Status = "GEWEIER"
     friendship.Gewysig_Op = datetime.utcnow()
+    telling = _recommendation_score_for_pair(
+        db, friendship.Versoeker_ID, friendship.Ontvanger_ID
+    )
+    _voeg_recommendation_log_by(
+        db, friendship.Versoeker_ID, friendship.Ontvanger_ID, telling, "GEWEIER"
+    )
     db.commit()
     return schemas.APIResponse(sukses=True, data={"boodskap": "Versoek geweier"})
 
@@ -1909,6 +2003,26 @@ def confirm_group_at_gate(
         event.Bestuurder_Log_ID = driver_log.Log_ID
         event.Voltooi_Op = datetime.utcnow()
         event.Gewysig_Op = datetime.utcnow()
+
+        # Positiewe, werklike uitkoms vir toekomstige recommendation training:
+        # log net passasiers wat in hierdie hektransaksie saam met die Driver verwerk is.
+        verwerkte_ids = {item["gebruiker_id"] for item in processed}
+        for passasier_id in verwerkte_ids:
+            if passasier_id == event.Bestuurder_ID:
+                continue
+            telling_driver = _recommendation_score_for_pair(
+                db, event.Bestuurder_ID, passasier_id
+            )
+            _voeg_recommendation_log_by(
+                db, event.Bestuurder_ID, passasier_id, telling_driver, "RIT_VOLTOOI"
+            )
+            telling_passasier = _recommendation_score_for_pair(
+                db, passasier_id, event.Bestuurder_ID
+            )
+            _voeg_recommendation_log_by(
+                db, passasier_id, event.Bestuurder_ID, telling_passasier, "RIT_VOLTOOI"
+            )
+
         db.commit()
     except Exception:
         db.rollback()
@@ -1937,6 +2051,25 @@ def confirm_group_at_gate(
 # Saamry Profiel & Versoenbaarheidsalgoritme (Saamry-Algo)
 # ---------------------------------------------------------------------------
 
+
+def _saamry_profiel_out_dict(profiel: models.SaamryProfiel) -> dict:
+    """Serialiseer SaamryProfiel na die lowercase API-kontrak.
+
+    Die SQLAlchemy model gebruik legacy Title_Case kolomname, terwyl die
+    Pydantic/Flutter API lowercase snake_case verwag.
+    """
+    return {
+        "gebruiker_id": profiel.Gebruiker_ID,
+        "rol_tipe": profiel.Rol_Tipe,
+        "voorstad": profiel.Voorstad,
+        "sone_kode": profiel.Sone_Kode,
+        "kampus_id": profiel.Kampus_ID,
+        "maks_ompad_minute": profiel.Maks_Ompad_Minute,
+        "is_aktief_saamryer": profiel.Is_Aktief_Saamryer,
+    }
+
+
+
 @router.get("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
 def kry_saamry_profiel(
     db: Session = Depends(database.get_db),
@@ -1950,13 +2083,9 @@ def kry_saamry_profiel(
     ).first()
 
     if not profiel:
-        from services.compatibiliteit_service import herlei_geslag_uit_id
-        geslag = herlei_geslag_uit_id(current_user.GEB_ID_Nommer)
         profiel = models.SaamryProfiel(
             Gebruiker_ID=current_user.Gebruiker_ID,
             Rol_Tipe="BEIDE",
-            Geslag=geslag,
-            Geslag_Voorkeur="ENIGE",
             Maks_Ompad_Minute=15,
             Is_Aktief_Saamryer=True,
         )
@@ -1964,7 +2093,7 @@ def kry_saamry_profiel(
         db.commit()
         db.refresh(profiel)
 
-    return schemas.APIResponse(sukses=True, data=profiel)
+    return schemas.APIResponse(sukses=True, data=_saamry_profiel_out_dict(profiel))
 
 
 @router.put("/profiel", response_model=schemas.APIResponse[schemas.SaamryProfielOut])
@@ -2005,15 +2134,6 @@ def werk_saamry_profiel_by(
                 raise HTTPException(status_code=400, detail="Kampus bestaan nie")
         profiel.Kampus_ID = data["kampus_id"]
 
-    if "geslag" in data and data["geslag"]:
-        profiel.Geslag = data["geslag"].strip().upper()
-
-    if "geslag_voorkeur" in data and data["geslag_voorkeur"]:
-        voorkeur = data["geslag_voorkeur"].strip().upper()
-        if voorkeur not in ("ENIGE", "DIESELFDE"):
-            raise HTTPException(status_code=400, detail="Ongeldige geslag_voorkeur. Kies ENIGE of DIESELFDE.")
-        profiel.Geslag_Voorkeur = voorkeur
-
     if "maks_ompad_minute" in data and data["maks_ompad_minute"] is not None:
         if data["maks_ompad_minute"] < 0 or data["maks_ompad_minute"] > 120:
             raise HTTPException(status_code=400, detail="Maksimum ompad moet tussen 0 en 120 minute wees.")
@@ -2026,7 +2146,7 @@ def werk_saamry_profiel_by(
     db.commit()
     db.refresh(profiel)
 
-    return schemas.APIResponse(sukses=True, data=profiel)
+    return schemas.APIResponse(sukses=True, data=_saamry_profiel_out_dict(profiel))
 
 
 @router.get("/voorstelle")
@@ -2039,7 +2159,49 @@ def kry_saamry_voorstelle(
     """Vind en rangskik versoenbare saamrymaats volgens die Saamry-Algo."""
     _require_saamry_user(db, current_user)
     voorstelle = vind_saamry_voorstelle(db, current_user, limiet=limiet, min_telling=min_telling)
-    return schemas.APIResponse(sukses=True, data={"voorstelle": voorstelle, "totaal": len(voorstelle)})
+
+    # GESIEN = recommendation impression. Dedupeer per paar oor 24 uur sodat
+    # app-refreshes nie toekomstige training-data kunsmatig opblaas nie.
+    try:
+        het_nuwe_log = False
+        for voorstel in voorstelle:
+            het_nuwe_log = _voeg_recommendation_log_by(
+                db,
+                current_user.Gebruiker_ID,
+                voorstel["gebruiker_id"],
+                voorstel["totale_telling"],
+                "GESIEN",
+                dedupe_ure=24,
+            ) or het_nuwe_log
+        if het_nuwe_log:
+            db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"Waarskuwing: GESIEN recommendation logs kon nie gestoor word nie: {exc}")
+
+    # Hou die wiskundige afbreking intern. Die mobiele kliënt kry slegs
+    # die finale aanbeveling en praktiese gebruikersinligting.
+    publieke_voorstelle = []
+    for voorstel in voorstelle:
+        publieke_voorstelle.append({
+            "gebruiker_id": voorstel.get("gebruiker_id"),
+            "naam": voorstel.get("naam"),
+            "van": voorstel.get("van"),
+            "foto_url": voorstel.get("foto_url"),
+            "saamry_rol": voorstel.get("saamry_rol"),
+            "voorstad": voorstel.get("voorstad"),
+            "totale_telling": voorstel.get("totale_telling"),
+            "gehalte": voorstel.get("gehalte"),
+            "is_geskik": True,
+            "gemeenskaplike_dae": voorstel.get("gemeenskaplike_dae", []),
+            "beste_dag": voorstel.get("beste_dag"),
+            "is_reeds_vriend": voorstel.get("is_reeds_vriend", False),
+        })
+
+    return schemas.APIResponse(
+        sukses=True,
+        data={"voorstelle": publieke_voorstelle, "totaal": len(publieke_voorstelle)},
+    )
 
 
 @router.get("/versoenbaarheid/{kandidaat_id}")
@@ -2048,7 +2210,7 @@ def kry_kandidaat_versoenbaarheid(
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
-    """Bereken 'n volledige wiskundige en per-dag afbreking vir 'n spesifieke student."""
+    """Gee 'n publieke versoenbaarheidsopsomming vir 'n spesifieke Saamry-kandidaat."""
     _require_saamry_user(db, current_user)
 
     kandidaat = db.query(models.Gebruikers).filter(
@@ -2080,10 +2242,20 @@ def kry_kandidaat_versoenbaarheid(
         "gemeenskaplike_dae": res.gemeenskaplike_dae,
         "beste_dag": res.beste_dag,
         "is_reeds_vriend": is_vriend,
-        "faktore": res.faktore,
-        "per_dag_afbreking": res.per_dag_afbreking,
-        "aanbeveling_teks": res.aanbeveling_teks,
     }
+
+    try:
+        _voeg_recommendation_log_by(
+            db,
+            current_user.Gebruiker_ID,
+            kandidaat.Gebruiker_ID,
+            res.totale_telling,
+            "PROFIEL_OOP",
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"Waarskuwing: PROFIEL_OOP recommendation log kon nie gestoor word nie: {exc}")
 
     return schemas.APIResponse(sukses=True, data=data)
 
