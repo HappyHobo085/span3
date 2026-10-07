@@ -1005,11 +1005,29 @@ def run_migrations(engine):
                 ON rooster_lokaal_koppeling ("KLA_Lokaal")
             '''))
 
+            # Ouer installasies van hierdie tabel het soms NOT NULL
+            # timestamp-kolomme sonder defaults gehad. Stel die defaults
+            # idempotent sodat beide ou en nuwe databasisse veilig werk.
+            _conn.execute(text('''
+                ALTER TABLE rooster_lokaal_koppeling
+                ALTER COLUMN "Geskep_Op" SET DEFAULT CURRENT_TIMESTAMP
+            '''))
+            _conn.execute(text('''
+                ALTER TABLE rooster_lokaal_koppeling
+                ALTER COLUMN "Gewysig_Op" SET DEFAULT CURRENT_TIMESTAMP
+            '''))
+
             # Bewaar veilige bestaande Step 16-koppelings as permanente mappings,
             # maar slegs waar dieselfde Lantiv-lokaal reeds oral dieselfde mapping het.
+            # Timestamps word eksplisiet ingevul vir maksimum agteruitversoenbaarheid.
             _conn.execute(text('''
-                INSERT INTO rooster_lokaal_koppeling ("KLA_Lokaal", "Lokasie_ID")
-                SELECT k."KLA_Lokaal", MIN(k."Lokasie_ID")
+                INSERT INTO rooster_lokaal_koppeling
+                    ("KLA_Lokaal", "Lokasie_ID", "Geskep_Op", "Gewysig_Op")
+                SELECT
+                    k."KLA_Lokaal",
+                    MIN(k."Lokasie_ID"),
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
                 FROM klas k
                 WHERE k."KLA_Lokaal" IS NOT NULL
                   AND k."Lokasie_ID" IS NOT NULL
