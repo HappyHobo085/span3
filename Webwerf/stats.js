@@ -707,7 +707,11 @@
         x: padL, y: y + rowH / 2 + 3.5,
         'font-size': 10.5, fill: COLORS.ink
       });
-      lab.textContent = it.label;
+      // Lang etikette word afgekap sodat hulle nie in die balk inloop nie;
+      // die volle naam staan in die tooltip en die aria-label.
+      var maksTekens = Math.max(6, Math.floor((labelW - 8) / 6.4));
+      var etiket = String(it.label || '');
+      lab.textContent = etiket.length > maksTekens ? etiket.slice(0, maksTekens - 1) + '…' : etiket;
       svg.appendChild(lab);
 
       // Dowwe baan agter die balk sodat die skaal sigbaar bly.
@@ -859,8 +863,237 @@
     container.appendChild(wrap);
   }
 
+  // ----- Tabel: soekbare datalys in dieselfde styl as die Verslag-blad -----
+
+  var MAANDE_KORT = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
+  var STATUS_KLAS = {
+    goed: 'status-badge--active',
+    sleg: 'status-badge--inactive',
+    waarsku: 'status-badge--vertrek',
+    neutraal: 'status-badge--onbekend'
+  };
+
+  // 'n Datum (Date of ISO-teks) as "5 Okt 2026" of "5 Okt 2026 12:00".
+  // ISO-teks sonder tydsone word net so gelees (die bediener stuur dan reeds
+  // plaaslike tyd); Date-objekte word in plaaslike tyd gewys.
+  function datumTeks(waarde, metTyd) {
+    if (waarde instanceof Date) {
+      if (isNaN(waarde.getTime())) return '';
+      var t = metTyd ? ' ' + String(waarde.getHours()).padStart(2, '0') + ':' +
+        String(waarde.getMinutes()).padStart(2, '0') : '';
+      return waarde.getDate() + ' ' + MAANDE_KORT[waarde.getMonth()] + ' ' + waarde.getFullYear() + t;
+    }
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(waarde || '');
+    if (!m) return String(waarde || '');
+    return parseInt(m[3], 10) + ' ' + MAANDE_KORT[parseInt(m[2], 10) - 1] + ' ' + m[1] +
+      (metTyd && m[4] ? ' ' + m[4] + ':' + m[5] : '');
+  }
+
+  /**
+   * Formateer een waarde vir 'n tabelsel of KPI-teël.
+   * formaat: 'teks' | 'getal' | 'persent' (verhouding 0..1) | 'datum' | 'datumtyd' | 'status'
+   */
+  function formatValue(waarde, formaat, leeg) {
+    if (waarde === null || waarde === undefined || waarde === '') return leeg === undefined ? '–' : leeg;
+    if (formaat === 'persent') return Math.round(Number(waarde) * 100) + '%';
+    if (formaat === 'datum') return datumTeks(waarde, false);
+    if (formaat === 'datumtyd') return datumTeks(waarde, true);
+    if (formaat === 'status') return waarde.label || '';
+    return String(waarde);
+  }
+
+  /**
+   * Bou 'n soekbare tabel in `container` en gee 'n beheerder terug.
+   *
+   * opts = {
+   *   columns: [{ name, format }],
+   *   searchPlaceholder, emptyText, pageSize (verstek 50),
+   *   filters: [{ label, test(row) }]     — opsionele keuselys langs die soekveld
+   *   onRowClick(row)                     — maak rye klikbaar (en met Enter kiesbaar)
+   *   fill: true                          — tabel vul sy houer se hoogte (vir vaste uitlegte)
+   *   note: 'teks'                        — ekstra inligting in die voetskrif
+   * }
+   * row = { key, cells: [waardes], ... enige ekstra velde vir die oproeper }
+   * 'n Status-sel se waarde is { label, tone: 'goed'|'sleg'|'waarsku'|'neutraal' }.
+   *
+   * setRows() hou die soekwoord, filter, hoeveel rye gewys word en die gekose
+   * ry — sodat 'n regstreekse verfrissing nie die gebruiker se plek verloor nie.
+   */
+  function createTable(container, opts) {
+    var cols = opts.columns || [];
+    var bladsy = opts.pageSize || 50;
+    var rye = [];
+    var gewys = bladsy;
+    var gekies = null;
+    var filterIndeks = 0;
+
+    container.innerHTML = '';
+    var wortel = document.createElement('div');
+    wortel.className = 'dash-tabel-wortel' + (opts.fill ? ' dash-tabel-wortel--vul' : '');
+
+    var beheer = document.createElement('div');
+    beheer.className = 'dash-tabel-beheer';
+    var soek = document.createElement('input');
+    soek.type = 'search';
+    soek.className = 'glass-input dash-soek';
+    soek.placeholder = opts.searchPlaceholder || 'Soek…';
+    soek.setAttribute('aria-label', opts.searchPlaceholder || 'Soek');
+    beheer.appendChild(soek);
+    var filterEl = null;
+    if (opts.filters && opts.filters.length) {
+      filterEl = document.createElement('select');
+      filterEl.className = 'glass-select dash-filter';
+      filterEl.setAttribute('aria-label', 'Filter');
+      opts.filters.forEach(function (f, i) {
+        var o = document.createElement('option');
+        o.value = String(i);
+        o.textContent = f.label;
+        filterEl.appendChild(o);
+      });
+      beheer.appendChild(filterEl);
+    }
+    wortel.appendChild(beheer);
+
+    var houer = document.createElement('div');
+    houer.className = 'dash-tabel-houer';
+    var tabel = document.createElement('table');
+    tabel.className = 'dash-tabel' + (opts.onRowClick ? ' dash-tabel--klikbaar' : '');
+    var kopRy = document.createElement('tr');
+    cols.forEach(function (k) {
+      var th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = k.name;
+      if (k.format === 'getal' || k.format === 'persent') th.className = 'is-getal';
+      kopRy.appendChild(th);
+    });
+    var thead = document.createElement('thead');
+    thead.appendChild(kopRy);
+    tabel.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    tabel.appendChild(tbody);
+    houer.appendChild(tabel);
+    wortel.appendChild(houer);
+
+    var voet = document.createElement('div');
+    voet.className = 'dash-lys-voet';
+    var inligting = document.createElement('span');
+    inligting.className = 'viz-caption';
+    var meer = document.createElement('button');
+    meer.type = 'button';
+    meer.className = 'btn-outline btn-sm';
+    meer.textContent = 'Wys meer';
+    voet.appendChild(inligting);
+    voet.appendChild(meer);
+    wortel.appendChild(voet);
+    container.appendChild(wortel);
+
+    function sel(waarde, k) {
+      var td = document.createElement('td');
+      if (k.format === 'status' && waarde && typeof waarde === 'object') {
+        var b = document.createElement('span');
+        b.className = 'status-badge ' + (STATUS_KLAS[waarde.tone] || STATUS_KLAS.neutraal);
+        var dot = document.createElement('span');
+        dot.className = 'status-dot';
+        b.appendChild(dot);
+        b.appendChild(document.createTextNode(waarde.label || ''));
+        td.appendChild(b);
+        return td;
+      }
+      td.textContent = formatValue(waarde, k.format);
+      if (k.format === 'getal' || k.format === 'persent') td.className = 'is-getal';
+      if (k.format === 'persent' && waarde !== null && waarde !== undefined && waarde < 0.75) {
+        td.classList.add('is-laag');
+      }
+      return td;
+    }
+
+    function gefiltreer() {
+      var q = soek.value.trim().toLowerCase();
+      var f = opts.filters && opts.filters[filterIndeks];
+      return rye.filter(function (r) {
+        return (!q || r._soek.indexOf(q) !== -1) && (!f || !f.test || f.test(r));
+      });
+    }
+
+    function teken() {
+      var lys = gefiltreer();
+      tbody.innerHTML = '';
+      var frag = document.createDocumentFragment();
+      lys.slice(0, gewys).forEach(function (r) {
+        var tr = document.createElement('tr');
+        r.cells.forEach(function (w, i) { tr.appendChild(sel(w, cols[i] || {})); });
+        if (opts.onRowClick) {
+          tr.tabIndex = 0;
+          tr.setAttribute('aria-selected', gekies !== null && r.key === gekies ? 'true' : 'false');
+          tr.addEventListener('click', function () { opts.onRowClick(r); });
+          tr.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); opts.onRowClick(r); }
+          });
+        }
+        if (gekies !== null && r.key === gekies) tr.classList.add('is-gekies');
+        frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+
+      if (!lys.length) {
+        var leeg = document.createElement('tr');
+        var td = document.createElement('td');
+        td.className = 'dash-geen';
+        td.colSpan = cols.length || 1;
+        td.textContent = rye.length ? 'Niks pas by jou soektog of filter nie.' : (opts.emptyText || 'Geen data nie.');
+        leeg.appendChild(td);
+        tbody.appendChild(leeg);
+      }
+
+      var teks = '';
+      if (rye.length) {
+        teks = 'Wys ' + Math.min(gewys, lys.length) + ' van ' + lys.length;
+        if (lys.length !== rye.length) teks += ' (gefiltreer uit ' + rye.length + ')';
+      }
+      if (opts.note) teks += (teks ? ' · ' : '') + opts.note;
+      inligting.textContent = teks;
+      meer.hidden = gewys >= lys.length;
+    }
+
+    soek.addEventListener('input', function () { gewys = bladsy; teken(); });
+    if (filterEl) {
+      filterEl.addEventListener('change', function () {
+        filterIndeks = parseInt(filterEl.value, 10) || 0;
+        gewys = bladsy;
+        teken();
+      });
+    }
+    meer.addEventListener('click', function () { gewys += bladsy * 2; teken(); });
+
+    var beheerder = {
+      element: wortel,
+      setRows: function (nuwe, ekstra) {
+        rye = (nuwe || []).map(function (r) {
+          r._soek = r.cells.map(function (w, i) {
+            return formatValue(w, (cols[i] || {}).format, '');
+          }).join(' ').toLowerCase() + (r.search ? ' ' + String(r.search).toLowerCase() : '');
+          return r;
+        });
+        if (ekstra && ekstra.note !== undefined) opts.note = ekstra.note;
+        teken();
+      },
+      setSelected: function (key) {
+        gekies = key === undefined ? null : key;
+        teken();
+      },
+      setNote: function (note) {
+        opts.note = note;
+        teken();
+      }
+    };
+    teken();
+    return beheerder;
+  }
+
   // Maak alles beskikbaar vir die res van die webwerf.
   window.MoonStats = {
+    createTable: createTable,
+    formatValue: formatValue,
     renderDonut: renderDonut,
     colors: COLORS,
     renderMeter: renderMeter,

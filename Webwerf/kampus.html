@@ -25,7 +25,7 @@
     </section>
 
     <!-- KPI-teëls: die vier tellings van die gekose kampus -->
-    <div class="stat-grid" aria-label="Kampus tellings">
+    <div class="stat-grid dash-kpi" aria-label="Kampus tellings">
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
         <div class="stat-label">Studente ingeteken</div>
@@ -48,65 +48,36 @@
       </div>
     </div>
 
-    <!-- Twee panele langs mekaar: statistieke links, soekbare lyste regs -->
-    <section class="panels">
-      <article class="glass-card panel" aria-label="Statistieke">
-        <h2>Statistieke</h2>
-        <div class="dashboard-grid">
-          <div class="card wide viz-block" id="dash-stats-card">
-            <div id="stat-studente-split"></div>
-            <div id="stat-personeel-split"></div>
-            <div>
-              <div class="viz-chart-title">Op kampus oor tyd (regstreeks)</div>
-              <div id="stat-trend" class="viz-chart"></div>
-            </div>
-          </div>
-        </div>
+    <!-- Grafieke: sirkeldiagramme vir in/uit en die regstreekse tendens -->
+    <section class="dash-grafieke" aria-label="Statistieke">
+      <article class="glass-card panel dash-grafiek">
+        <h2>Studente in / uit</h2>
+        <div id="stat-studente-donut" class="viz-chart"></div>
       </article>
-
-      <article class="glass-card panel" aria-label="Lyste">
-        <h2>Almal op die stelsel</h2>
-        <!-- Soekblokkie vir die studente-lys -->
-        <div class="list-search">
-          <input class="glass-input" type="search" id="list-search"
-                 aria-label="Soek student" placeholder="Soek student...">
-        </div>
-        <div id="data-list" class="admin-list" aria-label="Student lys"></div>
-
-        <!-- Soekblokkie vir die personeel-lys -->
-        <div class="list-search list-search--spaced">
-          <input class="glass-input" type="search" id="bottom-search"
-                 aria-label="Soek personeel" placeholder="Soek personeel...">
-        </div>
-        <div id="personeel-list" class="admin-list" aria-label="Personeel lys"></div>
+      <article class="glass-card panel dash-grafiek">
+        <h2>Personeel in / uit</h2>
+        <div id="stat-personeel-donut" class="viz-chart"></div>
       </article>
     </section>
+    <article class="glass-card panel dash-grafiek">
+      <h2>Op kampus oor tyd <span class="panel-count">regstreeks</span></h2>
+      <div id="stat-trend" class="viz-chart"></div>
+    </article>
 
-    <!-- Wie is nou in en uit: vier naamlyste -->
-    <section class="glass-card panel" aria-label="Op die kampus nou">
-      <h2>Op die kampus nou</h2>
-      <div class="dashboard-grid">
-        <div class="card" id="dash-student-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Studente tans op kampus</strong>
-          <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-        <div class="card" id="dash-student-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Studente nie op kampus</strong>
-          <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-        <div class="card" id="dash-personeel-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Personeel tans op kampus</strong>
-          <div id="dash-personeel-in-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-        <div class="card" id="dash-personeel-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Personeel nie op kampus</strong>
-          <div id="dash-personeel-out-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-      </div>
-    </section>
+    <!-- Wie is nou in en uit: een soekbare tabel met 'n statusfilter -->
+    <article class="glass-card panel" aria-label="Op die kampus nou">
+      <h2>Op die kampus nou <span class="panel-count" id="nou-telling"></span></h2>
+      <div id="nou-tabel"></div>
+    </article>
+
+    <!-- Almal op die stelsel: soekbare tabel van alle gebruikers -->
+    <article class="glass-card panel" aria-label="Almal op die stelsel">
+      <h2>Almal op die stelsel <span class="panel-count" id="almal-telling"></span></h2>
+      <div id="almal-tabel"></div>
+    </article>
 
     <!-- Lokaalgebruik Voorspelling / Hittekaart -->
-    <section class="panels" style="margin-top:20px;">
+    <section class="panels" style="grid-template-columns:1fr">
       <article class="glass-card panel" aria-label="Lokaalgebruik" style="flex: 1 1 100%;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h2>Lokaalgebruik Voorspelling (Kapasiteit & Vulgraad)</h2>
@@ -133,7 +104,7 @@
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
-  <script src="stats.js?v=20260819"></script>
-  <script src="kampus.js?v=20260819"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="kampus.js?v=20261007dash"></script>
 </body>
 </html>

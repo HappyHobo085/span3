@@ -35,6 +35,45 @@
       </div>
     </section>
 
+    <!-- Oorsig: KPI-teëls en grafieke van die stelsel (admin-oorsig.js) -->
+    <div class="stat-grid dash-kpi" aria-label="Stelsel-oorsig">
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
+        <div class="stat-label">Gebruikers</div>
+        <div class="stat-value" id="oorsig-gebruikers">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
+        <div class="stat-label">Aktiewe gebruikers</div>
+        <div class="stat-value" id="oorsig-aktief">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-2)"></span>
+        <div class="stat-label">Kampusse</div>
+        <div class="stat-value" id="oorsig-kampusse">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Koshuise</div>
+        <div class="stat-value" id="oorsig-koshuise">--</div>
+      </div>
+    </div>
+
+    <section class="dash-grafieke" aria-label="Stelsel-statistieke">
+      <article class="glass-card panel dash-grafiek">
+        <h2>Aktiewe gebruikers</h2>
+        <div id="oorsig-aktief-donut" class="viz-chart"></div>
+      </article>
+      <article class="glass-card panel dash-grafiek">
+        <h2>Gebruikers per rol</h2>
+        <div id="oorsig-rol-balke" class="viz-chart"></div>
+      </article>
+      <article class="glass-card panel dash-grafiek">
+        <h2>Besetting per koshuis</h2>
+        <div id="oorsig-koshuis-balke" class="viz-chart"></div>
+      </article>
+    </section>
+
     <!-- Panele met die lyste: elke paneel het 'n soekveld en 'n lys -->
     <section class="panels">
       <!-- Paneel 1: Lys van alle gebruikers, met soek en rol-filter -->
@@ -487,6 +526,8 @@
        gedeelde kode, en admin.js beheer hierdie spesifieke bladsy -->
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="admin-oorsig.js?v=20261007dash"></script>
   <script src="admin.js?v=20260916c"></script>
 </body>
 </html>

@@ -12,7 +12,6 @@
 
 (function () {
   var MAAND = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'];
-  var BLADSY_RYE = 50; // soveel rye wys 'n lys op 'n slag
 
   var vanEl, totEl, kampusEl, statusEl, omvangEl, tabsEl, inhoudEl;
   var aflaaiKnoppie, aflaaiMenu;
@@ -208,7 +207,7 @@
     inhoudEl.appendChild(el('p', 'verslag-beskrywing', afd.beskrywing));
 
     // --- KPI-teëls ---
-    var rooster = el('div', 'stat-grid');
+    var rooster = el('div', 'stat-grid dash-kpi');
     rooster.setAttribute('aria-label', afd.titel + ' kernsyfers');
     afd.kernsyfers.forEach(function (s) {
       var kaart = el('div', 'glass-card stat-card');
@@ -222,26 +221,31 @@
     inhoudEl.appendChild(rooster);
 
     // --- Grafieke ---
-    var grafiekRooster = el('div', 'verslag-grafieke');
+    var grafiekRooster = el('div', 'dash-grafieke');
     var houers = [];
-    // Sirkels en balke deel 'n ry; tendenslyne kry die volle breedte onderaan.
-    var grafieke = afd.grafieke.filter(function (g) { return g.tipe !== 'lyn'; })
-      .concat(afd.grafieke.filter(function (g) { return g.tipe === 'lyn'; }));
-    grafieke.forEach(function (g) {
-      var kaart = el('article', 'glass-card panel verslag-grafiek verslag-grafiek--' + g.tipe);
+    // Sirkels en balke deel 'n ry; tendenslyne kry elk 'n eie volle-breedte
+    // kaart onder die rooster (binne die rooster sou hulle leë kolomme afdwing).
+    var lyne = [];
+    function kaartVir(g) {
+      var kaart = el('article', 'glass-card panel dash-grafiek');
       kaart.appendChild(el('h2', null, g.titel));
       var houer = el('div', 'viz-chart');
       kaart.appendChild(houer);
-      grafiekRooster.appendChild(kaart);
       houers.push({ houer: houer, grafiek: g });
+      return kaart;
+    }
+    afd.grafieke.forEach(function (g) {
+      if (g.tipe === 'lyn') lyne.push(kaartVir(g));
+      else grafiekRooster.appendChild(kaartVir(g));
     });
-    inhoudEl.appendChild(grafiekRooster);
+    if (grafiekRooster.children.length) inhoudEl.appendChild(grafiekRooster);
+    lyne.forEach(function (k) { inhoudEl.appendChild(k); });
 
     // --- Wat die data wys ---
     if (afd.insigte.length) {
       var insigKaart = el('article', 'glass-card panel');
       insigKaart.appendChild(el('h2', null, 'Wat die data wys'));
-      var lys = el('ul', 'verslag-insigte');
+      var lys = el('ul', 'dash-insigte');
       afd.insigte.forEach(function (t) { lys.appendChild(el('li', null, t)); });
       insigKaart.appendChild(lys);
       inhoudEl.appendChild(insigKaart);
@@ -306,103 +310,25 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Soekbare lys (tabel)
+  // Soekbare lys (tabel) — die gedeelde tabel uit stats.js
   // ---------------------------------------------------------------------------
   function bouTabel(t) {
-    var kaart = el('article', 'glass-card panel verslag-lys');
+    var kaart = el('article', 'glass-card panel');
     var kop = el('h2', null, t.titel);
-    var tel = el('span', 'panel-count', String(t.totaal));
-    kop.appendChild(tel);
+    kop.appendChild(el('span', 'panel-count', String(t.totaal)));
     kaart.appendChild(kop);
 
-    if (!t.rye.length) {
-      kaart.appendChild(el('div', 'viz-empty', 'Geen data in hierdie tydperk nie.'));
-      return kaart;
-    }
-
-    var soek = el('input', 'glass-input verslag-soek');
-    soek.type = 'search';
-    soek.placeholder = 'Soek in ' + t.titel.toLowerCase() + '…';
-    soek.setAttribute('aria-label', 'Soek in ' + t.titel);
-    kaart.appendChild(soek);
-
-    var houer = el('div', 'verslag-tabel-houer');
-    var tabel = el('table', 'verslag-tabel');
-    var thead = el('thead');
-    var kopRy = el('tr');
-    t.kolomme.forEach(function (k) {
-      var th = el('th', k.formaat === 'getal' || k.formaat === 'persent' ? 'is-getal' : null, k.naam);
-      th.scope = 'col';
-      kopRy.appendChild(th);
-    });
-    thead.appendChild(kopRy);
-    tabel.appendChild(thead);
-    var tbody = el('tbody');
-    tabel.appendChild(tbody);
-    houer.appendChild(tabel);
+    var houer = el('div');
     kaart.appendChild(houer);
-
-    var voet = el('div', 'verslag-lys-voet');
-    var inligting = el('span', 'viz-caption');
-    var meer = el('button', 'btn-outline btn-sm', 'Wys meer');
-    meer.type = 'button';
-    voet.appendChild(inligting);
-    voet.appendChild(meer);
-    kaart.appendChild(voet);
-
-    // Elke ry se teks word een keer opgestel sodat soek vinnig bly.
-    var rye = t.rye.map(function (ry) {
-      var selle = ry.map(function (v, i) { return formateer(v, t.kolomme[i].formaat); });
-      return { ry: ry, selle: selle, soek: selle.join(' ').toLowerCase() };
+    var tabel = MoonStats.createTable(houer, {
+      columns: t.kolomme.map(function (k) { return { name: k.naam, format: k.formaat }; }),
+      searchPlaceholder: 'Soek in ' + t.titel.toLowerCase() + '…',
+      emptyText: 'Geen data in hierdie tydperk nie.',
+      note: t.totaal > t.rye.length
+        ? 'die voorskou bevat die eerste ' + t.rye.length + ' van ' + t.totaal + ' rye; die aflaai bevat alles'
+        : ''
     });
-    var gefiltreer = rye;
-    var gewys = BLADSY_RYE;
-
-    function vul() {
-      tbody.innerHTML = '';
-      var frag = document.createDocumentFragment();
-      gefiltreer.slice(0, gewys).forEach(function (r) {
-        var tr = el('tr');
-        r.selle.forEach(function (teks, i) {
-          var k = t.kolomme[i];
-          var klas = k.formaat === 'getal' || k.formaat === 'persent' ? 'is-getal' : null;
-          var td = el('td', klas, teks);
-          if (k.formaat === 'persent' && r.ry[i] !== null && r.ry[i] < 0.75) td.classList.add('is-laag');
-          tr.appendChild(td);
-        });
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-
-      var getoon = Math.min(gewys, gefiltreer.length);
-      var teks = 'Wys ' + getoon + ' van ' + gefiltreer.length;
-      if (gefiltreer.length !== rye.length) teks += ' (gefiltreer uit ' + rye.length + ')';
-      if (t.totaal > t.rye.length) {
-        teks += ' · die voorskou bevat die eerste ' + t.rye.length + ' van ' + t.totaal +
-          ' rye; die aflaai bevat alles';
-      }
-      inligting.textContent = teks;
-      meer.hidden = gewys >= gefiltreer.length;
-      if (!gefiltreer.length) {
-        var leeg = el('tr');
-        var td = el('td', 'verslag-geen', 'Niks pas by jou soektog nie.');
-        td.colSpan = t.kolomme.length;
-        leeg.appendChild(td);
-        tbody.appendChild(leeg);
-      }
-    }
-
-    soek.addEventListener('input', function () {
-      var q = soek.value.trim().toLowerCase();
-      gefiltreer = q ? rye.filter(function (r) { return r.soek.indexOf(q) !== -1; }) : rye;
-      gewys = BLADSY_RYE;
-      vul();
-    });
-    meer.addEventListener('click', function () {
-      gewys += BLADSY_RYE * 2;
-      vul();
-    });
-    vul();
+    tabel.setRows(t.rye.map(function (ry, i) { return { key: i, cells: ry }; }));
     return kaart;
   }
 

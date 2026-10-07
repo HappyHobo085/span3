@@ -81,34 +81,38 @@
       <span class="viz-empty" style="padding:0">Kon nie die regstreekse syfers van die bediener laai nie — dit word elke paar sekondes weer probeer.</span>
     </div>
 
-    <!-- Vier panele in twee kolomme -->
+    <!-- Grafieke: wie is nou op kampus, per kampus, en my eie status -->
+    <section class="dash-grafieke" aria-label="Statistieke">
+      <article class="glass-card panel dash-grafiek" aria-label="Samestelling op kampus">
+        <h2>Op kampus nou</h2>
+        <div id="stat-samestelling-donut" class="viz-chart"></div>
+      </article>
+      <article class="glass-card panel dash-grafiek" aria-label="Nou per kampus">
+        <h2>Nou per kampus</h2>
+        <div id="kampus-lys" aria-label="Kampus tellings"></div>
+      </article>
+      <article class="glass-card panel dash-grafiek" aria-label="My Status">
+        <h2>My Status</h2>
+        <div id="my-status" aria-label="My status besonderhede"></div>
+      </article>
+    </section>
+
+    <!-- Twee soekbare tabelle langs mekaar -->
     <section class="panels">
-      <div class="panel-column">
-        <article class="glass-card panel" aria-label="Nou op kampus">
-          <h2>Nou per kampus</h2>
-          <div id="kampus-lys" aria-label="Kampus tellings"></div>
-        </article>
-        <article class="glass-card panel" aria-label="My Status">
-          <h2>My Status</h2>
-          <div id="my-status" aria-label="My status besonderhede"></div>
-        </article>
-      </div>
-      <div class="panel-column">
-        <article class="glass-card panel" aria-label="Komende Events">
-          <h2 id="events-titel">Komende Events</h2>
-          <div id="events-lys" aria-label="Komende events lys"></div>
-        </article>
-        <article class="glass-card panel" aria-label="Onlangse Aktiwiteit">
-          <h2>Onlangse Aktiwiteit</h2>
-          <div id="aktiwiteit-lys" class="admin-list" aria-label="Nuutste skanderings"></div>
-        </article>
-      </div>
+      <article class="glass-card panel" aria-label="Komende Events">
+        <h2>Komende Events <span class="panel-count" id="events-telling"></span></h2>
+        <div id="events-tabel"></div>
+      </article>
+      <article class="glass-card panel" aria-label="Onlangse Aktiwiteit">
+        <h2>Onlangse Aktiwiteit <span class="panel-count">regstreeks</span></h2>
+        <div id="aktiwiteit-tabel"></div>
+      </article>
     </section>
   </main>
 
   <!-- Skripte: main.js (aanmelding en API), stats.js (grafieke) en home.js -->
   <script src="main.js?v=20261007verslag"></script>
-  <script src="stats.js?v=20260819"></script>
-  <script src="home.js?v=20260819"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="home.js?v=20261007dash"></script>
 </body>
 </html>

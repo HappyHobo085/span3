@@ -1,4 +1,4 @@
-<!-- koshuis.html — Die Koshuis-bladsy. Wys wie tans by die koshuis in- en uitgeteken is, die kapasiteit, en 'n soekbare lys van die koshuis se studente. -->
+<!-- koshuis.html — Die Koshuis-bladsy. Wys wie tans by die koshuis in- en uitgeteken is, die besetting teenoor die kapasiteit, en 'n soekbare tabel van die koshuis se inwoners. -->
 <!DOCTYPE html>
 <html lang="af">
 <head>
@@ -25,16 +25,21 @@
     </section>
 
     <!-- KPI-teëls: die koshuis se tellings -->
-    <div class="stat-grid" aria-label="Koshuis tellings">
+    <div class="stat-grid dash-kpi" aria-label="Koshuis tellings">
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
         <div class="stat-label">Studente ingeteken</div>
         <div class="stat-value" id="dash-student-in-count">--</div>
       </div>
       <div class="glass-card stat-card">
-        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-2)"></span>
         <div class="stat-label">Studente uitgeteken</div>
         <div class="stat-value" id="dash-student-out-count">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Nog nooit gescan</div>
+        <div class="stat-value" id="dash-nooit-count">--</div>
       </div>
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true"></span>
@@ -43,52 +48,34 @@
       </div>
     </div>
 
-    <!-- Twee panele langs mekaar: statistieke links, studente-lys regs -->
-    <section class="panels">
-      <article class="glass-card panel" aria-label="Statistieke">
-        <h2>Statistieke</h2>
-        <div class="dashboard-grid">
-          <div class="card wide viz-block" id="dash-stats-card">
-            <div id="stat-kapasiteit-meter"></div>
-            <div id="stat-inuit-split"></div>
-            <div>
-              <div class="viz-chart-title">Studente ingeteken oor tyd (regstreeks)</div>
-              <div id="stat-trend" class="viz-chart"></div>
-            </div>
-          </div>
-        </div>
+    <!-- Grafieke: sirkeldiagramme vir status en besetting, en die regstreekse tendens -->
+    <section class="dash-grafieke" aria-label="Statistieke">
+      <article class="glass-card panel dash-grafiek">
+        <h2>Inwoners in / uit</h2>
+        <div id="stat-inuit-donut" class="viz-chart"></div>
       </article>
-
-      <article class="glass-card panel" aria-label="Inwoners">
-        <h2>Inwoners van hierdie koshuis</h2>
-        <div class="list-search">
-          <input class="glass-input" type="search" id="list-search"
-                 aria-label="Soek student" placeholder="Soek student...">
-        </div>
-        <div id="data-list" class="admin-list" aria-label="Student lys"></div>
+      <article class="glass-card panel dash-grafiek">
+        <h2>Besetting</h2>
+        <div id="stat-besetting-donut" class="viz-chart"></div>
+        <p class="viz-caption" id="besetting-nota" style="margin-top:10px"></p>
       </article>
     </section>
+    <article class="glass-card panel dash-grafiek">
+      <h2>Studente ingeteken oor tyd <span class="panel-count">regstreeks</span></h2>
+      <div id="stat-trend" class="viz-chart"></div>
+    </article>
 
-    <!-- Wie is nou in en uit: twee naamlyste -->
-    <section class="glass-card panel" aria-label="By die koshuis nou">
-      <h2>By die koshuis nou</h2>
-      <div class="dashboard-grid">
-        <div class="card" id="dash-student-in-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Studente tans ingeteken</strong>
-          <div id="dash-student-in-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-        <div class="card" id="dash-student-out-card" style="flex-direction:column;align-items:stretch;justify-content:flex-start">
-          <strong>Studente uitgeteken</strong>
-          <div id="dash-student-out-list" class="admin-list" style="margin-top:8px"></div>
-        </div>
-      </div>
-    </section>
+    <!-- Inwoners: soekbare tabel met elkeen se status -->
+    <article class="glass-card panel" aria-label="Inwoners">
+      <h2>Inwoners van hierdie koshuis <span class="panel-count" id="inwoner-telling"></span></h2>
+      <div id="inwoner-tabel"></div>
+    </article>
   </main>
 
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
-  <script src="stats.js?v=20260819"></script>
-  <script src="koshuis.js?v=20260819"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="koshuis.js?v=20261007dash"></script>
 </body>
 </html>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <!--
   events.html — Events-blad: wys die gebeure (events) van die bediener af —
-  komende of voriges — met 'n soekveld. Klik op 'n event om regs sy gastelys
-  te sien: wie genooi is (RSVP's en eksterne gaste), wie hier is en wie al
-  vertrek het. Die logika sit in event.js.
+  komende of voriges — as KPI-teëls, grafieke en 'n soekbare tabel. Klik op
+  'n event om sy gastelys te sien: wie genooi is (RSVP's en eksterne gaste),
+  wie hier is en wie al vertrek het. Die logika sit in event.js.
 -->
 <html lang="af">
 <head>
@@ -20,7 +20,7 @@
   <div id="site-header"></div>
 
   <main class="page" id="events-page">
-    <!-- Boonste beheer: kies watter events om te sien, en soek -->
+    <!-- Boonste beheer: kies watter events om te sien -->
     <section class="top-controls space-between" aria-label="Opsies">
       <div class="control-group">
         <label class="field-label" for="events-view">Wys</label>
@@ -29,64 +29,78 @@
           <option value="vorige">Vorige events</option>
         </select>
       </div>
-      <div class="control-group" style="min-width:240px">
-        <label class="field-label" for="list-search">Soek</label>
-        <input class="glass-input" type="search" id="list-search"
-               aria-label="Soek event" placeholder="Soek event of plek...">
+      <span class="live-chip"><span class="live-dot" aria-hidden="true"></span>Gaste regstreeks · elke 10s</span>
+    </section>
+
+    <!-- KPI-teëls: die gekose aansig se events -->
+    <div class="stat-grid dash-kpi" aria-label="Events tellings">
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true"></span>
+        <div class="stat-label">Events</div>
+        <div class="stat-value" id="kpi-events">--</div>
       </div>
-    </section>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--success)"></span>
+        <div class="stat-label">Nou aan die gang</div>
+        <div class="stat-value" id="kpi-nou">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
+        <div class="stat-label">Totale RSVP's</div>
+        <div class="stat-value" id="kpi-rsvp">--</div>
+      </div>
+      <div class="glass-card stat-card">
+        <span class="stat-accent" aria-hidden="true" style="background:var(--viz-dim)"></span>
+        <div class="stat-label">Plekke oor</div>
+        <div class="stat-value" id="kpi-plekke">--</div>
+      </div>
+    </div>
 
-    <!-- Twee panele: links die events (klik een), regs die gekose event se gaste -->
-    <section class="panels">
-      <!-- Links: die lys van events -->
-      <article class="glass-card panel" aria-label="Events">
-        <h2 id="events-titel">Events</h2>
-        <div id="events-lys" class="admin-list" aria-label="Events lys"></div>
+    <!-- Grafieke: plekke bespreek, bespreking per event, en die gekose event se bywoning -->
+    <section class="dash-grafieke" aria-label="Statistieke">
+      <article class="glass-card panel dash-grafiek">
+        <h2>Plekke bespreek</h2>
+        <div id="stat-plekke-donut" class="viz-chart"></div>
       </article>
-
-      <!-- Regs: die gekose event en sy gastelys (GET /events/{id}/rsvps) -->
-      <article class="glass-card panel" aria-label="Gaste van die gekose event">
-        <h2 id="gaste-titel">Gaste</h2>
-
-        <!-- Die gekose event se besonderhede -->
-        <div class="event-kop" id="event-kop" hidden>
-          <div class="event-kop-ry">
-            <div class="event-kop-naam" id="event-naam">--</div>
-            <span class="live-chip" id="event-nou" hidden><span class="live-dot" aria-hidden="true"></span>Nou aan die gang</span>
+      <article class="glass-card panel dash-grafiek">
+        <h2>Bespreking per event</h2>
+        <div id="stat-bespreking-balke" class="viz-chart"></div>
+      </article>
+      <article class="glass-card panel dash-grafiek" aria-label="Gekose event">
+        <h2>Gekose event</h2>
+        <p class="viz-empty" id="event-leeg">Kies 'n event in die tabel om sy bywoning te sien.</p>
+        <div id="event-kaart" hidden>
+          <div class="event-kop" id="event-kop">
+            <div class="event-kop-ry">
+              <div class="event-kop-naam" id="event-naam">--</div>
+              <span class="live-chip" id="event-nou" hidden><span class="live-dot" aria-hidden="true"></span>Nou aan die gang</span>
+            </div>
+            <div class="event-kop-detail" id="event-detail">--</div>
+            <p class="event-kop-beskrywing" id="event-beskrywing" hidden></p>
           </div>
-          <div class="event-kop-detail" id="event-detail">--</div>
-          <p class="event-kop-beskrywing" id="event-beskrywing" hidden></p>
+          <div id="stat-gaste-donut" class="viz-chart" style="margin-top:12px"></div>
+          <p class="viz-caption" id="gaste-caption" style="margin-top:10px"></p>
         </div>
-
-        <!-- Opsomming: hoeveel gaste hier is, vertrek het en nog nie aangekom het nie -->
-        <div class="card wide viz-block" id="gaste-stats-card" hidden>
-          <div id="stat-gaste-split"></div>
-          <div class="viz-caption" id="gaste-caption"></div>
-        </div>
-
-        <!-- Filter en soek in die gastelys -->
-        <div class="list-search gaste-filters" id="gaste-filters" hidden>
-          <input class="glass-input" type="search" id="gaste-search"
-                 aria-label="Soek gas" placeholder="Soek gas..." style="flex:1">
-          <select class="glass-select" id="gaste-filter" aria-label="Filter volgens status" style="width:170px">
-            <option value="ALMAL">Almal</option>
-            <option value="HIER">Hier</option>
-            <option value="VERTREK">Vertrek</option>
-            <option value="NIE">Nog nie aangekom</option>
-            <option value="ONBEKEND">Eksterne gaste</option>
-          </select>
-        </div>
-
-        <!-- Die gastelys: elke gas met rol, nommer en sy/haar status -->
-        <div id="gaste-lys" class="admin-list" aria-label="Gastelys"></div>
       </article>
     </section>
+
+    <!-- Events: klik 'n ry om sy gaste te sien -->
+    <article class="glass-card panel" aria-label="Events">
+      <h2><span id="events-titel-teks">Events</span> <span class="panel-count" id="events-telling"></span></h2>
+      <div id="events-tabel"></div>
+    </article>
+
+    <!-- Die gekose event se gastelys (GET /events/{id}/rsvps) -->
+    <article class="glass-card panel" aria-label="Gaste van die gekose event">
+      <h2 id="gaste-titel">Gaste <span class="panel-count" id="gaste-telling"></span></h2>
+      <div id="gaste-tabel"></div>
+    </article>
   </main>
 
   <!-- Skripte: main.js (aanmelding en API) en event.js (hierdie blad se logika) -->
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
-  <script src="stats.js?v=20260902"></script>
-  <script src="event.js?v=20260903"></script>
+  <script src="stats.js?v=20261007dash"></script>
+  <script src="event.js?v=20261007dash"></script>
 </body>
 </html>
