@@ -590,6 +590,10 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
     persoon_rye = []
     for p in sorted(persone.values(), key=lambda p: (not p.is_student, p.gebruiker.GEB_Van, p.gebruiker.GEB_Naam)):
         dae = len(p.dae_in & werksdag_stel)
+        laaste_outo = bool(
+            p.laaste_log is not None
+            and getattr(p.laaste_log, "TOE_Auto_Uitgecheck", False)
+        )
         persoon_rye.append([
             p.naam, _nommer(p.gebruiker), "Student" if p.is_student else p.rol,
             dae, len(werksdae), bywoning(p),
@@ -597,6 +601,7 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
             p.skanderings,
             _na_sa(p.laaste_log.TOE_Tydstempel) if p.laaste_log else None,
             status(p),
+            "⚠ Outo-uitcheck" if laaste_outo else "",
         ])
 
     dag_rye = []
@@ -621,6 +626,7 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
             lok.LOK_Naam if lok else None,
             lok.kampus.KAM_Naam if lok and lok.kampus else None,
             log.TOE_Rigting, log.TOE_Metode,
+            "⚠ Outo-uitcheck" if getattr(log, "TOE_Auto_Uitgecheck", False) else "",
         ])
 
     tabelle = [
@@ -628,7 +634,7 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
             ("Naam", TEKS), ("Nommer", TEKS), ("Rol", TEKS), ("Dae op kampus", GETAL),
             ("Werksdae", GETAL), ("Bywoning %", PERSENT), ("Gem. aankoms", TEKS),
             ("Gem. vertrek", TEKS), ("Skanderings", GETAL), ("Laaste skandering", DATUMTYD),
-            ("Huidige status", TEKS),
+            ("Huidige status", TEKS), ("Waarskuwing", TEKS),
         ], persoon_rye, maks_rye),
         _tabel("daagliks", "Daaglikse bywoning", [
             ("Datum", DATUM), ("Dag", TEKS), ("Werksdag", TEKS), ("Studente teenwoordig", GETAL),
@@ -638,6 +644,7 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
         _tabel("toegangslogs", "Toegangslogs", [
             ("Tyd", DATUMTYD), ("Naam", TEKS), ("Nommer", TEKS), ("Rol", TEKS),
             ("Lokasie", TEKS), ("Kampus", TEKS), ("Rigting", TEKS), ("Metode", TEKS),
+            ("Waarskuwing", TEKS),
         ], log_rye, maks_rye),
     ]
 
@@ -786,13 +793,26 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
         ])
 
     kos_naam = {k.Koshuis_ID: k.KOS_Naam for k in koshuise}
+
+    # Veiligheidswaarskuwing: ná 22:00 SA-tyd moet 'n koshuisinwoner se
+    # jongste koshuis-skandering IN wees.  UIT of geen skandering word rooi
+    # gemerk op die web-verslag deur die waarskuwing-teks hieronder.
+    koshuis_afsny_aktief = _na_sa(nou_utc).hour >= 22
+
     inwoner_rye = []
     for s in sorted(inwoners, key=lambda s: (kos_naam.get(s.Koshuis_ID, ""), s.gebruiker.GEB_Van, s.gebruiker.GEB_Naam)):
         log = laaste.get(s.Gebruiker_ID)
+        huidige_status = status(s.Gebruiker_ID)
+        koshuis_warning = (
+            "⚠ Koshuis: nie teen 22:00 ingeskandeer nie"
+            if koshuis_afsny_aktief and huidige_status != KOS_IN
+            else ""
+        )
         inwoner_rye.append([
             _volle_naam(s.gebruiker), s.STU_Nommer, kos_naam.get(s.Koshuis_ID),
-            status(s.Gebruiker_ID), _na_sa(log.TOE_Tydstempel) if log else None,
+            huidige_status, _na_sa(log.TOE_Tydstempel) if log else None,
             len(dae_in.get(s.Gebruiker_ID, ())), skanderings.get(s.Gebruiker_ID, 0),
+            koshuis_warning,
         ])
 
     student_per_id = {s.Gebruiker_ID: s for s in inwoners}
@@ -816,6 +836,7 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
         _tabel("inwoners", "Inwoners", [
             ("Naam", TEKS), ("Studentenommer", TEKS), ("Koshuis", TEKS), ("Huidige status", TEKS),
             ("Laaste skandering", DATUMTYD), ("Dae ingeteken", GETAL), ("Skanderings", GETAL),
+            ("Waarskuwing", TEKS),
         ], inwoner_rye, maks_rye),
         _tabel("koshuis_logs", "Koshuis-skanderings", [
             ("Tyd", DATUMTYD), ("Naam", TEKS), ("Studentenommer", TEKS), ("Koshuis", TEKS),
