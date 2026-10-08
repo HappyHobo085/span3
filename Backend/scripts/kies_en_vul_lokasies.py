@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,61 @@ def _csv_pad() -> Path:
     if override:
         return Path(override)
     return BACKEND_ROOT / "ml_data" / "lokale.csv"
+
+
+def _normaliseer(waarde: str | None) -> str:
+    """Normaliseer name net genoeg vir veilige, hoofletter-onafhanklike vergelyking."""
+    teks = str(waarde or "").strip().casefold()
+    teks = re.sub(r"\s*\([^)]*\)\s*$", "", teks).strip()
+    teks = teks.replace("_", " ").replace("-", " ")
+    return " ".join(teks.split())
+
+
+def _vind_lokasie(
+    db,
+    *,
+    kampus_id: int,
+    lokaal_kode: str,
+    lokaal_naam: str,
+):
+    """Vind die fisiese MOON-lokasie vir 'n CSV-ry.
+
+    Prioriteit:
+    1. Fisiese lokaalnaam uit `Lokaal_Naam` (bv. Bitterbessie / Bosvy).
+    2. Roosterkode uit `Lokaal` (bv. LERIBA L4 / GH117 A).
+
+    Dit hou die ML-kapasiteit-import versoenbaar met die nuwe rooster waar die
+    roosterkode en die fisiese MOON-lokaalnaam nie noodwendig dieselfde is nie.
+    """
+    lokale = (
+        db.query(Lokasie)
+        .filter(
+            Lokasie.Kampus_ID == kampus_id,
+            func.lower(Lokasie.LOK_Tipe).in_(["klaskamer", "lokaal"]),
+        )
+        .all()
+    )
+
+    # Gebruik eers die fisiese naam, want dit is die gesaghebbende MOON-lokasie.
+    vir_soek = []
+    if lokaal_naam:
+        vir_soek.append(lokaal_naam)
+    if lokaal_kode and _normaliseer(lokaal_kode) not in {
+        _normaliseer(x) for x in vir_soek
+    }:
+        vir_soek.append(lokaal_kode)
+
+    for kandidaat in vir_soek:
+        sleutel = _normaliseer(kandidaat)
+        matches = [l for l in lokale if _normaliseer(l.LOK_Naam) == sleutel]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise RuntimeError(
+                f"Meer as een fisiese lokaal pas by '{kandidaat}' op kampus-ID {kampus_id}."
+            )
+
+    return None
 
 
 def vul_lokasies() -> int:
@@ -43,19 +99,27 @@ def vul_lokasies() -> int:
 
             for ry_nommer, ry in enumerate(leser, start=2):
                 lokaal_kode = str(ry.get("lokaal", "") or "").strip()
+                lokaal_naam = str(
+                    ry.get("lokaal_naam", "")
+                    or ry.get("lokaal naam", "")
+                    or ry.get("naam", "")
+                    or ""
+                ).strip()
                 kampus_naam = str(ry.get("kampus", "") or "").strip()
                 kapasiteit_str = str(ry.get("kapasiteit", "") or "").strip()
 
-                if not lokaal_kode or not kampus_naam or not kapasiteit_str:
+                # Minstens een lokaal-identifiseerder is nodig.
+                if not (lokaal_kode or lokaal_naam) or not kampus_naam or not kapasiteit_str:
                     continue
 
                 try:
-                    kapasiteit = int(kapasiteit_str)
+                    kapasiteit = int(float(kapasiteit_str))
                     if kapasiteit <= 0:
                         raise ValueError
                 except ValueError:
                     foute.append(
-                        f"Ry {ry_nommer}: Ongeldige kapasiteit '{kapasiteit_str}' vir {lokaal_kode}"
+                        f"Ry {ry_nommer}: Ongeldige kapasiteit '{kapasiteit_str}' "
+                        f"vir {lokaal_kode or lokaal_naam}"
                     )
                     continue
 
@@ -70,21 +134,24 @@ def vul_lokasies() -> int:
                     )
                     continue
 
-                # Ondersteun beide huidige 'Klaskamer' en historiese 'Lokaal'.
-                lokasie = (
-                    db.query(Lokasie)
-                    .filter(
-                        func.lower(Lokasie.LOK_Naam) == lokaal_kode.lower(),
-                        Lokasie.Kampus_ID == kampus.Kampus_ID,
-                        func.lower(Lokasie.LOK_Tipe).in_(["klaskamer", "lokaal"]),
+                try:
+                    lokasie = _vind_lokasie(
+                        db,
+                        kampus_id=kampus.Kampus_ID,
+                        lokaal_kode=lokaal_kode,
+                        lokaal_naam=lokaal_naam,
                     )
-                    .first()
-                )
+                except RuntimeError as exc:
+                    foute.append(f"Ry {ry_nommer}: {exc}")
+                    continue
 
                 if lokasie is None:
+                    beskrywing = lokaal_kode
+                    if lokaal_naam:
+                        beskrywing += f" / {lokaal_naam}" if beskrywing else lokaal_naam
                     foute.append(
                         f"Ry {ry_nommer}: Klaskamer nie gevind nie - "
-                        f"'{lokaal_kode}' op kampus '{kampus_naam}'"
+                        f"'{beskrywing}' op kampus '{kampus_naam}'"
                     )
                     continue
 
