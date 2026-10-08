@@ -9,6 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20261007verslag">
   <script src="theme.js?v=20260819"></script>
+
+  <style>
+    /* Verslag waarskuwings: outo-uitcheck en koshuis nie-terug-gescan */
+    #verslag-inhoud .verslag-waarskuwing-ry {
+      background: rgba(220, 38, 38, 0.20) !important;
+      box-shadow: inset 4px 0 0 rgba(248, 113, 113, 0.95);
+    }
+    #verslag-inhoud .verslag-waarskuwing-ry:hover {
+      background: rgba(220, 38, 38, 0.28) !important;
+    }
+    #verslag-inhoud .verslag-waarskuwing-ry td,
+    #verslag-inhoud .verslag-waarskuwing-ry .stats-table-cell {
+      color: #fecaca !important;
+    }
+  </style>
 </head>
 <body>
   <!-- Gedeelde raamwerk: sybalk + boonste balk -->
@@ -89,6 +104,6 @@
   <script src="website_api_calls.js?v=20261007verslag"></script>
   <script src="main.js?v=20261007verslag"></script>
   <script src="stats.js?v=20261007dash"></script>
-  <script src="verslag.js?v=20261007dash"></script>
+  <script src="verslag.js?v=20261008warnings"></script>
 </body>
 </html>

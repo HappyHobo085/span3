@@ -329,7 +329,52 @@
         : ''
     });
     tabel.setRows(t.rye.map(function (ry, i) { return { key: i, cells: ry }; }));
+
+    // --- Waarskuwings: merk ernstige rye rooi ---
+    // Die backend stuur reeds die relevante waarskuwing-lyste in die verslag.
+    // Ons verander net die visuele aanbieding hier: outo-uitcheck en koshuis-
+    // studente wat nie terug ingeskandeer het nie kry 'n rooi agtergrond.
+    merkWaarskuwingRye(houer, t);
+
     return kaart;
+  }
+
+  function merkWaarskuwingRye(houer, tabelData) {
+    if (!houer || !tabelData) return;
+
+    var titel = String(tabelData.titel || '').toLowerCase();
+    var heleTabelIsWaarskuwing =
+      ((titel.indexOf('outo') !== -1 || titel.indexOf('auto') !== -1) && titel.indexOf('uit') !== -1) ||
+      (titel.indexOf('koshuis') !== -1 && (
+        titel.indexOf('nie ingeskandeer') !== -1 ||
+        titel.indexOf('nie terug') !== -1 ||
+        titel.indexOf('ontbreek') !== -1 ||
+        titel.indexOf('waarsku') !== -1
+      ));
+
+    // MoonStats kan sy tabel-DOM effens verander; hierdie selectors hou die
+    // verslag robuust sonder om stats.js te verander.
+    var rye = houer.querySelectorAll('tbody tr, .stats-table-row, .table-row');
+
+    rye.forEach(function (row) {
+      var teks = String(row.textContent || '').toLowerCase();
+      var isOutoUit =
+        (teks.indexOf('outo') !== -1 || teks.indexOf('auto') !== -1) &&
+        (teks.indexOf('uit') !== -1 || teks.indexOf('checkout') !== -1);
+
+      var isKoshuisNieIn =
+        teks.indexOf('koshuis') !== -1 && (
+          teks.indexOf('nie ingeskandeer') !== -1 ||
+          teks.indexOf('nie terug') !== -1 ||
+          teks.indexOf('nog nie in') !== -1 ||
+          teks.indexOf('geen in') !== -1 ||
+          teks.indexOf('ontbreek') !== -1
+        );
+
+      if (heleTabelIsWaarskuwing || isOutoUit || isKoshuisNieIn) {
+        row.classList.add('verslag-waarskuwing-ry');
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
