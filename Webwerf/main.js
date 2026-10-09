@@ -49,7 +49,7 @@ var PAGE_TITLES = {
   'home.html': 'Oorsig',
   'kampus.html': 'Kampus',
   'koshuis.html': 'Koshuis',
-  'events.html': 'Events',
+  'events.html': 'Geleenthede',
   'admin.html': 'Admin',
   'personeel.html': 'My Klasse',
   'verslag.html': 'Verslag'
@@ -59,7 +59,7 @@ var PAGE_TITLES = {
 var ROL_VERTOON = {
   'Administrateur': 'Administrateur',
   'Personeel': 'Personeel',
-  'Kampus_Opsigter': 'Kampus Opsigter',
+  'Kampus_Opsigter': 'Kampusopsigter',
   'Sekuriteit_Wag': 'Sekuriteitswag'
 };
 
@@ -220,7 +220,7 @@ var isSuwerStudent = hasRole('Student')
   && !hasRole('Kampus_Opsigter')
   && !hasRole('Sekuriteit_Wag');
 if (isSuwerStudent && currentPage !== 'login.html') {
-  alert('Studente gebruik asseblief die Moon Flutter app.');
+  alert('Studente gebruik asseblief die MOON-app.');
   logOut();
   return;
 }
@@ -299,7 +299,7 @@ function voegVerslagKnoppieBy() {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
     '<path d="M9 1.5H4a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V6L9 1.5Z"/>' +
     '<path d="M9 1.5V6h4.5M8 8v4.5M6 10.5l2 2 2-2"/></svg>' +
-    '<span>Eksporteer Verslag</span>';
+    '<span>Voer verslag uit</span>';
   var uitteken = voet.querySelector('button[onclick="logOut()"]');
   voet.insertBefore(skakel, uitteken || null);
 }

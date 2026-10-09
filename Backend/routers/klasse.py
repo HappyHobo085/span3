@@ -1500,7 +1500,7 @@ def valideer_student_klas_nfc(
 
     tag = _vind_aktiewe_nfc_tag(db, data.nfc_uid)
     if not tag or not tag.Lokasie_ID:
-        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC-etiket gevind nie")
 
     lokasie = (
         db.query(models.Lokasie)
@@ -1636,7 +1636,7 @@ def klas_studente(
         try:
             dag = date.fromisoformat(datum)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik YYYY-MM-DD")
+            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik JJJJ-MM-DD")
     return schemas.APIResponse(sukses=True, data=resolver_klas_studente(db, klas_id, dag))
 
 
@@ -1654,7 +1654,7 @@ def klas_bywoning(
         try:
             dag = date.fromisoformat(datum)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik YYYY-MM-DD")
+            raise HTTPException(status_code=400, detail="Ongeldige datum; gebruik JJJJ-MM-DD")
     else:
         dag = datetime.now(_SA_TZ).date()
 

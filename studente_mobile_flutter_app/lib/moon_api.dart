@@ -1739,7 +1739,7 @@ class MoonApi {
 
       throw Exception(
 
-        decoded['fout'] ?? decoded['detail'] ?? 'Login het misluk',
+        decoded['fout'] ?? decoded['detail'] ?? 'Aanmelding het misluk',
 
       );
 
@@ -1793,7 +1793,7 @@ class MoonApi {
 
     final data = decoded['data'];
     if (data is! Map) {
-      throw Exception('Ongeldige huidige-kampus antwoord ontvang.');
+      throw Exception('Ongeldige antwoord vir huidige kampus ontvang.');
     }
 
     return Map<String, dynamic>.from(data);
@@ -1926,7 +1926,7 @@ class MoonApi {
 
     final data = decoded['data'];
     if (data is! Map) {
-      throw Exception('Ongeldige klas-NFC validasie antwoord');
+      throw Exception('Ongeldige antwoord op klas-NFC-validering');
     }
     return Map<String, dynamic>.from(data);
   }
@@ -1975,7 +1975,7 @@ class MoonApi {
 
             decoded['fout'] ??
 
-            'Scan het misluk',
+            'Skandering het misluk',
 
       );
 
@@ -2007,7 +2007,7 @@ class MoonApi {
 
       throw Exception(
 
-        'Geen toegang tot lokasies nie. Login asseblief weer.',
+        'Geen toegang tot lokasies nie. Teken asseblief weer in.',
 
       );
 
@@ -2121,7 +2121,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
     throw Exception(
 
-      decoded['fout'] ?? decoded['detail'] ?? 'Dashboard kon nie laai nie',
+      decoded['fout'] ?? decoded['detail'] ?? 'Paneelbord kon nie laai nie',
 
     );
 
@@ -2189,7 +2189,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
             decoded['fout'] ??
 
-            'Student skandering het misluk',
+            'Studentskandering het misluk',
 
       );
 
@@ -2199,7 +2199,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
       throw Exception(
 
-        decoded['fout'] ?? 'Student skandering het misluk',
+        decoded['fout'] ?? 'Studentskandering het misluk',
 
       );
 
@@ -2329,7 +2329,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
       throw Exception(
 
-        decoded['fout'] ?? decoded['detail'] ?? 'Foto upload het misluk',
+        decoded['fout'] ?? decoded['detail'] ?? 'Foto-oplaai het misluk',
 
       );
 
@@ -2431,7 +2431,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
     throw Exception(
 
-      decoded['fout'] ?? decoded['detail'] ?? 'Kon nie dashboard laai nie',
+      decoded['fout'] ?? decoded['detail'] ?? 'Kon nie paneelbord laai nie',
 
     );
 
@@ -2464,7 +2464,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
     final raw = decoded['data'];
     if (raw is! Map) {
-      throw Exception('Ongeldige koshuisstatus antwoord');
+      throw Exception('Ongeldige koshuisstatusantwoord');
     }
     return Map<String, dynamic>.from(raw);
   }
@@ -2632,7 +2632,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
     if (response.statusCode != 200 || decoded['sukses'] != true) {
       throw Exception(
-        decoded['fout'] ?? decoded['detail'] ?? 'Verify het misluk',
+        decoded['fout'] ?? decoded['detail'] ?? 'Verifikasie het misluk',
       );
     }
 
@@ -2772,7 +2772,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
       throw Exception(
 
-        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampus status laai nie',
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie kampusstatus laai nie',
 
       );
 
@@ -2950,7 +2950,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
       throw Exception(
 
-        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuis status laai nie',
+        decoded['fout'] ?? decoded['detail'] ?? 'Kon nie koshuisstatus laai nie',
 
       );
 
@@ -3699,7 +3699,7 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
       throw Exception(
 
-        decoded['fout'] ?? decoded['detail'] ?? 'Event-versoek het misluk',
+        decoded['fout'] ?? decoded['detail'] ?? 'Geleentheidversoek het misluk',
 
       );
 

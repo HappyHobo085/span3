@@ -51,7 +51,7 @@ DATUMTYD = "datumtyd"
 
 STATUS_IN = "Op kampus (IN)"
 STATUS_UIT = "Van kampus af (UIT)"
-STATUS_NOOIT = "Nog nooit gescan nie"
+STATUS_NOOIT = "Nog nooit geskandeer nie"
 
 
 # --------------------------------------------------------------------------- #
@@ -576,7 +576,7 @@ def _afdeling_kampus(data: dict, maks_rye: Optional[int]) -> dict:
         _sirkel("Huidige status", [
             ("Op kampus", status_tel[STATUS_IN]),
             ("Van kampus af", status_tel[STATUS_UIT]),
-            ("Nog nooit gescan", status_tel[STATUS_NOOIT]),
+            ("Nog nooit geskandeer", status_tel[STATUS_NOOIT]),
         ]),
         _sirkel("Samestelling", [("Studente", len(studente)), ("Personeel", len(personeel))]),
         _lyn("Daaglikse bywoning (unieke persone)", alle_dae, [
@@ -745,7 +745,7 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
         _syfer("Besetting", _verhouding(len(inwoners), totaal_kap), PERSENT),
         _syfer("Tans ingeteken", tans_in),
         _syfer("Tans uitgeteken", tans_uit),
-        _syfer("Nog nooit gescan", nooit),
+        _syfer("Nog nooit geskandeer", nooit),
         _syfer("Koshuis-skanderings in tydperk", len(periode_logs)),
     ]
 
@@ -762,7 +762,7 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
             insigte.append("Vol of oor kapasiteit: " + ", ".join(k.KOS_Naam for k in vol) + ".")
         insigte.append(f"Tans ingeteken: {tans_in}; uitgeteken: {tans_uit} (volgens hul jongste koshuis-skandering).")
         if nooit:
-            insigte.append(f"{nooit} inwoner(s) is nog nooit by 'n koshuis gescan nie.")
+            insigte.append(f"{nooit} inwoner(s) is nog nooit by 'n koshuis geskandeer nie.")
         if not koshuis_lok_ids:
             insigte.append("Geen koshuis-skandeerplek is nog opgestel nie, so daar is geen koshuis-skanderings nie.")
         dae = [(d, len(daagliks_in.get(d, ()))) for d in _alle_dae(van, tot_effektief)]
@@ -772,7 +772,7 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
     alle_dae = _alle_dae(van, tot_effektief)
     grafieke = [
         _sirkel("Huidige status van inwoners", [
-            (KOS_IN, tans_in), (KOS_UIT, tans_uit), ("Nog nooit gescan", nooit),
+            (KOS_IN, tans_in), (KOS_UIT, tans_uit), ("Nog nooit geskandeer", nooit),
         ]),
         _balk("Besetting per koshuis", [
             (k.KOS_Naam, _verhouding(per_koshuis[k.Koshuis_ID]["inwoners"], k.KOS_Kapasiteit or 0) or 0)
@@ -831,7 +831,7 @@ def _afdeling_koshuis(db: Session, omvang: Omvang, van: date, tot_effektief: dat
         _tabel("koshuise", "Koshuise", [
             ("Koshuis", TEKS), ("Kampus", TEKS), ("Kapasiteit", GETAL), ("Inwoners", GETAL),
             ("Besetting %", PERSENT), ("Ingeteken", GETAL), ("Uitgeteken", GETAL),
-            ("Nog nooit gescan", GETAL),
+            ("Nog nooit geskandeer", GETAL),
         ], koshuis_rye, maks_rye),
         _tabel("inwoners", "Inwoners", [
             ("Naam", TEKS), ("Studentenommer", TEKS), ("Koshuis", TEKS), ("Huidige status", TEKS),
@@ -929,7 +929,7 @@ def _afdeling_events(db: Session, omvang: Omvang, van: date, tot: date,
 
     gem_opkoms = _verhouding(gemeet_aangekom, gemeet_rsvp)
     kernsyfers = [
-        _syfer("Events in tydperk", len(events)),
+        _syfer("Geleenthede in tydperk", len(events)),
         _syfer("Afgehandel", status_tel["Afgehandel"]),
         _syfer("Komende", status_tel["Komende"]),
         _syfer("Gekanselleer", status_tel["Gekanselleer"]),
@@ -941,14 +941,14 @@ def _afdeling_events(db: Session, omvang: Omvang, van: date, tot: date,
 
     insigte: list[str] = []
     if not events:
-        insigte.append("Geen events het in hierdie tydperk plaasgevind of is geskeduleer nie.")
+        insigte.append("Geen geleenthede het in hierdie tydperk plaasgevind of is geskeduleer nie.")
     else:
         insigte.append(
-            f"{len(events)} event(s) in die tydperk: {status_tel['Afgehandel']} afgehandel, "
+            f"{len(events)} geleentheid/geleenthede in die tydperk: {status_tel['Afgehandel']} afgehandel, "
             f"{status_tel['Komende']} komende, {status_tel['Gekanselleer']} gekanselleer."
         )
         if gem_opkoms is not None:
-            insigte.append(f"Gemiddelde opkoms by events was {gem_opkoms:.0%} van die RSVP's.")
+            insigte.append(f"Gemiddelde opkoms by geleenthede was {gem_opkoms:.0%} van die RSVP's.")
         if opkoms_items:
             beste = max(opkoms_items, key=lambda kv: kv[1])
             swakste = min(opkoms_items, key=lambda kv: kv[1])
@@ -960,29 +960,29 @@ def _afdeling_events(db: Session, omvang: Omvang, van: date, tot: date,
             insigte.append(f"{ekstern_tot} van die {rsvp_tot} RSVP's was eksterne gaste.")
 
     grafieke = [
-        _sirkel("Opkoms (afgehandelde en lopende events)", [
+        _sirkel("Opkoms (afgehandelde en lopende geleenthede)", [
             ("Aangekom", gemeet_aangekom), ("Nie aangekom nie", gemeet_rsvp - gemeet_aangekom),
         ]),
         _sirkel("RSVP-bron", [("App-gebruikers", app_tot), ("Eksterne gaste", ekstern_tot)]),
-        _balk("Opkoms per event", opkoms_items[-12:], PERSENT),
+        _balk("Opkoms per geleentheid", opkoms_items[-12:], PERSENT),
     ]
 
     tabelle = [
-        _tabel("events", "Events", [
-            ("Event", TEKS), ("Kampus", TEKS), ("Lokaal", TEKS), ("Begin", DATUMTYD),
+        _tabel("events", "Geleenthede", [
+            ("Geleentheid", TEKS), ("Kampus", TEKS), ("Lokaal", TEKS), ("Begin", DATUMTYD),
             ("Einde", DATUMTYD), ("Status", TEKS), ("Kapasiteit", GETAL), ("RSVP's", GETAL),
             ("Aangekom", GETAL), ("Nie aangekom nie", GETAL), ("Opkoms %", PERSENT),
         ], event_rye, maks_rye),
         _tabel("bywoners", "Bywoners", [
-            ("Event", TEKS), ("Datum", DATUM), ("Naam", TEKS), ("Rol", TEKS),
+            ("Geleentheid", TEKS), ("Datum", DATUM), ("Naam", TEKS), ("Rol", TEKS),
             ("Nommer", TEKS), ("Status", TEKS), ("Eerste IN", DATUMTYD),
         ], bywoner_rye, maks_rye),
     ]
 
     return {
         "sleutel": "events",
-        "titel": "Events",
-        "beskrywing": "Events in die tydperk, hul RSVP's en wie werklik opgedaag het.",
+        "titel": "Geleenthede",
+        "beskrywing": "Geleenthede in die tydperk, hul RSVP's en wie werklik opgedaag het.",
         "kernsyfers": kernsyfers,
         "insigte": insigte,
         "grafieke": grafieke,

@@ -153,7 +153,7 @@ class _TuisTabState extends State<_TuisTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Dashboard',
+              'Paneelbord',
               style: GoogleFonts.inter(
                 color: kText1,
                 fontSize: 24,
@@ -214,7 +214,7 @@ class _TuisTabState extends State<_TuisTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'KAMPUS STATUS',
+                          'KAMPUSSTATUS',
                           style: GoogleFonts.inter(
                             color: Colors.green,
                             fontSize: 10,
@@ -354,8 +354,8 @@ class _TuisTabState extends State<_TuisTab> {
                             width: tileWidth,
                             child: _OpsigterQuickActionCard(
                               icon: Icons.event_rounded,
-                              label: 'Events',
-                              subtitle: 'Bestuur events',
+                              label: 'Geleenthede',
+                              subtitle: 'Bestuur geleenthede',
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -687,13 +687,13 @@ class _KampusPageState extends State<_KampusPage> {
                             child: _OpsigterMetricCard(
                               label: 'STUDENTE',
                               value: _laai ? '—' : '$studenteIn',
-                              subtitle: 'In kampus',
+                              subtitle: 'Op kampus',
                               icon: Icons.school_rounded,
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => _KampusPeopleListPage(
-                                    title: 'Studente in Kampus',
+                                    title: 'Studente op kampus',
                                     kampusNaam: kampusNaam,
                                     items: studenteLys,
                                     emptyText: 'Geen studente is tans op kampus nie.',
@@ -707,13 +707,13 @@ class _KampusPageState extends State<_KampusPage> {
                             child: _OpsigterMetricCard(
                               label: 'PERSONEEL',
                               value: _laai ? '—' : '$personeelIn',
-                              subtitle: 'In kampus',
+                              subtitle: 'Op kampus',
                               icon: Icons.badge_rounded,
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => _KampusPeopleListPage(
-                                    title: 'Personeel in Kampus',
+                                    title: 'Personeel op kampus',
                                     kampusNaam: kampusNaam,
                                     items: personeelLys,
                                     emptyText: 'Geen personeel is tans op kampus nie.',
@@ -749,7 +749,7 @@ class _KampusPageState extends State<_KampusPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _OpsigterMetricCard(
-                              label: 'EVENTS',
+                              label: 'GELEENTHEDE',
                               value: _laai ? '—' : '$eventsKomende',
                               subtitle: 'Komende',
                               icon: Icons.event_rounded,
@@ -783,7 +783,7 @@ class _KampusPageState extends State<_KampusPage> {
                             else if (scannedIn.isEmpty)
                               const _MiniLogRow(
                                 name: 'Geen aktiewe beweging',
-                                detail: 'Kampus beweging sal hier verskyn.',
+                                detail: 'Kampusbeweging sal hier verskyn.',
                                 icon: Icons.timeline_rounded,
                               )
                             else
@@ -1000,7 +1000,7 @@ class _KoshuisPageState extends State<_KoshuisPage> {
           children: [
             const AppScreenHeader(
               title: 'Koshuis',
-              subtitle: 'Koshuis oorsig',
+              subtitle: 'Koshuisoorsig',
               showBack: true,
             ),
             Expanded(
@@ -1117,7 +1117,7 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) => _KoshuisPeopleListPage(
-                                            title: 'Inwoners in Koshuis',
+                                            title: 'Inwoners in koshuis',
                                             koshuisNaam: _gekoseKoshuis!.naam,
                                             items: scannedIn,
                                             emptyText: 'Geen inwoners is tans in hierdie koshuis nie.',
@@ -1140,7 +1140,7 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) => _KoshuisPeopleListPage(
-                                            title: 'Inwoners uit Koshuis',
+                                            title: 'Inwoners uit koshuis',
                                             koshuisNaam: _gekoseKoshuis!.naam,
                                             items: scannedOut,
                                             emptyText: 'Geen inwoners is tans as uit hierdie koshuis gemerk nie.',
@@ -1198,14 +1198,14 @@ class _KoshuisPageState extends State<_KoshuisPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _SectionTitle('KOSHUIS STATUS'),
+                            const _SectionTitle('KOSHUISSTATUS'),
                             const SizedBox(height: 12),
                             if (_laai)
                               const Center(child: CircularProgressIndicator())
                             else if (scannedIn.isEmpty)
                               const _MiniLogRow(
                                 name: 'Geen aktiewe inwoners',
-                                detail: 'Koshuis beweging sal hier verskyn.',
+                                detail: 'Koshuisbeweging sal hier verskyn.',
                                 icon: Icons.check_circle,
                               )
                             else
@@ -1603,10 +1603,10 @@ class _EventsPageState extends State<_EventsPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Events',
+              title: 'Geleenthede',
               subtitle: widget.kampusNaam == null
-                  ? 'Skep en bestuur kampus-events'
-                  : '${widget.kampusNaam} · komende events',
+                  ? 'Skep en bestuur kampusgeleenthede'
+                  : '${widget.kampusNaam} · komende geleenthede',
               showBack: true,
             ),
             Expanded(
@@ -1618,13 +1618,13 @@ class _EventsPageState extends State<_EventsPage> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _OpsigterMetricCard(label: 'EVENTS', value: _loading ? '—' : '${_events.length}', subtitle: 'Komende', icon: Icons.event_rounded)),
+                        Expanded(child: _OpsigterMetricCard(label: 'GELEENTHEDE', value: _loading ? '—' : '${_events.length}', subtitle: 'Komende', icon: Icons.event_rounded)),
                         const SizedBox(width: 12),
                         Expanded(child: _OpsigterMetricCard(label: 'RSVP', value: _loading ? '—' : '$totalRsvp', subtitle: 'Bevestig', icon: Icons.how_to_reg_rounded)),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    GradientActionButton(label: 'Skep Nuwe Event', onTap: _create, height: 52),
+                    GradientActionButton(label: 'Skep nuwe geleentheid', onTap: _create, height: 52),
                     const SizedBox(height: 16),
                     if (_error != null)
                       GlassCard(
@@ -1634,9 +1634,9 @@ class _EventsPageState extends State<_EventsPage> {
                     else if (_loading)
                       const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
                     else if (_events.isEmpty)
-                      const _InfoGlassCard(title: 'KOMENDE EVENTS', name: 'Geen komende events', detail: 'Druk “Skep Nuwe Event” om die eerste event te skep.', icon: Icons.event_busy_rounded)
+                      const _InfoGlassCard(title: 'KOMENDE GELEENTHEDE', name: 'Geen komende geleenthede', detail: 'Druk “Skep nuwe geleentheid” om die eerste geleentheid te skep.', icon: Icons.event_busy_rounded)
                     else ...[
-                      const _SectionTitle('KOMENDE EVENTS'),
+                      const _SectionTitle('KOMENDE GELEENTHEDE'),
                       const SizedBox(height: 10),
                       ..._events.map((event) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -1659,7 +1659,7 @@ class _EventsPageState extends State<_EventsPage> {
                               const SizedBox(height: 10),
                               Text('${event.rsvpAantal} / ${event.kapasiteit} RSVP · ${event.plekkeOor} plekke oor', style: GoogleFonts.inter(color: event.vol ? Colors.orange : kTextMuted, fontSize: 11, fontWeight: FontWeight.w700)),
                               const SizedBox(height: 12),
-                              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _manage(event), icon: const Icon(Icons.settings_rounded), label: const Text('BESTUUR EVENT'))),
+                              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _manage(event), icon: const Icon(Icons.settings_rounded), label: const Text('BESTUUR GELEENTHEID'))),
                             ],
                           ),
                         ),
@@ -1817,7 +1817,7 @@ class _EventFormPageState extends State<_EventFormPage> {
     final name = _name.text.trim();
     final capacity = int.tryParse(_capacity.text.trim());
     if (name.isEmpty || _campus?.kampusId == null || capacity == null || capacity < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Vul event naam, kampus en ’n geldige kapasiteit in')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Vul die naam van die geleentheid, die kampus en ’n geldige kapasiteit in')));
       return;
     }
     if (!_end.isAfter(_start)) {
@@ -1866,7 +1866,7 @@ class _EventFormPageState extends State<_EventFormPage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(title: _editing ? 'Wysig Event' : 'Skep Event', subtitle: 'Event besonderhede', showBack: true),
+            AppScreenHeader(title: _editing ? 'Wysig geleentheid' : 'Skep geleentheid', subtitle: 'Besonderhede van geleentheid', showBack: true),
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -1879,7 +1879,7 @@ class _EventFormPageState extends State<_EventFormPage> {
                             Text(_error!, style: GoogleFonts.inter(color: Colors.red)),
                             const SizedBox(height: 12),
                           ],
-                          _EventField(controller: _name, label: 'Event naam'),
+                          _EventField(controller: _name, label: 'Naam van geleentheid'),
                           const SizedBox(height: 12),
                           GlassCard(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -1920,7 +1920,7 @@ class _EventFormPageState extends State<_EventFormPage> {
                           const SizedBox(height: 12),
                           _EventField(controller: _description, label: 'Beskrywing', maxLines: 4),
                           const SizedBox(height: 18),
-                          GradientActionButton(label: _saving ? 'Besig...' : (_editing ? 'Stoor Veranderinge' : 'Skep Event'), onTap: _saving ? () {} : _save, height: 52),
+                          GradientActionButton(label: _saving ? 'Besig...' : (_editing ? 'Stoor Veranderinge' : 'Skep geleentheid'), onTap: _saving ? () {} : _save, height: 52),
                         ],
                       ),
                     ),
@@ -1960,7 +1960,7 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
       if (!mounted) return;
       final e = widget.event;
       final text = [
-        'MOON Event',
+        'MOON-geleentheid',
         e.naam,
         '${_shareDateTime(e.beginTyd)} - ${_shareDateTime(e.eindTyd)}',
         e.kampusNaam,
@@ -1973,7 +1973,7 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
       await SharePlus.instance.share(
         ShareParams(
           text: text,
-          subject: 'MOON Event - ${e.naam}',
+          subject: 'MOON-geleentheid - ${e.naam}',
           sharePositionOrigin: renderBox == null
               ? null
               : renderBox.localToGlobal(Offset.zero) & renderBox.size,
@@ -2005,7 +2005,7 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF111827),
-        title: const Text('Kanselleer Event', style: TextStyle(color: Colors.white)),
+        title: const Text('Kanselleer geleentheid', style: TextStyle(color: Colors.white)),
         content: Text('Kanselleer ${widget.event.naam}?', style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nee')),
@@ -2032,7 +2032,7 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
       body: SafeArea(
         child: Column(
           children: [
-            AppScreenHeader(title: e.naam, subtitle: 'Event bestuur', showBack: true),
+            AppScreenHeader(title: e.naam, subtitle: 'Bestuur geleentheid', showBack: true),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -2059,7 +2059,7 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
                         onPressed: _sharing ? null : () => _shareEvent(shareContext),
                         icon: const Icon(Icons.share_rounded, color: kAccent),
                         label: Text(
-                          _sharing ? 'Skep deel-skakel...' : 'DEEL EVENT',
+                          _sharing ? 'Skep deel-skakel...' : 'DEEL GELEENTHEID',
                           style: const TextStyle(color: kText1, fontWeight: FontWeight.w800),
                         ),
                         style: OutlinedButton.styleFrom(
@@ -2070,11 +2070,11 @@ class _OpsigterEventDetailPageState extends State<_OpsigterEventDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    GradientActionButton(label: 'Sien RSVP-Lys', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _EventRsvpListPage(event: e))), height: 50),
+                    GradientActionButton(label: 'Sien RSVP-lys', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _EventRsvpListPage(event: e))), height: 50),
                     const SizedBox(height: 10),
-                    OutlinedButton.icon(onPressed: _edit, icon: const Icon(Icons.edit_rounded), label: const Text('Wysig Event')),
+                    OutlinedButton.icon(onPressed: _edit, icon: const Icon(Icons.edit_rounded), label: const Text('Wysig geleentheid')),
                     const SizedBox(height: 10),
-                    OutlinedButton.icon(onPressed: _cancel, icon: const Icon(Icons.cancel_rounded, color: Colors.red), label: const Text('Kanselleer Event', style: TextStyle(color: Colors.red))),
+                    OutlinedButton.icon(onPressed: _cancel, icon: const Icon(Icons.cancel_rounded, color: Colors.red), label: const Text('Kanselleer geleentheid', style: TextStyle(color: Colors.red))),
                   ],
                 ),
               ),
@@ -2513,7 +2513,7 @@ class _OpsigterNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+      _NavItem(icon: Icons.dashboard_rounded, label: 'Paneelbord'),
       _NavItem(icon: Icons.location_city_rounded, label: 'Kampus'),
       _NavItem(icon: Icons.apartment_rounded, label: 'Koshuis'),
       _NavItem(icon: Icons.emergency_rounded, label: 'Nood'),

@@ -89,7 +89,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
   Widget build(BuildContext context) {
     final plek = _gekosePlek;
     final scanLabel =
-        plek?.isKoshuis == true ? 'KOSHUIS SKANDEER' : 'KAMPUS SKANDEER';
+        plek?.isKoshuis == true ? 'KOSHUISSKANDERING' : 'KAMPUSSKANDERING';
 
     return Scaffold(
       backgroundColor: kBg,
@@ -175,7 +175,7 @@ class _SekuriteitswagHomePageState extends State<SekuriteitswagHomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'KIES SKANPLEK',
+                                      'KIES SKANDEERPLEK',
                                       style: GoogleFonts.inter(
                                         color: kTextMuted,
                                         fontSize: 9,
@@ -334,7 +334,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
   bool _loading = false;
   bool _nfcSessionActive = false;
   bool _nfcAvailable = false;
-  String _status = 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
+  String _status = 'Gereed – skandeer QR of hou NFC-etiket teen die toestel';
 
   @override
   void initState() {
@@ -431,7 +431,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
 
           if (nommer.trim().isEmpty) {
             setState(() {
-              _status = 'NFC-tag bevat nie ’n leesbare nommer nie';
+              _status = 'NFC-etiket bevat nie ’n leesbare nommer nie';
             });
             await _resumeAutomaticListening();
             return;
@@ -507,7 +507,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           cleanNommer.toUpperCase().startsWith('MOON-EVENT:')) {
         if (!widget.isKampus) {
           throw Exception(
-            'Event QR kan net by ’n kampus-skandeerplek gebruik word',
+            '’n Geleentheid-QR-kode kan net by ’n kampusskandeerplek gebruik word',
           );
         }
 
@@ -520,7 +520,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         _scannerController.clear();
         setState(() {
           _loading = false;
-          _status = 'Event-gas RSVP gevind';
+          _status = 'RSVP van geleentheidsgas gevind';
         });
 
         final verified = await Navigator.push<bool>(
@@ -537,8 +537,8 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         if (!mounted) return;
         setState(() {
           _status = verified == true
-              ? 'Event-gas suksesvol verwerk'
-              : 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
+              ? 'Geleentheidsgas suksesvol verwerk'
+              : 'Gereed – skandeer QR of hou NFC-etiket teen die toestel';
         });
         await _resumeAutomaticListening();
         return;
@@ -594,14 +594,14 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
           setState(() {
             _loading = false;
             _status = saamryPreview.rede ??
-                'Hierdie passasier moet saam met die Driver se aktiewe Saamry-event scan';
+                'Hierdie passasier moet saam met die bestuurder se aktiewe Saamry-rit skandeer';
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: Colors.orange.shade800,
               content: Text(
                 saamryPreview.rede ??
-                    'Hierdie passasier is deel van ’n aktiewe Saamry-event. Scan die Driver.',
+                    'Hierdie passasier is deel van ’n aktiewe Saamry-rit. Skandeer die bestuurder.',
               ),
             ),
           );
@@ -639,7 +639,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
       setState(() {
         _status = verified == true
             ? '$metode suksesvol verwerk'
-            : 'Gereed – skandeer QR of hou NFC-tag teen die toestel';
+            : 'Gereed – skandeer QR of hou NFC-etiket teen die toestel';
       });
 
       await _resumeAutomaticListening();
@@ -809,7 +809,7 @@ class _KampusSkandeerPageState extends State<KampusSkandeerPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: widget.isKoshuis ? 'Koshuis Skandeer' : 'Kampus Skandeer',
+              title: widget.isKoshuis ? 'Koshuisskandering' : 'Kampusskandering',
               subtitle: widget.kampusNaam,
               showBack: true,
               trailing: const NfcStatusBadge(),
@@ -1141,7 +1141,7 @@ class _WagteEventGuestVerifyPageState
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF111827),
         title: const Text(
-          'Weier Event-toegang',
+          'Weier toegang tot geleentheid',
           style: TextStyle(color: Colors.white),
         ),
         content: Text(
@@ -1200,7 +1200,7 @@ class _WagteEventGuestVerifyPageState
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Event Gas',
+              title: 'Geleentheidsgas',
               subtitle: widget.kampusNaam,
               showBack: true,
             ),
@@ -1230,7 +1230,7 @@ class _WagteEventGuestVerifyPageState
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'GELDIGE EVENT RSVP',
+                              'GELDIGE RSVP VIR GELEENTHEID',
                               style: GoogleFonts.inter(
                                 color: Colors.green,
                                 fontSize: 14,
@@ -1305,7 +1305,7 @@ class _WagteEventGuestVerifyPageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'EVENT',
+                            'GELEENTHEID',
                             style: GoogleFonts.inter(
                               color: kTextMuted,
                               fontSize: 9,
@@ -1381,7 +1381,7 @@ class _WagteEventGuestVerifyPageState
                     const SizedBox(height: 18),
                     if (_verified)
                       Text(
-                        '✔ EVENT-TOEGANG BEVESTIG',
+                        '✔ GELEENTHEIDTOEGANG BEVESTIG',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           color: Colors.green,
@@ -1391,7 +1391,7 @@ class _WagteEventGuestVerifyPageState
                       )
                     else if (_declined)
                       Text(
-                        '✖ EVENT-TOEGANG GEWEIER',
+                        '✖ GELEENTHEIDTOEGANG GEWEIER',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           color: Colors.red,
@@ -1857,7 +1857,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Saamry Voertuig',
+              title: 'Saamryvoertuig',
               subtitle: widget.kampusNaam,
               showBack: true,
             ),
@@ -2006,7 +2006,7 @@ class _WagteSaamryVerifyPageState extends State<WagteSaamryVerifyPage> {
                           if (_skippedCount > 0) ...[
                             const SizedBox(height: 6),
                             Text(
-                              '$_skippedCount reeds in die korrekte kampusstatus en is nie weer gelog nie.',
+                              '$_skippedCount reeds in die korrekte kampusstatus en is nie weer aangeteken nie.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 color: kText2,
@@ -2116,7 +2116,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
       setState(() => _loading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verify fout: $e')),
+        SnackBar(content: Text('Verifikasiefout: $e')),
       );
     }
   }
@@ -2196,7 +2196,7 @@ class _WagteVerifyPageState extends State<WagteVerifyPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.red,
-          content: Text('Weier fout: $e'),
+          content: Text('Weierfout: $e'),
         ),
       );
     }
@@ -2432,7 +2432,7 @@ class _OnverwagteBesoekerPageState extends State<OnverwagteBesoekerPage> {
           children: [
             const AppScreenHeader(
               title: 'Onverwagte Besoeker',
-              subtitle: 'Lisensie foto en rede',
+              subtitle: 'Lisensiefoto en rede',
               showBack: true,
             ),
             Expanded(
@@ -2874,7 +2874,7 @@ class _VisitorVerifyPageState extends State<VisitorVerifyPage> {
                           const SizedBox(height: 14),
                           GlassInput(
                             controller: _otpController,
-                            hintText: 'Tik 6-syfer besoeker OTP',
+                            hintText: 'Tik die 6-syfer-besoeker-OTP',
                             keyboardType: TextInputType.number,
                             prefixIcon: const Icon(
                               Icons.password_rounded,

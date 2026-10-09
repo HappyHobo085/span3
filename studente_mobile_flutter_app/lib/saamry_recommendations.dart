@@ -713,7 +713,7 @@ class _SaamryProfileSettingsPageState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Jou rol, voorstad en kampus word vir recommendations gebruik. Maksimum ompad word reeds gestoor vir latere roetebeplanning. Jou event se pickup-adres bly apart.',
+                                'Jou rol, voorstad en kampus word vir aanbevelings gebruik. Die maksimum ompad word reeds gestoor vir latere roetebeplanning. Jou rit se opteladres bly apart.',
                                 style: GoogleFonts.inter(
                                   color: kText2,
                                   fontSize: 11.5,

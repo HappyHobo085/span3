@@ -209,7 +209,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
 
     final token = (MoonApi.bearerToken ?? '').trim();
     if (token.isEmpty) {
-      if (mounted) setState(() => _error = 'Geen geldige login-token beskikbaar nie.');
+      if (mounted) setState(() => _error = 'Geen geldige aanmeldtoken beskikbaar nie.');
       return;
     }
 
@@ -241,7 +241,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
       if (mounted) {
         setState(() {
           _socketConnected = false;
-          _error = 'Live verbinding kon nie koppel nie: ${_cleanError(e)}';
+          _error = 'Regstreekse verbinding kon nie koppel nie: ${_cleanError(e)}';
         });
       }
       _startIdlePolling();
@@ -286,7 +286,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         _busyUsers.clear();
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Live data kon nie gelees word nie: ${_cleanError(e)}');
+      if (mounted) setState(() => _error = 'Regstreekse data kon nie gelees word nie: ${_cleanError(e)}');
     }
   }
 
@@ -311,7 +311,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     if (mounted) {
       setState(() {
         _socketConnected = false;
-        if (error != null) _error = 'Live verbinding onderbreek: ${_cleanError(error)}';
+        if (error != null) _error = 'Regstreekse verbinding onderbreek: ${_cleanError(error)}';
       });
     }
     // Probeer altyd die kampus-socket herstel, ongeag of daar tans 'n aktiewe
@@ -520,7 +520,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                 style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
                 onPressed: () => Navigator.pop(dialogContext, true),
                 icon: const Icon(Icons.check_circle_outline_rounded),
-                label: const Text('JA, SLUIT NOOD'),
+                label: const Text('JA, SLUIT NOODGEVAL'),
               ),
             ],
           ),
@@ -842,7 +842,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
     Color color;
     switch (status) {
       case 'GEEN_TOESTEL':
-        label = 'Event-gas · geen app';
+        label = 'Geleentheidsgas · geen app';
         color = Colors.purpleAccent;
         break;
       case 'KENNIS_GENEEM':
@@ -854,7 +854,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
         color = Colors.blue;
         break;
       default:
-        label = 'Wag op ontvang';
+        label = 'Wag op ontvangs';
         color = Colors.orange;
     }
     return Container(
@@ -911,7 +911,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                     if (isEventGuest && eventName.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(
-                        'EVENT · $eventName',
+                        'GELEENTHEID · $eventName',
                         style: GoogleFonts.inter(
                           color: Colors.purpleAccent,
                           fontSize: 10,
@@ -1004,7 +1004,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                   if (eventName.isNotEmpty) ...[
                     const SizedBox(height: 3),
                     Text(
-                      'EVENT · $eventName',
+                      'GELEENTHEID · $eventName',
                       style: GoogleFonts.inter(
                         color: Colors.purpleAccent,
                         fontSize: 9,
@@ -1132,7 +1132,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Geen live WebSocket is nodig totdat ’n nood begin nie. MQTT bly die agtergrond-noodkanaal.',
+                'Geen regstreekse verbinding is nodig totdat ’n noodgeval begin nie. MQTT bly die agtergrondnoodkanaal.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(color: kText2, fontSize: 11, height: 1.45),
               ),
@@ -1298,7 +1298,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Icon(Icons.stop_circle_outlined),
-                  label: const Text('SLUIT NOOD'),
+                  label: const Text('SLUIT NOODGEVAL'),
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.green.shade700,
                     foregroundColor: Colors.white,
@@ -1335,7 +1335,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
           ),
           const SizedBox(height: 5),
           Text(
-            'Event-gaste: ${_stats['event_gaste'] ?? 0}  ·  Intern: ${_stats['event_gaste_intern'] ?? 0}  ·  Ekstern: ${_stats['event_gaste_ekstern'] ?? 0}',
+            'Geleentheidsgaste: ${_stats['event_gaste'] ?? 0}  ·  Intern: ${_stats['event_gaste_intern'] ?? 0}  ·  Ekstern: ${_stats['event_gaste_ekstern'] ?? 0}',
             style: GoogleFonts.inter(
               color: Colors.purpleAccent,
               fontSize: 10,
@@ -1457,7 +1457,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
           children: [
             const AppScreenHeader(
               title: 'Nood',
-              subtitle: 'Live kampuskontrole',
+              subtitle: 'Regstreekse kampuskontrole',
               showBack: true,
             ),
             Expanded(
@@ -1475,7 +1475,7 @@ class _NoodgevalDashboardPageState extends State<NoodgevalDashboardPage> {
                                 const CircularProgressIndicator(),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Koppel aan live nooddata...',
+                                  'Koppel aan regstreekse nooddata...',
                                   style: GoogleFonts.inter(color: kText2, fontSize: 12),
                                 ),
                                 if (_error != null) ...[

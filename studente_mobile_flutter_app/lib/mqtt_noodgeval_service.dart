@@ -69,7 +69,7 @@ class NoodgevalMqttService {
     } on TimeoutException {
       client.disconnect();
       throw Exception(
-        'MQTT verbinding het uitgetel ($host:$port). '
+        'MQTT-verbinding het uitgetel ($host:$port). '
         'Kontroleer dat Mosquitto loop en dat die foon die rekenaar kan bereik.',
       );
     } catch (e) {
@@ -81,7 +81,7 @@ class NoodgevalMqttService {
       final status = client.connectionStatus;
       client.disconnect();
       throw Exception(
-        'MQTT verbinding geweier: ${status?.returnCode ?? status?.state}',
+        'MQTT-verbinding geweier: ${status?.returnCode ?? status?.state}',
       );
     }
 
@@ -90,7 +90,7 @@ class NoodgevalMqttService {
 
     final updates = client.updates;
     if (updates == null) {
-      throw Exception('MQTT updates stream is nie beskikbaar nie.');
+      throw Exception('MQTT-opdateringstroom is nie beskikbaar nie.');
     }
 
     _subscription = updates.listen(

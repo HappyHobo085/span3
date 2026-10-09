@@ -96,7 +96,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${gekoseKlas.klasNaam} het nog geen NFC-tag nie. Herlaai die klasse of wag totdat die bediener opgedateer is.',
+          '${gekoseKlas.klasNaam} het nog geen NFC-etiket nie. Herlaai die klasse of wag totdat die bediener opgedateer is.',
         ),
       ),
     );
@@ -112,7 +112,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         side: BorderSide(color: kBorderEm, width: 1),
       ),
       title: Text(
-        'Skryf NFC-tag',
+        'Skryf NFC-etiket',
         style: GoogleFonts.inter(
           color: kText1,
           fontSize: 16,
@@ -120,7 +120,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         ),
       ),
       content: Text(
-        'Hou die NFC-tag teen die toestel.\n\n'
+        'Hou die NFC-etiket teen die toestel.\n\n'
         'Klas: ${gekoseKlas.klasNaam}\n'
         'UID: $uid',
         style: GoogleFonts.inter(
@@ -156,7 +156,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
         if (ndef == null || !ndef.isWritable) {
           await NfcManager.instance.stopSession(
-            errorMessage: 'Tag is nie skryfbaar nie.',
+            errorMessage: 'Etiket is nie skryfbaar nie.',
           );
           return;
         }
@@ -173,7 +173,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           const SnackBar(
             backgroundColor: Colors.green,
             content: Text(
-              'NFC-tag suksesvol geskryf.',
+              'NFC-etiket suksesvol geskryf.',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -333,7 +333,7 @@ class _TuisTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'NFC BESTUUR',
+                  'NFC-BESTUUR',
                   style: GoogleFonts.inter(
                     color: kTextMuted,
                     fontSize: 9,
@@ -348,7 +348,7 @@ class _TuisTab extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Kies \'n klas en skryf \'n NFC-tag',
+                        'Kies \'n klas en skryf \'n NFC-etiket',
                         style: GoogleFonts.inter(
                           color: kText2,
                           fontSize: 13,
@@ -548,7 +548,7 @@ class _NfcTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 20),
             child: Text(
-              'NFC Skryf',
+              'Skryf NFC',
               style: GoogleFonts.inter(
                 color: kText1,
                 fontSize: 22,
@@ -570,7 +570,7 @@ class _NfcTab extends StatelessWidget {
                       child: Text(
                         gekoseLokasieId == null
                           ? 'Kies \'n klas in die Klasse-tab'
-                          : 'Klas gekies. Druk "Skryf NFC" om die tag te programmeer.',
+                          : 'Klas gekies. Druk "Skryf NFC" om die etiket te programmeer.',
                         style: GoogleFonts.inter(
                           color: gekoseLokasieId == null ? kTextMuted : kText2,
                           fontSize: 13,

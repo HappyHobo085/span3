@@ -74,7 +74,7 @@ async def upload_my_profile_photo(
     db: Session = Depends(get_db),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Slegs foto lêers word toegelaat")
+        raise HTTPException(status_code=400, detail="Slegs fotolêers word toegelaat")
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -278,7 +278,7 @@ def kry_lokasie_deur_uid(
     ).first()
 
     if not tag:
-        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC-etiket gevind nie")
 
     lokasie = db.query(models.Lokasie).filter(models.Lokasie.Lokasie_ID == tag.Lokasie_ID).first()
     if not lokasie:

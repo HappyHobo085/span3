@@ -60,7 +60,7 @@
         { label: 'Almal' },
         { label: 'Ingeteken', test: function (r) { return r.status === 'IN'; } },
         { label: 'Uitgeteken', test: function (r) { return r.status === 'UIT'; } },
-        { label: 'Nog nooit gescan', test: function (r) { return r.status === null; } }
+        { label: 'Nog nooit geskandeer', test: function (r) { return r.status === null; } }
       ]
     });
   }
@@ -100,7 +100,7 @@
           volleNaam(g), g.STU_Nommer || null, g.GEB_Epos || null,
           status === 'IN' ? { label: 'Ingeteken', tone: 'goed' }
             : status === 'UIT' ? { label: 'Uitgeteken', tone: 'neutraal' }
-            : { label: 'Nog nooit gescan', tone: 'sleg' },
+            : { label: 'Nog nooit geskandeer', tone: 'sleg' },
           sk ? leesTyd(sk.Tydstempel) : null,
           sk ? sk.Metode : null
         ]
@@ -192,7 +192,7 @@
       segments: [
         { label: 'Ingeteken', value: ingeteken, color: c.series1 },
         { label: 'Uitgeteken', value: uitgeteken, color: c.series2 },
-        { label: 'Nog nooit gescan', value: Math.max(inwoners - ingeteken - uitgeteken, 0), color: c.dim }
+        { label: 'Nog nooit geskandeer', value: Math.max(inwoners - ingeteken - uitgeteken, 0), color: c.dim }
       ]
     });
 

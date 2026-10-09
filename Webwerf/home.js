@@ -348,7 +348,7 @@
 
     var json = await window.MoonApi.fetchEvents('komende');
     if (!json || !json.sukses || !Array.isArray(json.data)) {
-      eventsTabel.setNote('Kon nie die events laai nie.');
+      eventsTabel.setNote('Kon nie die geleenthede laai nie.');
       return;
     }
 
@@ -372,13 +372,13 @@
     if (!window.MoonStats) return;
     eventsTabel = MoonStats.createTable(document.getElementById('events-tabel'), {
       columns: [
-        { name: 'Event', format: 'teks' },
+        { name: 'Geleentheid', format: 'teks' },
         { name: 'Plek', format: 'teks' },
         { name: 'Begin', format: 'datumtyd' },
         { name: 'Plekke', format: 'status' }
       ],
-      searchPlaceholder: 'Soek event…',
-      emptyText: 'Geen komende events nie.',
+      searchPlaceholder: 'Soek geleentheid…',
+      emptyText: 'Geen komende geleenthede nie.',
       pageSize: 10
     });
     aktiwiteitTabel = MoonStats.createTable(document.getElementById('aktiwiteit-tabel'), {

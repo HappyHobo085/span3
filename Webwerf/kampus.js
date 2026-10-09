@@ -64,7 +64,7 @@
         { name: 'Metode', format: 'teks' }
       ],
       searchPlaceholder: 'Soek persoon…',
-      emptyText: 'Nog niemand het by hierdie kampus gescan nie.',
+      emptyText: 'Nog niemand het by hierdie kampus geskandeer nie.',
       filters: [
         { label: 'Almal' },
         { label: 'Op kampus', test: function (r) { return r.inn; } },
@@ -325,7 +325,7 @@
 
   // Maak seker die gebruiker het 'n naam en 'n kampus gekies
   if (!roomName || !kampusId) {
-    alert('Voltooi asseblief die klaskamer naam en kampus.');
+    alert('Voltooi asseblief die klaskamernaam en kampus.');
     return;
   }
 
@@ -420,7 +420,7 @@
     const gleuwe = huidigeLokaalGebruik.filter(g => g.Dag === gekoseDag);
 
     if (gleuwe.length === 0) {
-      container.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted)">Geen voorspellings data vir ${gekoseDag} nie.</p>`;
+      container.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted)">Geen voorspellingsdata vir ${gekoseDag} nie.</p>`;
       return;
     }
 
@@ -459,7 +459,7 @@
             <td style="border: ${grens}; background: ${agtergrond}; color: #000; padding: 4px; position: relative; ${flits}" title="Vak: ${match.Vak}&#10;Tyd: ${match.Begin} - ${match.Einde}&#10;Inskrywing: ${match.Inskrywing}&#10;Voorspel: ${match.Verwagte_Skanderings}&#10;Kapasiteit: ${match.Kapasiteit}&#10;Bron: ${match.Bron}">
               <div style="font-size: 0.75em; font-weight:bold;">${match.Vak}</div>
               <div style="font-size: 0.85em;">${vulTeks}</div>
-              ${match.Konflik ? '<span style="color:red;font-weight:900;" title="Bespreekings konflik!">&#9888;</span>' : ''}
+              ${match.Konflik ? '<span style="color:red;font-weight:900;" title="Besprekingskonflik!">&#9888;</span>' : ''}
             </td>
           `;
         } else {

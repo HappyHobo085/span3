@@ -34,7 +34,7 @@
     btn.type = 'button';
     btn.className = 'btn-outline btn-sm theme-toggle';
     btn.textContent = labelFor(theme);
-    btn.setAttribute('aria-label', 'Wissel tussen lig en donker modus');
+    btn.setAttribute('aria-label', 'Wissel tussen lig- en donkermodus');
     btn.addEventListener('click', function () {
       applyTheme(theme === 'light' ? 'dark' : 'light');
       try { localStorage.setItem('theme', theme); } catch (e) {}

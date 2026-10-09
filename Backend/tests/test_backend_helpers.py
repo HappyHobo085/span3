@@ -236,7 +236,7 @@ class TestGebruikerServiceHelpers:
 
         with pytest.raises(HTTPException, match="E-pos reeds geregistreer"):
             kontroleer_unieke_gebruiker_velde(db, epos="dup@example.com")
-        with pytest.raises(HTTPException, match="ID Nommer reeds in gebruik"):
+        with pytest.raises(HTTPException, match="ID-nommer reeds in gebruik"):
             kontroleer_unieke_gebruiker_velde(db, id_nommer="900101000001")
 
     def test_generate_next_subnommer_and_unique_validation(self, db):
@@ -800,7 +800,7 @@ class TestRouterAndAdminEndpoints:
         main_module = importlib.reload(importlib.import_module("main"))
         request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b"", "state": {}})
         root = main_module.read_root()
-        assert root.data["message"] == "Backend is working"
+        assert root.data["message"] == "Backend werk"
         http_response = asyncio.run(main_module.custom_http_exception_handler(request, HTTPException(status_code=400, detail="bad")))
         assert http_response.status_code == 400
         error_response = asyncio.run(main_module.general_exception_handler(request, RuntimeError("broken")))

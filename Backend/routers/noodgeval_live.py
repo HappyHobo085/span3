@@ -588,7 +588,7 @@ def event_gas_kontrole(
         .first()
     )
     if rsvp is None:
-        raise HTTPException(status_code=404, detail="Eksterne Event-gas nie gevind nie")
+        raise HTTPException(status_code=404, detail="Eksterne geleentheidsgas nie gevind nie")
 
     event = (
         db.query(models.Funksie)
@@ -596,13 +596,13 @@ def event_gas_kontrole(
         .first()
     )
     if event is None or event.Kampus_ID != emergency.Kampus_ID:
-        raise HTTPException(status_code=403, detail="Hierdie Event-gas behoort nie aan dié kampus nie")
+        raise HTTPException(status_code=403, detail="Hierdie geleentheidsgas behoort nie aan dié kampus nie")
 
     latest = _latest_external_guest_gate_log(db, publiek_rsvp_id, emergency.Kampus_ID)
     if latest is None or latest.Rigting != "IN":
         raise HTTPException(
             status_code=409,
-            detail="Hierdie Event-gas is nie meer as IN op hierdie kampus aangeteken nie",
+            detail="Hierdie geleentheidsgas is nie meer as IN op hierdie kampus aangeteken nie",
         )
 
     clean_action = (action or "").strip().lower()
@@ -716,7 +716,7 @@ async def noodgeval_live_ws(websocket: WebSocket, kampus_id: int):
                 {
                     "tipe": "FOUT",
                     "kampus_id": kampus_id,
-                    "fout": f"WebSocket feed fout: {exc}",
+                    "fout": f"Fout in regstreekse WebSocket-voer: {exc}",
                 }
             )
         except Exception:

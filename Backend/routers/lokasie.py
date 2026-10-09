@@ -142,7 +142,7 @@ def kry_klas_bywoning(
         try:
             day = datetime.fromisoformat(date).date()
         except Exception:
-            raise HTTPException(status_code=400, detail="Ongeldige datumformaat — gebruik YYYY-MM-DD")
+            raise HTTPException(status_code=400, detail="Ongeldige datumformaat — gebruik JJJJ-MM-DD")
     else:
         day = datetime.utcnow().date()
 

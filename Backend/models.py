@@ -450,7 +450,7 @@ class SaamryVriendskap(Base):
 class SaamryPickupProfiel(Base):
     """Gebruiker se gewone/default Saamry opteladres.
 
-    Hierdie profiel is apart van 'n spesifieke Saamry-event. 'n Event kopieer
+    Hierdie profiel is apart van 'n spesifieke Saamry-rit. 'n Rit kopieer
     die adres as 'n voorstel; die gebruiker moet dit vir die event bevestig.
     """
 

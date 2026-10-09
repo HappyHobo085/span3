@@ -56,7 +56,7 @@ def check_csv_import_export_enabled():
     if not Config.CSV_IMPORT_EXPORT_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSV import/export functionality is disabled."
+            detail="CSV-invoer en -uitvoer is gedeaktiveer."
         )
     return True
 
@@ -751,7 +751,7 @@ async def import_table_csv(
     table: str = Form(..., description="Table name or model name to import into"),
     file: Optional[UploadFile] = File(default=None),
     text: Optional[str] = Form(default=None),
-    mode: str = Form(default="merge", description="Import strategy: merge or replace"),
+    mode: str = Form(default="merge", description="Invoerstrategie: merge (saamvoeg) of replace (vervang)"),
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
@@ -772,14 +772,14 @@ async def import_table_csv(
     if not csv_payload or not csv_payload.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please provide CSV content as text or upload a CSV file.",
+            detail="Plak asseblief CSV-teks of laai 'n CSV-lêer op.",
         )
 
     rows = parse_csv_rows(table, csv_payload)
     if not rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No CSV rows were found to import.",
+            detail="Geen CSV-rye is gevind om in te voer nie.",
         )
 
     verslag: Dict[str, Any] = {}
@@ -819,14 +819,14 @@ def export_all_tables_csv(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Export failed: {str(exc)}",
+            detail=f"Uitvoer het misluk: {str(exc)}",
         ) from exc
 
 
 @router.post("/csv/import-all")
 async def import_all_tables_csv(
     file: UploadFile = File(..., description="ZIP file containing CSV files named after tables"),
-    mode: str = Form(default="merge", description="Import strategy: merge or replace"),
+    mode: str = Form(default="merge", description="Invoerstrategie: merge (saamvoeg) of replace (vervang)"),
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_admin: bool = Depends(auth.check_admin),
@@ -840,7 +840,7 @@ async def import_all_tables_csv(
     if not file.filename or not file.filename.endswith('.zip'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please upload a ZIP file containing CSV files.",
+            detail="Laai asseblief 'n ZIP-lêer met CSV-lêers op.",
         )
 
     try:
@@ -849,12 +849,12 @@ async def import_all_tables_csv(
     except zipfile.BadZipFile:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid ZIP file.",
+            detail="Ongeldige ZIP-lêer.",
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {str(exc)}",
+            detail=f"Invoer het misluk: {str(exc)}",
         ) from exc
 
 

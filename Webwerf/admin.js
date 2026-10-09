@@ -132,7 +132,7 @@
     'Student': 'Student',
     'Personeel': 'Personeel',
     'Kampus_Opsigter': 'Opsigter',
-    'Sekuriteit_Wag': 'Sekuriteits Wag'
+    'Sekuriteit_Wag': 'Sekuriteitswag'
   };
 
   // =====================================================================
@@ -244,7 +244,7 @@
         await loadRolleDropdown();
       }
     } catch (error) {
-      console.warn('CSV import refresh failed:', error);
+      console.warn('Kon nie CSV-invoer verfris nie:', error);
     }
   }
 
@@ -851,7 +851,7 @@
 
     const tagBadge = document.createElement('span');
     tagBadge.className = 'campus-badge tag-badge';
-    tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+    tagBadge.textContent = 'Etiket: ' + (nfcUid || '—');
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -888,7 +888,7 @@
     row.dataset.kampusId = String(kampusId);
     row.dataset.name = name.toLowerCase();
     const tagBadge = row.querySelector('.tag-badge');
-    if (tagBadge) tagBadge.textContent = 'Tag: ' + (nfcUid || '—');
+    if (tagBadge) tagBadge.textContent = 'Etiket: ' + (nfcUid || '—');
     row.dataset.nfcUid = nfcUid || '';
   }
 
@@ -920,7 +920,7 @@
 
     // Maak seker albei velde is ingevul.
     if (!roomName || !kampusId) {
-      alert('Voltooi asseblief die klaskamer naam en kampus.');
+      alert('Voltooi asseblief die klaskamernaam en kampus.');
       return;
     }
 
@@ -945,7 +945,7 @@
       if (nuweUid && nuweUid !== editingLokaalOldUid) {
         const tagJson = await window.MoonApi.updateLokasieTag(lokasieId, nuweUid);
         if (!tagJson || !tagJson.sukses) {
-          alert(foutBoodskap(tagJson, 'Kon nie die NFC-tag opdateer nie.'));
+          alert(foutBoodskap(tagJson, 'Kon nie die NFC-etiket opdateer nie.'));
           return;
         }
         finaleUid = nuweUid;
@@ -1613,7 +1613,7 @@ if (isStudent) {
 else if (
     rolIds.some(function(rid) {
       var n = rolleMap[String(rid)] || '';
-      return n === 'Personeel' || n === 'Sekuriteits Wag' || n === 'Opsigter' || n === 'Admin';
+      return n === 'Personeel' || n === 'Sekuriteitswag' || n === 'Opsigter' || n === 'Admin';
     })
 ) {
     // Werknemers login met e-pos.
@@ -1997,7 +1997,7 @@ async function refreshDashboard() {
         autoScanoutTime.value = json.data.Waarde;
       }
     } catch (e) {
-      console.error('Kon nie auto-uitcheck tyd laai nie:', e);
+      console.error('Kon nie outo-uitskanderingstyd laai nie:', e);
     }
   }
 
@@ -2019,7 +2019,7 @@ async function refreshDashboard() {
 
         if (autoScanoutMsg) {
           if (json.sukses) {
-            autoScanoutMsg.textContent = 'Outo-uitcheck tyd gestel vir ' + tyd + '.';
+            autoScanoutMsg.textContent = 'Outo-uitskanderingstyd gestel op ' + tyd + '.';
           } else {
             autoScanoutMsg.textContent = json.fout || 'Stoor het misluk.';
           }
@@ -2027,7 +2027,7 @@ async function refreshDashboard() {
           setTimeout(function () { autoScanoutMsg.style.display = 'none'; }, 3000);
         }
       } catch (e) {
-        console.error('Kon nie auto-uitcheck tyd stoor nie:', e);
+        console.error('Kon nie outo-uitskanderingstyd stoor nie:', e);
         if (autoScanoutMsg) {
           autoScanoutMsg.textContent = 'Fout tydens stoor.';
           autoScanoutMsg.style.display = 'block';

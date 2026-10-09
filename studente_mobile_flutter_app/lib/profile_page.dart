@@ -60,7 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library, color: kAccent),
-              title: Text('Kies uit gallery', style: GoogleFonts.inter(color: kText1)),
+              title: Text('Kies uit galery', style: GoogleFonts.inter(color: kText1)),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
           ],
@@ -102,7 +102,7 @@ class _ProfilePageState extends State<ProfilePage> {
       SnackBar(
         backgroundColor: Colors.red,
         content: Text(
-          'Foto fout: $e',
+          'Fotofout: $e',
           style: const TextStyle(color: Colors.white),
         ),
       ),
@@ -302,7 +302,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(height: 12),
 
           OutlineActionButton(
-            label: 'Logout',
+            label: 'Teken uit',
             onTap: () {
               MoonApi.logout();
 

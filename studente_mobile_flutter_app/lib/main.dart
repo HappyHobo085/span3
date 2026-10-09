@@ -73,7 +73,7 @@ Future<void> _startNativeNoodgevalService({
 
         'MQTT_PASSWORD ontbreek. Begin die app met '
 
-        '--dart-define=MQTT_PASSWORD=<jou mobile MQTT wagwoord>.',
+        '--dart-define=MQTT_PASSWORD=<jou mobiele MQTT-wagwoord>.',
 
       );
 
@@ -231,7 +231,7 @@ class MyApp extends StatelessWidget {
 
       scaffoldMessengerKey: rootScaffoldMessengerKey,
 
-      title: 'MOON — Kampus Bestuur',
+      title: 'MOON — Kampusbestuur',
 
       debugShowCheckedModeBanner: false,
 
@@ -479,7 +479,7 @@ class _LoginPageState extends State<LoginPage> {
 
           content: Text(
 
-            'Login fout: $e',
+            'Aanmeldfout: $e',
 
             style: const TextStyle(color: Colors.white),
 
@@ -571,7 +571,7 @@ class _LoginPageState extends State<LoginPage> {
 
                         Text(
 
-                          'KAMPUS BESTUUR STELSEL',
+                          'KAMPUSBESTUURSTELSEL',
 
                           style: GoogleFonts.inter(
 
@@ -599,7 +599,7 @@ class _LoginPageState extends State<LoginPage> {
 
                     controller: _usernameController,
 
-                    hintText: 'Gebruikers e-pos / Studentenommer',
+                    hintText: 'E-pos of studentenommer',
 
                     keyboardType: TextInputType.text,
 

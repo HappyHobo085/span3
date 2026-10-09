@@ -27,7 +27,7 @@ def _parse_datum(waarde: Optional[str], naam: str) -> Optional[date]:
     try:
         return date.fromisoformat(waarde)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Ongeldige '{naam}'-datum; gebruik YYYY-MM-DD")
+        raise HTTPException(status_code=400, detail=f"Ongeldige '{naam}'-datum; gebruik JJJJ-MM-DD")
 
 
 def _tydperk(van: Optional[str], tot: Optional[str]) -> tuple[date, date]:

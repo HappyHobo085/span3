@@ -153,7 +153,7 @@ def _resolve_wagte_scanplek(
     """
     if lokasie_id is None:
         if kampus_id is None:
-            raise HTTPException(status_code=400, detail="Geen scanplek/lokasie is gekies nie")
+            raise HTTPException(status_code=400, detail="Geen skandeerplek/lokasie is gekies nie")
 
         kampus = db.query(models.Kampus).filter(
             models.Kampus.Kampus_ID == kampus_id
@@ -180,7 +180,7 @@ def _resolve_wagte_scanplek(
         models.Lokasie.Lokasie_ID == lokasie_id
     ).first()
     if lokasie is None:
-        raise HTTPException(status_code=404, detail="Scanplek-lokasie nie gevind nie")
+        raise HTTPException(status_code=404, detail="Skandeerplek-lokasie nie gevind nie")
 
     tipe = (lokasie.LOK_Tipe or "").strip().upper()
     if tipe == "KAMPUS":
@@ -209,7 +209,7 @@ def _resolve_wagte_scanplek(
             koshuis.Kampus_ID != lokasie.Kampus_ID
             or koshuis.KOS_Naam != lokasie.LOK_Naam
         ):
-            raise HTTPException(status_code=400, detail="Koshuis en scanplek stem nie ooreen nie")
+            raise HTTPException(status_code=400, detail="Koshuis en skandeerplek stem nie ooreen nie")
 
         kampus = db.query(models.Kampus).filter(
             models.Kampus.Kampus_ID == lokasie.Kampus_ID
@@ -218,7 +218,7 @@ def _resolve_wagte_scanplek(
 
     raise HTTPException(
         status_code=400,
-        detail="Hierdie lokasie is nie 'n geldige Kampus- of Koshuis-scanplek nie",
+        detail="Hierdie lokasie is nie 'n geldige kampus- of koshuisskandeerplek nie",
     )
 
 
@@ -404,7 +404,7 @@ def wagte_profile_scan(
         raise HTTPException(status_code=404, detail="Gebruiker nie gevind nie")
 
     if not gebruiker.Is_Aktief:
-        raise HTTPException(status_code=403, detail="Gebruiker is gedeaktiveer en mag nie scan nie")
+        raise HTTPException(status_code=403, detail="Gebruiker is gedeaktiveer en mag nie skandeer nie")
 
     lokasie = None
     koshuis = None
@@ -605,35 +605,35 @@ def _event_guest_from_scan(db: Session, scan_kode: str):
     else:
         token = clean
     if not token:
-        raise HTTPException(status_code=400, detail="Event QR is leeg of ongeldig")
+        raise HTTPException(status_code=400, detail="Geleentheid-QR-kode is leeg of ongeldig")
 
     rsvp = db.query(models.FunksiePubliekRSVP).filter(
         models.FunksiePubliekRSVP.QR_Token == token
     ).first()
     if rsvp is None:
-        raise HTTPException(status_code=404, detail="Event QR word nie herken nie")
+        raise HTTPException(status_code=404, detail="Geleentheid-QR-kode word nie herken nie")
     return rsvp
 
 
 def _validate_event_guest_access(db: Session, rsvp, kampus_id: int):
     if rsvp.RSVP_Status != "GAAN":
-        raise HTTPException(status_code=403, detail="Hierdie Event RSVP is gekanselleer; QR is ongeldig")
+        raise HTTPException(status_code=403, detail="Hierdie RSVP vir die geleentheid is gekanselleer; die QR-kode is ongeldig")
 
     event = db.query(models.Funksie).filter(
         models.Funksie.Funksie_ID == rsvp.Funksie_ID
     ).first()
     if event is None:
-        raise HTTPException(status_code=404, detail="Event bestaan nie meer nie")
+        raise HTTPException(status_code=404, detail="Geleentheid bestaan nie meer nie")
     if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF":
-        raise HTTPException(status_code=403, detail="Hierdie Event is nie meer aktief nie")
+        raise HTTPException(status_code=403, detail="Hierdie geleentheid is nie meer aktief nie")
     if event.Kampus_ID != kampus_id:
-        raise HTTPException(status_code=403, detail="Hierdie Event QR is vir 'n ander kampus")
+        raise HTTPException(status_code=403, detail="Hierdie geleentheid-QR-kode is vir 'n ander kampus")
 
     now = datetime.utcnow()
     if now < event.FUN_Begin_Tyd - timedelta(hours=4):
-        raise HTTPException(status_code=403, detail="Dit is nog te vroeg vir hierdie Event se toegang")
+        raise HTTPException(status_code=403, detail="Dit is nog te vroeg vir toegang tot hierdie geleentheid")
     if now > event.FUN_Eind_Tyd + timedelta(hours=6):
-        raise HTTPException(status_code=403, detail="Hierdie Event se toegangstyd is reeds verby")
+        raise HTTPException(status_code=403, detail="Hierdie geleentheid se toegangstyd is reeds verby")
 
     kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
     if kampus is None:
@@ -707,14 +707,14 @@ def wagte_event_guest_confirm(
         models.FunksiePubliekRSVP.Publiek_RSVP_ID == data.publiek_rsvp_id
     ).first()
     if rsvp is None:
-        raise HTTPException(status_code=404, detail="Eksterne Event RSVP nie gevind nie")
+        raise HTTPException(status_code=404, detail="Eksterne RSVP vir geleentheid nie gevind nie")
     event, kampus = _validate_event_guest_access(db, rsvp, data.kampus_id)
     last = _last_event_guest_gate_log(db, rsvp.Publiek_RSVP_ID, event.Funksie_ID)
 
     if rigting == "IN" and last is not None and last.Rigting == "IN":
-        raise HTTPException(status_code=409, detail="Hierdie Event-gas is reeds IN")
+        raise HTTPException(status_code=409, detail="Hierdie geleentheidsgas is reeds IN")
     if rigting == "UIT" and (last is None or last.Rigting != "IN"):
-        raise HTTPException(status_code=409, detail="Hierdie Event-gas is nie tans IN nie")
+        raise HTTPException(status_code=409, detail="Hierdie geleentheidsgas is nie tans IN nie")
 
     log = models.FunksiePubliekToegang(
         Publiek_RSVP_ID=rsvp.Publiek_RSVP_ID,
@@ -761,7 +761,7 @@ def wagte_event_guest_decline(
         models.FunksiePubliekRSVP.Publiek_RSVP_ID == data.publiek_rsvp_id
     ).first()
     if rsvp is None:
-        raise HTTPException(status_code=404, detail="Eksterne Event RSVP nie gevind nie")
+        raise HTTPException(status_code=404, detail="Eksterne RSVP vir geleentheid nie gevind nie")
     event, kampus = _validate_event_guest_access(db, rsvp, data.kampus_id)
 
     log = models.FunksiePubliekToegang(

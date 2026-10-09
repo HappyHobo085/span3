@@ -233,6 +233,6 @@ def read_root():
     return schemas.APIResponse(
         sukses=True,
         data={
-            "message": "Backend is working",
+            "message": "Backend werk",
         },
     )

@@ -9,7 +9,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MOON — Events</title>
+  <title>MOON — Geleenthede</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20261007verslag">
@@ -25,18 +25,18 @@
       <div class="control-group">
         <label class="field-label" for="events-view">Wys</label>
         <select class="glass-select" id="events-view" style="width:200px">
-          <option value="komende">Komende events</option>
-          <option value="vorige">Vorige events</option>
+          <option value="komende">Komende geleenthede</option>
+          <option value="vorige">Vorige geleenthede</option>
         </select>
       </div>
       <span class="live-chip"><span class="live-dot" aria-hidden="true"></span>Gaste regstreeks · elke 10s</span>
     </section>
 
     <!-- KPI-teëls: die gekose aansig se events -->
-    <div class="stat-grid dash-kpi" aria-label="Events tellings">
+    <div class="stat-grid dash-kpi" aria-label="Geleentheidtellings">
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true"></span>
-        <div class="stat-label">Events</div>
+        <div class="stat-label">Geleenthede</div>
         <div class="stat-value" id="kpi-events">--</div>
       </div>
       <div class="glass-card stat-card">
@@ -63,12 +63,12 @@
         <div id="stat-plekke-donut" class="viz-chart"></div>
       </article>
       <article class="glass-card panel dash-grafiek">
-        <h2>Bespreking per event</h2>
+        <h2>Besprekings per geleentheid</h2>
         <div id="stat-bespreking-balke" class="viz-chart"></div>
       </article>
-      <article class="glass-card panel dash-grafiek" aria-label="Gekose event">
-        <h2>Gekose event</h2>
-        <p class="viz-empty" id="event-leeg">Kies 'n event in die tabel om sy bywoning te sien.</p>
+      <article class="glass-card panel dash-grafiek" aria-label="Gekose geleentheid">
+        <h2>Gekose geleentheid</h2>
+        <p class="viz-empty" id="event-leeg">Kies 'n geleentheid in die tabel om die bywoning te sien.</p>
         <div id="event-kaart" hidden>
           <div class="event-kop" id="event-kop">
             <div class="event-kop-ry">
@@ -85,13 +85,13 @@
     </section>
 
     <!-- Events: klik 'n ry om sy gaste te sien -->
-    <article class="glass-card panel" aria-label="Events">
-      <h2><span id="events-titel-teks">Events</span> <span class="panel-count" id="events-telling"></span></h2>
+    <article class="glass-card panel" aria-label="Geleenthede">
+      <h2><span id="events-titel-teks">Geleenthede</span> <span class="panel-count" id="events-telling"></span></h2>
       <div id="events-tabel"></div>
     </article>
 
     <!-- Die gekose event se gastelys (GET /events/{id}/rsvps) -->
-    <article class="glass-card panel" aria-label="Gaste van die gekose event">
+    <article class="glass-card panel" aria-label="Gaste van die gekose geleentheid">
       <h2 id="gaste-titel">Gaste <span class="panel-count" id="gaste-telling"></span></h2>
       <div id="gaste-tabel"></div>
     </article>

@@ -29,7 +29,7 @@ def student_scan_klas(
     ).first()
 
     if not student:
-        raise HTTPException(status_code=403, detail="Net studente kan klas scan")
+        raise HTTPException(status_code=403, detail="Net studente kan by 'n klas skandeer")
 
     tag = db.query(models.NFC_Tags).filter(
         models.NFC_Tags.NFC_UID == data.nfc_uid.strip(),
@@ -37,7 +37,7 @@ def student_scan_klas(
     ).first()
 
     if not tag or not tag.Lokasie_ID:
-        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC tag gevind nie")
+        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC-etiket gevind nie")
 
     lokasie = db.query(models.Lokasie).filter(
         models.Lokasie.Lokasie_ID == tag.Lokasie_ID

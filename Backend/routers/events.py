@@ -59,7 +59,7 @@ def _require_opsigter(db: Session, current_user: models.Gebruikers) -> None:
     if not rol_namen and current_user.rol is not None:
         rol_namen = [current_user.rol.ROL_Naam]
     if "Administrateur" not in rol_namen and "Kampus_Opsigter" not in rol_namen:
-        raise HTTPException(status_code=403, detail="Slegs 'n Opsigter mag events bestuur")
+        raise HTTPException(status_code=403, detail="Slegs 'n opsigter mag geleenthede bestuur")
 
 
 def _require_rsvp_user(db: Session, current_user: models.Gebruikers) -> None:
@@ -80,7 +80,7 @@ def _event_or_404(db: Session, event_id: int, *, lock: bool = False) -> models.F
         query = query.with_for_update()
     event = query.first()
     if event is None:
-        raise HTTPException(status_code=404, detail="Event nie gevind nie")
+        raise HTTPException(status_code=404, detail="Geleentheid nie gevind nie")
     return event
 
 
@@ -90,7 +90,7 @@ def _public_event_or_404(db: Session, share_token: str, *, lock: bool = False) -
         query = query.with_for_update()
     event = query.first()
     if event is None:
-        raise HTTPException(status_code=404, detail="Event-skakel is ongeldig of bestaan nie meer nie")
+        raise HTTPException(status_code=404, detail="Geleentheidskakel is ongeldig of bestaan nie meer nie")
     return event
 
 
@@ -138,7 +138,7 @@ def _validate_location(db: Session, kampus_id: int, lokasie_id: Optional[int]) -
 
 def _validate_times(begin_tyd: datetime, eind_tyd: datetime) -> None:
     if eind_tyd <= begin_tyd:
-        raise HTTPException(status_code=400, detail="Event se eindtyd moet ná die begintyd wees")
+        raise HTTPException(status_code=400, detail="Die geleentheid se eindtyd moet ná die begintyd wees")
 
 
 def _my_rsvp(db: Session, event_id: int, user_id: int) -> Optional[str]:
@@ -411,7 +411,7 @@ def list_events(
     _require_active(current_user)
     view = view.strip().lower()
     if view not in {"komende", "my", "vorige"}:
-        raise HTTPException(status_code=400, detail="Ongeldige event-filter")
+        raise HTTPException(status_code=400, detail="Ongeldige geleentheidfilter")
     now = datetime.utcnow()
     query = db.query(models.Funksie).options(
         joinedload(models.Funksie.kampus),
@@ -466,7 +466,7 @@ def create_event(
     _require_opsigter(db, current_user)
     naam = payload.naam.strip()
     if not naam:
-        raise HTTPException(status_code=400, detail="Event naam is verpligtend")
+        raise HTTPException(status_code=400, detail="Naam van geleentheid is verpligtend")
     if payload.kapasiteit < 1:
         raise HTTPException(status_code=400, detail="Kapasiteit moet minstens 1 wees")
     begin = _utc_naive(payload.begin_tyd)
@@ -516,7 +516,7 @@ def update_event(
     if payload.naam is not None:
         naam = payload.naam.strip()
         if not naam:
-            raise HTTPException(status_code=400, detail="Event naam mag nie leeg wees nie")
+            raise HTTPException(status_code=400, detail="Naam van geleentheid mag nie leeg wees nie")
         event.FUN_Naam = naam
     event.Kampus_ID = new_kampus_id
     event.Lokasie_ID = new_lokasie_id
@@ -618,9 +618,9 @@ def rsvp_event(
     if payload.status.strip().upper() != "GAAN":
         raise HTTPException(status_code=400, detail="Gebruik GAAN vir 'n bevestigde RSVP")
     if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF":
-        raise HTTPException(status_code=400, detail="Hierdie event is nie meer aktief nie")
+        raise HTTPException(status_code=400, detail="Hierdie geleentheid is nie meer aktief nie")
     if event.FUN_Eind_Tyd < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Hierdie event is reeds verby")
+        raise HTTPException(status_code=400, detail="Hierdie geleentheid is reeds verby")
     existing = db.query(models.FunksieRSVP).filter(
         models.FunksieRSVP.Funksie_ID == event_id,
         models.FunksieRSVP.Gebruiker_ID == current_user.Gebruiker_ID,
@@ -632,7 +632,7 @@ def rsvp_event(
     confirmed = _confirmed_count(db, event_id)
     if confirmed >= int(event.FUN_Kapasiteit or 0):
         db.rollback()
-        raise HTTPException(status_code=409, detail="Event is vol")
+        raise HTTPException(status_code=409, detail="Geleentheid is vol")
     if existing is None:
         db.add(models.FunksieRSVP(
             Funksie_ID=event_id,
@@ -661,7 +661,7 @@ def cancel_rsvp(
         models.FunksieRSVP.Gebruiker_ID == current_user.Gebruiker_ID,
     ).first()
     if row is None or row.RSVP_Status != "GAAN":
-        raise HTTPException(status_code=400, detail="Jy het nie 'n aktiewe RSVP vir hierdie event nie")
+        raise HTTPException(status_code=400, detail="Jy het nie 'n aktiewe RSVP vir hierdie geleentheid nie")
     row.RSVP_Status = "GEKANSELLEER"
     row.Gewysig_Op = datetime.utcnow()
     db.commit()
@@ -889,7 +889,7 @@ def restore_public_event_rsvp(
     if row.RSVP_Status != "GAAN":
         raise HTTPException(status_code=410, detail="Hierdie RSVP is gekanselleer en die QR is nie meer geldig nie")
     if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF" or event.FUN_Eind_Tyd < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="Hierdie Event is nie meer aktief nie")
+        raise HTTPException(status_code=410, detail="Hierdie geleentheid is nie meer aktief nie")
     return {
         "sukses": True,
         "data": {
@@ -912,10 +912,10 @@ def public_event_rsvp(
     event = _public_event_or_404(db, share_token, lock=True)
     if not event.FUN_Is_Aktief or event.FUN_Status != "AKTIEF":
         db.rollback()
-        raise HTTPException(status_code=400, detail="Hierdie event is nie meer oop vir RSVP nie")
+        raise HTTPException(status_code=400, detail="Hierdie geleentheid is nie meer oop vir RSVP nie")
     if event.FUN_Eind_Tyd < datetime.utcnow():
         db.rollback()
-        raise HTTPException(status_code=400, detail="Hierdie event is reeds verby")
+        raise HTTPException(status_code=400, detail="Hierdie geleentheid is reeds verby")
 
     naam = payload.naam.strip()
     van = payload.van.strip()
@@ -943,7 +943,7 @@ def public_event_rsvp(
             db.rollback()
             raise HTTPException(
                 status_code=403,
-                detail="Hierdie RSVP is deur die event-organiseerder gekanselleer. Kontak asseblief die organiseerder.",
+                detail="Hierdie RSVP is deur die organiseerder van die geleentheid gekanselleer. Kontak asseblief die organiseerder.",
             )
         data = {
             "publiek_rsvp_id": existing.Publiek_RSVP_ID,
@@ -957,7 +957,7 @@ def public_event_rsvp(
 
     if _confirmed_count(db, event.Funksie_ID) >= int(event.FUN_Kapasiteit or 0):
         db.rollback()
-        raise HTTPException(status_code=409, detail="Event is vol")
+        raise HTTPException(status_code=409, detail="Geleentheid is vol")
 
     row = models.FunksiePubliekRSVP(
         Funksie_ID=event.Funksie_ID,

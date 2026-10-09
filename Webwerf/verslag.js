@@ -159,7 +159,7 @@
 
     var titels = oorsig.afdelings.map(function (a) { return a.titel; });
     document.getElementById('aflaai-excel-detail').textContent =
-      (titels.length === 1 ? 'Tab: ' : 'Tabs: ') + titels.join(', ');
+      (titels.length === 1 ? 'Oortjie: ' : 'Oortjies: ') + titels.join(', ');
 
     tekenOortjies();
     tekenAfdeling();

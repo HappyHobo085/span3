@@ -53,7 +53,7 @@ def _require_sender_for_campus(db: Session, user: models.Gebruikers, kampus_id: 
     if "Kampus_Opsigter" not in roles:
         raise HTTPException(
             status_code=403,
-            detail="Slegs 'n Administrateur of Kampus Opsigter mag 'n noodgeval beheer.",
+            detail="Slegs 'n administrateur of kampusopsigter mag 'n noodgeval beheer.",
         )
 
     opsigter = (
@@ -64,7 +64,7 @@ def _require_sender_for_campus(db: Session, user: models.Gebruikers, kampus_id: 
     if not opsigter or opsigter.Kampus_ID != kampus_id:
         raise HTTPException(
             status_code=403,
-            detail="Die Kampus Opsigter mag net noodgevalle vir sy/haar eie kampus beheer.",
+            detail="Die kampusopsigter mag net noodgevalle vir sy/haar eie kampus beheer.",
         )
 
 
@@ -124,7 +124,7 @@ def mqtt_toets(
     try:
         publish_json(topic, message, qos=1, retain=False)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"MQTT broker is nie beskikbaar nie: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"MQTT-bediener is nie beskikbaar nie: {exc}") from exc
 
     return schemas.APIResponse(
         sukses=True,
@@ -250,7 +250,7 @@ def herstuur_noodgeval_status(
             row.NOO_Mqtt_Gestuur_Op = _utcnow_naive()
             db.commit()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"MQTT herstuur het misluk: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"Herstuur via MQTT het misluk: {exc}") from exc
 
     return schemas.APIResponse(sukses=True, data=mqtt_result, fout=None)
 

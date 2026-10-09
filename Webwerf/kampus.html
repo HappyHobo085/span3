@@ -25,7 +25,7 @@
     </section>
 
     <!-- KPI-teëls: die vier tellings van die gekose kampus -->
-    <div class="stat-grid dash-kpi" aria-label="Kampus tellings">
+    <div class="stat-grid dash-kpi" aria-label="Kampustellings">
       <div class="glass-card stat-card">
         <span class="stat-accent" aria-hidden="true" style="background:var(--series-1)"></span>
         <div class="stat-label">Studente ingeteken</div>
@@ -80,7 +80,7 @@
     <section class="panels" style="grid-template-columns:1fr">
       <article class="glass-card panel" aria-label="Lokaalgebruik" style="flex: 1 1 100%;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2>Lokaalgebruik Voorspelling (Kapasiteit & Vulgraad)</h2>
+          <h2>Lokaalgebruikvoorspelling (kapasiteit en vulgraad)</h2>
           <div style="display: flex; gap: 10px;">
             <select class="glass-select" id="lokaalgebruik-dag-select">
               <option value="Monday">Maandag</option>
@@ -92,7 +92,7 @@
           </div>
         </div>
         <div style="color: var(--viz-dim); font-size: 0.85em; margin-bottom: 10px;">
-          <em>Nota: Slegs sigbaar vir geselekteerde kampus. Gebruik moontlik sintetiese data-voorspellings indien bron aangedui as SINTETIES/ML.</em>
+          <em>Nota: Slegs sigbaar vir die gekose kampus. Voorspellings kan op sintetiese data gebaseer wees wanneer die bron as SINTETIES/ML aangedui word.</em>
         </div>
         <div id="lokaalgebruik-container" style="overflow-x: auto;">
           <!-- Heatmap word hier gelaai via kampus.js -->

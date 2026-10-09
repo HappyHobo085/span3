@@ -38,8 +38,8 @@ class NoodgevalNotificationService {
 
     const androidDetails = AndroidNotificationDetails(
       'moon_noodgeval_test',
-      'MOON Noodgeval Toets',
-      channelDescription: 'MQTT noodgeval-toetsboodskappe',
+      'MOON-noodgevaltoets',
+      channelDescription: 'MQTT-noodgevaltoetsboodskappe',
       importance: Importance.high,
       priority: Priority.high,
       playSound: false,

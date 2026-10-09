@@ -134,7 +134,7 @@ class NfcStatusBadge extends StatelessWidget {
           ),
           const SizedBox(width: 5),
           Text(
-            'NFC Gereed',
+            'NFC gereed',
             style: GoogleFonts.inter(
               color: const Color(0xFF6EE7B7),
               fontSize: 10,

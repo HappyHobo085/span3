@@ -25,7 +25,7 @@
     <section class="top-controls space-between" aria-label="Admin aksies">
       <div class="control-group" style="flex-direction:row;gap:10px;flex-wrap:wrap">
         <button class="btn-primary" id="open-create-user-modal" type="button">+ Skep Gebruiker</button>
-        <button class="btn-outline" id="upload-csv-btn" type="button">CSV In/Uitvoer</button>
+        <button class="btn-outline" id="upload-csv-btn" type="button">CSV-in-/uitvoer</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none">
       </div>
       <div class="control-group" style="flex-direction:row;gap:10px;flex-wrap:wrap">
@@ -165,8 +165,8 @@
         <p id="rooster-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
       </article>
       <!-- Roosterlokaal mapping: koppel elke Lantiv-lokaal eenmalig aan 'n fisiese MOON-klaskamer/NFC-tag. -->
-      <article class="glass-card panel" aria-label="Roosterlokaal Koppeling">
-        <h2>Roosterlokale Koppeling</h2>
+      <article class="glass-card panel" aria-label="Roosterlokaalkoppelings">
+        <h2>Roosterlokaalkoppelings</h2>
         <p style="font-size:12px;color:var(--text-2);margin-bottom:10px">
           Koppel elke lokaalnaam uit die Lantiv-rooster aan die werklike MOON-klaskamer.
           Die koppeling word onthou en weer gebruik wanneer 'n nuwe rooster ingevoer word.
@@ -176,7 +176,7 @@
           <span id="rooster-lokale-opsomming" style="font-size:11px;color:var(--text-2)">--</span>
         </div>
         <div id="rooster-lokale-status" class="modal-status" aria-live="polite"></div>
-        <div id="rooster-lokale-list" class="admin-list" aria-label="Lantiv na MOON lokaal koppelings"></div>
+        <div id="rooster-lokale-list" class="admin-list" aria-label="Lantiv-na-MOON-lokaalkoppelings"></div>
       </article>
 
       <!-- Paneel 6: Studente en hul groepe/modules. Bepaal wie op 'n klas se
@@ -203,14 +203,14 @@
         <p id="studente-opsomming" style="margin-top:10px;font-size:11px;color:var(--text-2)">--</p>
       </article>
       <!-- Paneel 7: Stel die tyd wanneer almal outomaties uitgeskandeer word (nog 'n demo) -->
-      <article class="glass-card panel" aria-label="Outo-Uitskandering">
-        <h2>Outo-Uitskandering</h2>
+      <article class="glass-card panel" aria-label="Outo-uitskandering">
+        <h2>Outo-uitskandering</h2>
         <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">
           Stel die tyd waarop alle gebruikers outomaties van kampusgronde
           uitgeskandeer word.
         </p>
         <div class="field">
-          <label class="field-label" for="auto-scanout-time">Uitskandering Tyd</label>
+          <label class="field-label" for="auto-scanout-time">Uitskanderingstyd</label>
           <input class="glass-input" type="time" id="auto-scanout-time"
                  value="18:00" style="width:160px;display:block;margin-top:6px">
         </div>
@@ -226,26 +226,26 @@
 
   <!-- Modale vensters: hulle is weggesteek totdat 'n knoppie hulle oopmaak -->
 
-  <!-- Modal: CSV In/Uitvoer -->
+  <!-- Modal: CSV-in-/uitvoer -->
   <div id="csvModal" class="class-modal-overlay" aria-hidden="true">
     <div class="class-modal" role="dialog" aria-modal="true" aria-labelledby="csv-modal-title">
-      <h3 id="csv-modal-title">CSV Import / Export</h3>
+      <h3 id="csv-modal-title">CSV-invoer en -uitvoer</h3>
 
       <div class="field">
         <label for="csv-action-select">Aksie</label>
         <select class="glass-select" id="csv-action-select">
-          <option value="import">Invoer (Import)</option>
-          <option value="export">Uitvoer (Export)</option>
-          <option value="import-all">Invoer Alles (Import All)</option>
-          <option value="export-all">Uitvoer Alles (Export All)</option>
+          <option value="import">Voer in</option>
+          <option value="export">Voer uit</option>
+          <option value="import-all">Voer alles in</option>
+          <option value="export-all">Voer alles uit</option>
         </select>
       </div>
 
       <div class="field">
-        <label for="csv-mode-select">Import Modus</label>
+        <label for="csv-mode-select">Invoermodus</label>
         <select class="glass-select" id="csv-mode-select">
-          <option value="merge">Merge</option>
-          <option value="replace">Replace</option>
+          <option value="merge">Saamvoeg</option>
+          <option value="replace">Vervang</option>
         </select>
       </div>
 
@@ -501,7 +501,7 @@
       <h3 id="class-modal-title">Skep nuwe klas</h3>
       <div class="field">
         <label for="class-room-name">Naam van klaskamer</label>
-        <input id="class-room-name" type="text" placeholder="Voer die klaskamer naam in">
+        <input id="class-room-name" type="text" placeholder="Voer die klaskamernaam in">
       </div>
       <div class="field">
         <label for="class-kampus">Kies kampus</label>
@@ -510,7 +510,7 @@
         </select>
       </div>
       <div class="field">
-        <label for="class-tag-uid">NFC-tag UID (bv. L4)</label>
+        <label for="class-tag-uid">NFC-etiket se UID (bv. L4)</label>
         <input id="class-tag-uid" type="text" placeholder="Los leeg om outomaties te genereer">
       </div>
       <div class="class-modal-actions">

@@ -32,7 +32,7 @@ MEDIA_TIPES = {
 MAKS_DOKUMENT_RYE = 2000
 
 # Reekskleure vir drukwerk/ligte agtergrond (dieselfde as die webwerf se ligte tema);
-# die derde kleur is die dowwe "res"-kategorie (bv. "Nog nooit gescan").
+# die derde kleur is die dowwe "res"-kategorie (bv. "Nog nooit geskandeer").
 _KLEURE = ["0077A8", "6D52F4", "B8BFCC"]
 _NAVY = "1F3A5F"
 

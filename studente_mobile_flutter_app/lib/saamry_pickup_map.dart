@@ -77,7 +77,7 @@ Future<List<_SaamryAddressResult>> _searchSaamryAddresses(String rawQuery) async
 
   final decoded = jsonDecode(response.body);
   if (decoded is! List) {
-    throw Exception('Ongeldige adres-soek antwoord');
+    throw Exception('Ongeldige antwoord op adressoektog');
   }
 
   return decoded
@@ -296,7 +296,7 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Tik die adres waar die Driver begin ry. Kies daarna die korrekte soekresultaat.',
+                          'Tik die adres waar die bestuurder begin ry. Kies daarna die korrekte soekresultaat.',
                           style: GoogleFonts.inter(color: kText1, fontSize: 13),
                         ),
                         const SizedBox(height: 14),
@@ -360,7 +360,7 @@ class _SaamryPinPickerPageState extends State<SaamryPinPickerPage> {
                             activeColor: kAccent,
                             checkColor: Colors.black,
                             title: Text(
-                              'Stoor ook as my gewone pickup-adres',
+                              'Stoor ook as my gewone opteladres',
                               style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
                             ),
                             onChanged: (value) =>
@@ -444,8 +444,8 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
       context,
       MaterialPageRoute(
         builder: (_) => SaamryPinPickerPage(
-          title: 'My Gewone Pickup-adres',
-          subtitle: 'Word as verstek vir nuwe Saamry-events gebruik',
+          title: 'My gewone opteladres',
+          subtitle: 'Word as verstek vir nuwe Saamry-ritte gebruik',
           initialLatitude: _profile?.latitude,
           initialLongitude: _profile?.longitude,
           initialBeskrywing: _profile?.beskrywing,
@@ -469,7 +469,7 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
         _saving = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gewone pickup-adres is gestoor')),
+        SnackBar(content: Text('Gewone opteladres is gestoor')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -491,8 +491,8 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'My Pickup-adres',
-              subtitle: 'Jou gewone Saamry optelpunt',
+              title: 'My opteladres',
+              subtitle: 'Jou gewone Saamry-optelpunt',
               showBack: true,
             ),
             Expanded(
@@ -514,8 +514,8 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
                               const SizedBox(height: 12),
                               Text(
                                 _profile == null
-                                    ? 'Geen gewone pickup-adres gestel nie'
-                                    : 'Jou gewone pickup-adres',
+                                    ? 'Geen gewone opteladres gestel nie'
+                                    : 'Jou gewone opteladres',
                                 style: GoogleFonts.inter(
                                   color: kText1,
                                   fontSize: 16,
@@ -525,7 +525,7 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
                               const SizedBox(height: 7),
                               Text(
                                 _profile?.beskrywing ??
-                                    'Stel dit een keer. Wanneer jy later deel van ’n nuwe Saamry-event is, word hierdie adres vooraf ingevul maar jy moet dit steeds vir daardie rit bevestig.',
+                                    'Stel dit een keer. Wanneer jy later deel van ’n nuwe Saamry-rit is, word hierdie adres vooraf ingevul maar jy moet dit steeds vir daardie rit bevestig.',
                                 style: GoogleFonts.inter(
                                   color: kText2,
                                   fontSize: 12,
@@ -547,8 +547,8 @@ class _SaamryDefaultPickupPageState extends State<SaamryDefaultPickupPage> {
                                 label: _saving
                                     ? 'Stoor...'
                                     : (_profile == null
-                                        ? 'Stel Pickup-adres'
-                                        : 'Verander Pickup-adres'),
+                                        ? 'Stel opteladres'
+                                        : 'Verander opteladres'),
                                 onTap: _saving ? () {} : _changeAddress,
                                 height: 50,
                               ),
@@ -678,7 +678,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Pickup-adresse',
+              title: 'Opteladresse',
               subtitle: widget.group.naam,
               showBack: true,
             ),
@@ -699,7 +699,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                               child: Text(
                                 _event.isBestuurder
                                     ? '${_event.pickupGereed}/${_event.pickupTotaal} adresse gereed'
-                                    : 'Jou opteladres + Driver se beginadres',
+                                    : 'Jou opteladres + bestuurder se beginadres',
                                 style: GoogleFonts.inter(
                                   color: kText1,
                                   fontSize: 13,
@@ -712,9 +712,9 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                         const SizedBox(height: 10),
                         Text(
                           _event.isBestuurder
-                              ? 'As Driver/Admin kan jy al die deelnemers se opteladresse sien. Tik jou eie beginadres hieronder om dit te verander.'
+                              ? 'As bestuurder/admin kan jy al die deelnemers se opteladresse sien. Tik jou eie beginadres hieronder om dit te verander.'
                               : _me?.pickupLatitude != null && _me?.pickupGestel != true
-                                  ? 'Jou gewone pickup-adres is vooraf ingevul. Bevestig dit vir hierdie rit of kies ’n ander adres.'
+                                  ? 'Jou gewone opteladres is vooraf ingevul. Bevestig dit vir hierdie rit of kies ’n ander adres.'
                                   : 'Tik jou opteladres hieronder. Ander passasiers se presiese adresse bly privaat.',
                           style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                         ),
@@ -820,7 +820,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                             activeColor: kAccent,
                             checkColor: Colors.black,
                             title: Text(
-                              'Stoor hierdie ook as my gewone pickup-adres',
+                              'Stoor hierdie ook as my gewone opteladres',
                               style: GoogleFonts.inter(color: kText1, fontSize: 11.5),
                             ),
                             onChanged: _saving
@@ -854,7 +854,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'EVENT-LEDE',
+                          'RITLEDE',
                           style: GoogleFonts.inter(
                             color: kTextMuted,
                             fontSize: 9,
@@ -905,7 +905,7 @@ class _SaamryPickupMapPageState extends State<SaamryPickupMapPage> {
                                 const SizedBox(width: 8),
                                 Text(
                                   member.isBestuurder
-                                      ? 'DRIVER'
+                                      ? 'BESTUURDER'
                                       : (member.pickupGestel ? 'ADRES GEREED' : 'WAG VIR ADRES'),
                                   style: TextStyle(
                                     color: member.pickupGestel

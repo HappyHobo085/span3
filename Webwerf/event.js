@@ -116,7 +116,7 @@
     if (!window.MoonStats) return;
     eventTabel = MoonStats.createTable(document.getElementById('events-tabel'), {
       columns: [
-        { name: 'Event', format: 'teks' },
+        { name: 'Geleentheid', format: 'teks' },
         { name: 'Kampus', format: 'teks' },
         { name: 'Lokaal', format: 'teks' },
         { name: 'Begin', format: 'datumtyd' },
@@ -124,8 +124,8 @@
         { name: 'Kapasiteit', format: 'getal' },
         { name: 'Status', format: 'status' }
       ],
-      searchPlaceholder: 'Soek event of plek…',
-      emptyText: 'Laai events…',
+      searchPlaceholder: 'Soek geleentheid of plek…',
+      emptyText: 'Laai geleenthede…',
       pageSize: 25,
       onRowClick: function (r) { kiesEvent(r.ev); }
     });
@@ -139,7 +139,7 @@
         { name: 'Status', format: 'status' }
       ],
       searchPlaceholder: 'Soek gas…',
-      emptyText: 'Kies \'n event om sy gaste te sien.',
+      emptyText: 'Kies \'n geleentheid om die gaste te sien.',
       filters: [
         { label: 'Almal' },
         { label: 'Hier', test: function (r) { return r.status === 'HIER'; } },
@@ -161,12 +161,12 @@
 
     if (!json || !json.sukses || !Array.isArray(json.data)) {
       eventTabel.setRows([]);
-      eventTabel.setNote('Kon nie die events laai nie.');
+      eventTabel.setNote('Kon nie die geleenthede laai nie.');
       return;
     }
 
     events = json.data;
-    stelTeks('events-titel-teks', view === 'vorige' ? 'Vorige events' : 'Komende events');
+    stelTeks('events-titel-teks', view === 'vorige' ? 'Vorige geleenthede' : 'Komende geleenthede');
     stelTeks('events-telling', String(events.length));
     eventTabel.setNote('');
     tekenEvents();
@@ -418,7 +418,7 @@
         ]
       };
     }));
-    if (!gaste.length) gasteTabel.setNote('Nog niemand het vir hierdie event RSVP nie.');
+    if (!gaste.length) gasteTabel.setNote('Nog niemand het vir hierdie geleentheid RSVP nie.');
   }
 
   // Teken die grafieke oor as die venster verander of die tema wissel.

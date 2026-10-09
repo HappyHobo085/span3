@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>MOON Event RSVP</title>
+  <title>MOON-geleentheid – RSVP</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -40,11 +40,11 @@
 <body>
   <main class="wrap">
     <div class="brand">MOON</div>
-    <div id="loading" class="card loading">Event word gelaai...</div>
+    <div id="loading" class="card loading">Geleentheid word gelaai...</div>
     <div id="restoreStatus" class="restore">Jou bestaande RSVP word gelaai...</div>
 
     <section id="formCard" class="card" style="display:none">
-      <h1 id="eventName">Event</h1>
+      <h1 id="eventName">Geleentheid</h1>
       <div id="eventDescription" class="muted"></div>
       <div class="meta">
         <div><strong>Kampus:</strong> <span id="eventLocation">—</span></div>
@@ -70,7 +70,7 @@
     <section id="confirmCard" class="card">
       <div class="success">✓ RSVP BEVESTIG</div>
       <h1 id="guestName" style="margin-top:12px"></h1>
-      <div class="muted">Wys hierdie QR by die event se toegangspunt.</div>
+      <div class="muted">Wys hierdie QR-kode by die geleentheid se toegangspunt.</div>
       <div id="qr"></div>
       <div id="confirmedEvent" class="muted"></div>
       <div id="tokenFallback" class="token"></div>
@@ -139,16 +139,16 @@
 
     async function loadEvent() {
       if (!shareToken) {
-        document.getElementById('loading').textContent = 'Die Event-skakel is ongeldig: geen token is gevind nie.';
+        document.getElementById('loading').textContent = 'Die geleentheidskakel is ongeldig: geen token is gevind nie.';
         return;
       }
       try {
         const res = await fetch(API_BASE_URL + '/events/public/' + encodeURIComponent(shareToken) + '/data');
         const body = await res.json();
-        if (!res.ok || body.sukses !== true) throw new Error(messageFrom(body, 'Event kon nie laai nie'));
+        if (!res.ok || body.sukses !== true) throw new Error(messageFrom(body, 'Geleentheid kon nie laai nie'));
         eventData = body.data;
-        document.getElementById('eventName').textContent = eventData.naam || 'Event';
-        document.title = (eventData.naam || 'MOON Event') + ' – RSVP';
+        document.getElementById('eventName').textContent = eventData.naam || 'Geleentheid';
+        document.title = (eventData.naam || 'MOON-geleentheid') + ' – RSVP';
         document.getElementById('eventDescription').textContent = eventData.beskrywing || '';
         document.getElementById('eventLocation').textContent = eventData.kampus_naam + (eventData.lokasie_naam ? ' · ' + eventData.lokasie_naam : '');
         document.getElementById('eventTime').textContent = formatDateTime(eventData.begin_tyd, eventData.eind_tyd);

@@ -134,7 +134,7 @@ def _laai(inhoud: bytes):
 
 def test_admin_kry_kampus_koshuis_events(db, opstelling):
     oorsig = bou_oorsig(db, opstelling["admin"], ["Administrateur"], VAN, TOT, nou=NOU)
-    assert [a["titel"] for a in oorsig["afdelings"]] == ["Kampus", "Koshuis", "Events"]
+    assert [a["titel"] for a in oorsig["afdelings"]] == ["Kampus", "Koshuis", "Geleenthede"]
 
     kampus = _afdeling(oorsig, "kampus")
     persone = _rye(kampus, "persone")
@@ -154,7 +154,7 @@ def test_admin_kry_kampus_koshuis_events(db, opstelling):
     assert inwoner["Koshuis"] == "Huis A"
 
     events = _afdeling(oorsig, "events")
-    assert _syfer(events, "Events in tydperk") == 2
+    assert _syfer(events, "Geleenthede in tydperk") == 2
     oopdag = _ry_vir(_rye(events, "events"), "Event", "Oopdag")
     assert (oopdag["RSVP's"], oopdag["Aangekom"]) == (2, 1)
     assert oopdag["Status"] == "Afgehandel"
@@ -218,10 +218,10 @@ def test_ongeldige_tydperk(db, opstelling):
 def test_excel_bladsye_vir_admin_en_opsigter(db, opstelling):
     inhoud, lêernaam = genereer_verslag(db, opstelling["admin"], ["Administrateur"], VAN, TOT, nou=NOU)
     assert lêernaam == "moon_bywoning_20260928_20261005.xlsx"
-    assert _laai(inhoud).sheetnames == ["Kampus", "Koshuis", "Events"]
+    assert _laai(inhoud).sheetnames == ["Kampus", "Koshuis", "Geleenthede"]
 
     inhoud, _ = genereer_verslag(db, opstelling["opsigter"], ["Kampus_Opsigter"], VAN, TOT, nou=NOU)
-    assert _laai(inhoud).sheetnames == ["Kampus", "Koshuis", "Events"]
+    assert _laai(inhoud).sheetnames == ["Kampus", "Koshuis", "Geleenthede"]
 
 
 def test_excel_bladsy_vir_personeel(db, opstelling):
@@ -247,7 +247,7 @@ def test_word(db, opstelling, rol_sleutel, rol):
     assert lêernaam.endswith(".docx")
     assert zipfile.is_zipfile(io.BytesIO(inhoud))
     opskrifte = [p.text for p in Document(io.BytesIO(inhoud)).paragraphs if p.style.name.startswith("Heading 1")]
-    assert opskrifte == (["Kampus", "Koshuis", "Events"] if rol == "Administrateur" else ["Klas"])
+    assert opskrifte == (["Kampus", "Koshuis", "Geleenthede"] if rol == "Administrateur" else ["Klas"])
 
 
 def test_teks(db, opstelling):
@@ -330,7 +330,7 @@ class TestVerslagHTTP:
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         assert 'filename="moon_bywoning_20260901_20260930.xlsx"' in resp.headers["content-disposition"]
-        assert _laai(resp.content).sheetnames == ["Kampus", "Koshuis", "Events"]
+        assert _laai(resp.content).sheetnames == ["Kampus", "Koshuis", "Geleenthede"]
 
     @pytest.mark.parametrize("formaat,tipe", [
         ("pdf", "application/pdf"),

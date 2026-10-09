@@ -59,7 +59,7 @@ def _device_identity(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Device token ontbreek.",
+            detail="Toesteltoken ontbreek.",
         )
 
     row = db.execute(
@@ -84,7 +84,7 @@ def _device_identity(
     if not row or not row["NDA_Is_Aktief"] or not row["Gebruiker_Is_Aktief"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Device token is ongeldig of gedeaktiveer.",
+            detail="Toesteltoken is ongeldig of gedeaktiveer.",
         )
 
     expiry = row["NDA_Verval_Op"]
@@ -100,7 +100,7 @@ def _device_identity(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Device token het verval. Meld weer in om dit te hernu.",
+            detail="Toesteltoken het verval. Meld weer aan om dit te hernu.",
         )
 
     db.execute(
@@ -172,7 +172,7 @@ def register_device(
 
     device_id = payload.device_id.strip()
     if not device_id:
-        raise HTTPException(status_code=400, detail="Device ID ontbreek.")
+        raise HTTPException(status_code=400, detail="Toestel-ID ontbreek.")
 
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_token(raw_token)

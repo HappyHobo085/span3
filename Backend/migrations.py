@@ -1165,7 +1165,7 @@ def run_migrations(engine):
         )
 
 
-    # Migrasie 022: Saamry-event pickup pins
+    # Migrasie 022: Saamry-rit pickup pins
     try:
         with engine.begin() as _conn:
             _conn.execute(text('''

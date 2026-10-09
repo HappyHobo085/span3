@@ -449,8 +449,8 @@ class _TuisTabState extends State<_TuisTab> {
                       width: tileWidth,
                       child: _PersoneelQuickAction(
                         icon: Icons.event_rounded,
-                        label: 'Events',
-                        subtitle: 'Komende events & RSVP',
+                        label: 'Geleenthede',
+                        subtitle: 'Komende geleenthede en RSVP',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const _PersoneelEventsPage()),
@@ -773,7 +773,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
         .toList();
     if (ownedActive.isNotEmpty) {
       _message(
-        'Jy het reeds ’n aktiewe Saamry-event in ${ownedActive.first.naam}. Voltooi of kanselleer dit eers.',
+        'Jy het reeds ’n aktiewe Saamry-rit in ${ownedActive.first.naam}. Voltooi of kanselleer dit eers.',
       );
       return;
     }
@@ -787,7 +787,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
 
     if (driverGroups.isEmpty) {
       _message(
-        'Jy het geen Driver/Admin-groep wat gereed is vir ’n nuwe Saamry-event nie.',
+        'Jy het geen groep waarvan jy bestuurder/admin is wat gereed is vir ’n nuwe Saamry-rit nie.',
       );
       return;
     }
@@ -830,7 +830,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
         .where((m) => m.status == 'AANVAAR' && !m.isBestuurder)
         .toList();
     if (candidates.isEmpty) {
-      _message('Daar is geen ander aanvaarde lid om Driver/Admin te maak nie');
+      _message('Daar is geen ander aanvaarde lid om bestuurder/admin te maak nie');
       return;
     }
 
@@ -839,7 +839,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF111827),
         title: const Text(
-          'Gee Driver/Admin oor',
+          'Gee bestuurder/admin-rol oor',
           style: TextStyle(color: Colors.white),
         ),
         content: SizedBox(
@@ -872,9 +872,9 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
     if (selected == null) return;
 
     final confirm = await _confirm(
-      title: 'Bevestig Driver/Admin',
+      title: 'Bevestig bestuurder/admin',
       message:
-          '${selected.gebruiker.volleNaam} word die nuwe Driver én Admin van ${group.naam}. Jy sal daarna ’n gewone lid wees.',
+          '${selected.gebruiker.volleNaam} word die nuwe bestuurder én admin van ${group.naam}. Jy sal daarna ’n gewone lid wees.',
       confirmLabel: 'Gee Oor',
     );
     if (!confirm) return;
@@ -884,7 +884,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
         groepId: group.groepId,
         nuweBestuurderId: selected.gebruiker.gebruikerId,
       ),
-      'Driver/Admin is oorgedra',
+      'Bestuurder/admin-rol is oorgedra',
     );
   }
 
@@ -911,7 +911,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
   Future<void> _openPickupMap(SaamryGroupDto group) async {
     final event = group.aktieweEvent;
     if (event == null || !event.isDeelnemer) {
-      _message('Jy is nie deel van hierdie aktiewe Saamry-event nie');
+      _message('Jy is nie deel van hierdie aktiewe Saamry-rit nie');
       return;
     }
     await Navigator.push<void>(
@@ -1055,7 +1055,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Driver/Admin: ${group.bestuurder.volleNaam}',
+              'Bestuurder/admin: ${group.bestuurder.volleNaam}',
               style: GoogleFonts.inter(color: kText2, fontSize: 12),
             ),
             const SizedBox(height: 12),
@@ -1108,7 +1108,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
           border: Border.all(color: Colors.white12),
         ),
         child: Text(
-          'Geen aktiewe Saamry-event nie. Almal scan individueel totdat ’n nuwe event geskep word.',
+          'Geen aktiewe Saamry-rit nie. Almal skandeer individueel totdat ’n nuwe rit geskep word.',
           style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
         ),
       );
@@ -1144,7 +1144,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'AKTIEWE SAAMRY-EVENT',
+                      'AKTIEWE SAAMRY-RIT',
                       style: GoogleFonts.inter(
                         color: kAccent,
                         fontSize: 9,
@@ -1172,8 +1172,8 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
               ),
               label: Text(
                 event.isBestuurder
-                    ? 'Pickup-kaart'
-                    : (myPinReady ? 'Pickup-kaart / Verander Adres' : 'Stel My Opteladres'),
+                    ? 'Optelkaart'
+                    : (myPinReady ? 'Optelkaart / verander adres' : 'Stel my opteladres'),
               ),
             ),
           ],
@@ -1206,7 +1206,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                       ),
                     ),
                     Text(
-                      'Driver/Admin: ${group.bestuurder.volleNaam}',
+                      'Bestuurder/admin: ${group.bestuurder.volleNaam}',
                       style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                     ),
                   ],
@@ -1220,7 +1220,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
-                    'DRIVER / ADMIN',
+                    'BESTUURDER / ADMIN',
                     style: TextStyle(
                       color: kAccent,
                       fontSize: 8,
@@ -1250,7 +1250,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                       ),
                       if (member.isBestuurder)
                         const Text(
-                          'DRIVER',
+                          'BESTUURDER',
                           style: TextStyle(
                             color: kAccent,
                             fontSize: 9,
@@ -1297,7 +1297,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
               children: [
                 Expanded(
                   child: GradientActionButton(
-                    label: group.aktieweEvent == null ? 'Nuwe Saamry' : 'Event Aktief',
+                    label: group.aktieweEvent == null ? 'Nuwe Saamry' : 'Rit aktief',
                     onTap: group.aktieweEvent == null
                         ? () => _openCreateEvent(initialGroup: group)
                         : () {},
@@ -1319,7 +1319,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
               children: [
                 Expanded(
                   child: OutlineActionButton(
-                    label: 'Gee Driver Oor',
+                    label: 'Gee bestuurderrol oor',
                     onTap: () => _transferDriver(group),
                     height: 44,
                   ),
@@ -1327,25 +1327,25 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlineActionButton(
-                    label: group.aktieweEvent != null ? 'Kanselleer Event' : 'Sluit Groep',
+                    label: group.aktieweEvent != null ? 'Kanselleer rit' : 'Sluit Groep',
                     onTap: _busy
                         ? () {}
                         : () async {
                             if (group.aktieweEvent != null) {
                               final ok = await _confirm(
-                                title: 'Kanselleer Saamry-event',
+                                title: 'Kanselleer Saamry-rit',
                                 message: 'Die permanente groep bly bestaan; net hierdie aktiewe rit word gekanselleer.',
-                                confirmLabel: 'Kanselleer Event',
+                                confirmLabel: 'Kanselleer rit',
                               );
                               if (!ok) return;
                               await _runAction(
                                 () => MoonApi.cancelSaamryEvent(group.aktieweEvent!.eventId),
-                                'Saamry-event gekanselleer',
+                                'Saamry-rit gekanselleer',
                               );
                             } else {
                               final ok = await _confirm(
                                 title: 'Sluit Permanente Groep',
-                                message: 'Dit sluit die permanente groep. Die groepchat en nuwe events sal daarna nie beskikbaar wees nie.',
+                                message: 'Dit sluit die permanente groep. Die groepklets en nuwe ritte sal daarna nie beskikbaar wees nie.',
                                 confirmLabel: 'Sluit Groep',
                               );
                               if (!ok) return;
@@ -1369,7 +1369,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                   : () async {
                       final ok = await _confirm(
                         title: 'Verlaat Groep',
-                        message: 'Jy sal nie meer die groepchat of toekomstige Saamry-events van hierdie groep sien nie.',
+                        message: 'Jy sal nie meer die groepklets of toekomstige Saamry-ritte van hierdie groep sien nie.',
                         confirmLabel: 'Verlaat',
                       );
                       if (!ok) return;
@@ -1394,7 +1394,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
         children: [
           Row(
             children: [
-              Expanded(child: _sectionTitle('VRIENDE & PRIVAAT CHAT')),
+              Expanded(child: _sectionTitle('VRIENDE & PRIVAAT KLETS')),
               TextButton.icon(
                 onPressed: _openAddFriend,
                 icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
@@ -1510,7 +1510,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$memberCount lid${memberCount == 1 ? '' : 'e'}',
+                      '$memberCount ${memberCount == 1 ? 'lid' : 'lede'}',
                       style: GoogleFonts.inter(color: kTextMuted, fontSize: 11.5),
                     ),
                   ],
@@ -1557,7 +1557,7 @@ class _PersoneelSaamryTabState extends State<_PersoneelSaamryTab> {
                 ),
               ),
               IconButton(
-                tooltip: 'My pickup-adres',
+                tooltip: 'My opteladres',
                 onPressed: _openDefaultPickup,
                 icon: Icon(Icons.location_on, color: kAccent),
               ),
@@ -1823,7 +1823,7 @@ class _PersoneelCreateSaamryGroupPageState extends State<_PersoneelCreateSaamryG
           children: [
             const AppScreenHeader(
               title: 'Nuwe Permanente Groep',
-              subtitle: 'Die Driver is outomaties die Admin',
+              subtitle: 'Die bestuurder is outomaties die admin',
               showBack: true,
             ),
             Expanded(
@@ -1866,7 +1866,7 @@ class _PersoneelCreateSaamryGroupPageState extends State<_PersoneelCreateSaamryG
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Die groep bly bestaan nadat ’n rit klaar is. Vir elke werklike rit skep die Driver later ’n nuwe Saamry-event.',
+                        'Die groep bly bestaan nadat ’n rit klaar is. Vir elke werklike rit skep die bestuurder later ’n nuwe Saamry-rit.',
                         style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                       ),
                       const SizedBox(height: 20),
@@ -1929,7 +1929,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
         );
       });
     } catch (_) {
-      // 'n Gewone pickup-adres is gerieflik, maar nie nodig om die blad oop te maak nie.
+      // 'n Gewone opteladres is gerieflik, maar nie nodig om die blad oop te maak nie.
     }
   }
 
@@ -1951,7 +1951,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
       context,
       MaterialPageRoute(
         builder: (_) => SaamryPinPickerPage(
-          title: 'Driver Beginadres',
+          title: 'Bestuurder se beginadres',
           subtitle: _group.naam,
           initialLatitude: _driverPin?.latitude,
           initialLongitude: _driverPin?.longitude,
@@ -1974,7 +1974,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
     }
     if (_driverPin == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stel eers die Driver se beginadres')),
+        const SnackBar(content: Text('Stel eers die bestuurder se beginadres')),
       );
       return;
     }
@@ -2063,7 +2063,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          'Driver/Admin: ${_group.bestuurder.volleNaam}',
+                          'Bestuurder/admin: ${_group.bestuurder.volleNaam}',
                           style: GoogleFonts.inter(
                             color: kAccent,
                             fontSize: 12,
@@ -2080,7 +2080,7 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
                           ),
                           label: Text(
                             _driverPin == null
-                                ? 'Stel Driver se beginadres'
+                                ? 'Stel bestuurder se beginadres'
                                 : 'Beginadres gereed · Verander',
                           ),
                         ),
@@ -2130,12 +2130,12 @@ class _PersoneelCreateSaamryEventPageState extends State<_PersoneelCreateSaamryE
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Geen tyd word gebruik om die event te voltooi nie. Sodra die Driver by die kampushek suksesvol IN of UIT scan, word die event outomaties voltooi en verdwyn.',
+                          'Die rit word nie volgens tyd voltooi nie. Sodra die bestuurder suksesvol by die kampushek IN of UIT skandeer, word die rit outomaties voltooi en verdwyn dit.',
                           style: GoogleFonts.inter(color: kText2, fontSize: 11.5),
                         ),
                         const SizedBox(height: 18),
                         GradientActionButton(
-                          label: _busy ? 'Skep...' : 'Aktiveer Saamry-event',
+                          label: _busy ? 'Skep...' : 'Aktiveer Saamry-rit',
                           onTap: _busy ? () {} : _create,
                           height: 50,
                         ),
@@ -2662,7 +2662,7 @@ class _PersoneelSaamryChatPageState extends State<_PersoneelSaamryChatPage> {
           children: [
             AppScreenHeader(
               title: _title,
-              subtitle: _isGroup ? 'Permanente Saamrygroep' : 'Privaat Saamry-chat',
+              subtitle: _isGroup ? 'Permanente Saamrygroep' : 'Privaat Saamry-klets',
               showBack: true,
             ),
             if (_error != null)
@@ -3140,7 +3140,7 @@ class _VisitorsTabState extends State<_VisitorsTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Nooi ’n besoeker en deel ’n eenmalige 6-syfer OTP.',
+              'Nooi ’n besoeker en deel ’n eenmalige 6-syfer-OTP.',
               style: GoogleFonts.inter(
                 color: kTextMuted,
                 fontSize: 12,
@@ -3490,7 +3490,7 @@ class _PersoneelKampusInskanderingPageState
     extends State<PersoneelKampusInskanderingPage> {
   bool _loading = true;
   String? _personeelNommer;
-  String _status = 'Laai personeel profiel...';
+  String _status = 'Laai personeelprofiel...';
 
   @override
   void initState() {
@@ -3539,7 +3539,7 @@ class _PersoneelKampusInskanderingPageState
         child: Column(
           children: [
             AppScreenHeader(
-              title: 'Kampus Skandering',
+              title: 'Kampusskandering',
               subtitle: 'Personeel',
               showBack: true,
             ),
@@ -3593,7 +3593,7 @@ class _PersoneelKampusInskanderingPageState
                                 child: Column(
                                   children: [
                                     Text(
-                                      'Alternatiewe QR-Kode',
+                                      'Alternatiewe QR-kode',
                                       style: GoogleFonts.inter(
                                         color: kTextMuted,
                                         fontSize: 12,
@@ -3760,8 +3760,8 @@ class _PersoneelEventsPageState extends State<_PersoneelEventsPage> {
         child: Column(
           children: [
             const AppScreenHeader(
-              title: 'Events',
-              subtitle: 'Komende events en RSVP',
+              title: 'Geleenthede',
+              subtitle: 'Komende geleenthede en RSVP',
               showBack: true,
             ),
             Padding(
@@ -3816,7 +3816,7 @@ class _PersoneelEventsPageState extends State<_PersoneelEventsPage> {
           const Icon(Icons.event_busy_rounded, color: kTextMuted, size: 52),
           const SizedBox(height: 12),
           Text(
-            _view == 'my' ? "Jy het nog geen aktiewe RSVP's nie" : 'Geen events om te wys nie',
+            _view == 'my' ? "Jy het nog geen aktiewe RSVP's nie" : 'Geen geleenthede om te wys nie',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(color: kText2, fontSize: 14),
           ),
@@ -3893,7 +3893,7 @@ class _PersoneelEventsPageState extends State<_PersoneelEventsPage> {
                       : ElevatedButton.icon(
                           onPressed: event.vol || busy ? null : () => _rsvp(event),
                           icon: const Icon(Icons.how_to_reg_rounded),
-                          label: Text(event.vol ? 'EVENT VOL' : (busy ? 'Besig...' : 'RSVP – EK GAAN')),
+                          label: Text(event.vol ? 'GELEENTHEID VOL' : (busy ? 'Besig...' : 'RSVP – EK GAAN')),
                         ),
                 ),
               ],

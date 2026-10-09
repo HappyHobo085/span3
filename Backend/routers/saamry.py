@@ -3,7 +3,7 @@
 Kernreëls:
 - 'n SaamryGroep is permanent en kan herhaaldelik gebruik word.
 - Die huidige Bestuurder is die groep se Admin.
-- Net die huidige Bestuurder kan die Driver/Admin-rol aan 'n aanvaarde lid oorgee.
+- Net die huidige Bestuurder kan die bestuurder/admin-rol aan 'n aanvaarde lid oorgee.
 - 'n SaamryEvent is 'n eenmalige groepsrit. Geen tydvenster bepaal die event nie.
 - Sodra die Driver se hek-scan suksesvol gecommit is, word die event VOLTOOI.
 - Daarna val alle lede terug na normale individuele kampus-skandering.
@@ -879,11 +879,11 @@ def invite_friend_to_group(
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
-        raise HTTPException(status_code=403, detail="Slegs die Driver/Admin kan vriende nooi")
+        raise HTTPException(status_code=403, detail="Slegs die bestuurder/admin kan vriende nooi")
     if group.SAA_Status != "AKTIEF":
         raise HTTPException(status_code=409, detail="Hierdie groep is nie meer aktief nie")
     if payload.gebruiker_id == current_user.Gebruiker_ID:
-        raise HTTPException(status_code=400, detail="Jy is reeds die Driver/Admin")
+        raise HTTPException(status_code=400, detail="Jy is reeds die bestuurder/admin")
 
     friendship = _friendship_between(
         db,
@@ -1022,10 +1022,10 @@ def transfer_driver_admin(
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
         raise HTTPException(
             status_code=403,
-            detail="Net die huidige Driver/Admin kan die rol oorgee",
+            detail="Net die huidige bestuurder/admin kan die rol oorgee",
         )
     if payload.nuwe_bestuurder_id == current_user.Gebruiker_ID:
-        raise HTTPException(status_code=400, detail="Jy is reeds die Driver/Admin")
+        raise HTTPException(status_code=400, detail="Jy is reeds die bestuurder/admin")
 
     target_member = (
         db.query(models.SaamryGroepLid)
@@ -1039,7 +1039,7 @@ def transfer_driver_admin(
     if target_member is None:
         raise HTTPException(
             status_code=400,
-            detail="Die nuwe Driver/Admin moet 'n aanvaarde lid van die groep wees",
+            detail="Die nuwe bestuurder/admin moet 'n aanvaarde lid van die groep wees",
         )
 
     event = _active_event_for_group(db, groep_id)
@@ -1048,7 +1048,7 @@ def transfer_driver_admin(
         if other_event is not None and other_event.Event_ID != event.Event_ID:
             raise HTTPException(
                 status_code=409,
-                detail="Hierdie lid is reeds Driver van 'n ander aktiewe Saamry-event",
+                detail="Hierdie lid is reeds bestuurder van 'n ander aktiewe Saamry-rit",
             )
         # Die huidige aktiewe event volg die nuwe Driver/Admin.
         event.Bestuurder_ID = payload.nuwe_bestuurder_id
@@ -1076,7 +1076,7 @@ def transfer_driver_admin(
     return schemas.APIResponse(
         sukses=True,
         data={
-            "boodskap": "Driver/Admin is suksesvol oorgedra",
+            "boodskap": "Bestuurder/admin-rol is suksesvol oorgedra",
             "groep": _group_dict(db, group, current_user.Gebruiker_ID),
         },
     )
@@ -1091,7 +1091,7 @@ def close_group(
     _require_saamry_user(db, current_user)
     group = _get_group_or_404(db, groep_id)
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
-        raise HTTPException(status_code=403, detail="Slegs die Driver/Admin kan die groep sluit")
+        raise HTTPException(status_code=403, detail="Slegs die bestuurder/admin kan die groep sluit")
     if group.SAA_Status != "AKTIEF":
         raise HTTPException(status_code=409, detail="Hierdie groep is reeds gesluit")
 
@@ -1118,7 +1118,7 @@ def leave_group(
     if group.Bestuurder_ID == current_user.Gebruiker_ID:
         raise HTTPException(
             status_code=400,
-            detail="Gee eers die Driver/Admin-rol aan 'n ander lid oor of sluit die groep",
+            detail="Gee eers die bestuurder/admin-rol aan 'n ander lid oor of sluit die groep",
         )
     member = (
         db.query(models.SaamryGroepLid)
@@ -1198,7 +1198,7 @@ def save_saamry_pickup_profile(
 
 
 # ---------------------------------------------------------------------------
-# Eenmalige Saamry-events
+# Eenmalige Saamry-ritte
 # ---------------------------------------------------------------------------
 
 @router.post("/events", status_code=status.HTTP_201_CREATED)
@@ -1214,12 +1214,12 @@ def create_saamry_event(
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
         raise HTTPException(
             status_code=403,
-            detail="Net die huidige Driver/Admin kan 'n Saamry-event skep",
+            detail="Net die huidige bestuurder/admin kan 'n Saamry-rit skep",
         )
     if _active_event_for_group(db, group.Groep_ID) is not None:
-        raise HTTPException(status_code=409, detail="Hierdie groep het reeds 'n aktiewe Saamry-event")
+        raise HTTPException(status_code=409, detail="Hierdie groep het reeds 'n aktiewe Saamry-rit")
     if _active_event_for_driver(db, current_user.Gebruiker_ID) is not None:
-        raise HTTPException(status_code=409, detail="Jy is reeds Driver van 'n ander aktiewe Saamry-event")
+        raise HTTPException(status_code=409, detail="Jy is reeds bestuurder van 'n ander aktiewe Saamry-rit")
 
     accepted_member_ids = {
         member.Gebruiker_ID
@@ -1233,7 +1233,7 @@ def create_saamry_event(
     if not selected_ids:
         raise HTTPException(
             status_code=400,
-            detail="Kies minstens een passasier vir die Saamry-event",
+            detail="Kies minstens een passasier vir die Saamry-rit",
         )
     invalid = [user_id for user_id in selected_ids if user_id not in accepted_member_ids]
     if invalid:
@@ -1247,7 +1247,7 @@ def create_saamry_event(
         if existing_event is not None:
             raise HTTPException(
                 status_code=409,
-                detail="Een van die gekose persone is reeds deel van 'n ander aktiewe Saamry-event",
+                detail="Een van die gekose persone is reeds deel van 'n ander aktiewe Saamry-rit",
             )
 
     event = models.SaamryEvent(
@@ -1266,7 +1266,7 @@ def create_saamry_event(
     if has_driver_lat != has_driver_lon:
         raise HTTPException(
             status_code=400,
-            detail="Driver latitude en longitude moet saam gestuur word",
+            detail="Die bestuurder se breedte- en lengtegraad moet saam gestuur word",
         )
 
     if has_driver_lat and has_driver_lon:
@@ -1274,7 +1274,7 @@ def create_saamry_event(
         driver_longitude = payload.driver_longitude
         driver_beskrywing = (payload.driver_pickup_beskrywing or '').strip()
         if not driver_beskrywing:
-            raise HTTPException(status_code=400, detail="Driver se beginadres is nodig")
+            raise HTTPException(status_code=400, detail="Die bestuurder se beginadres is nodig")
         if payload.stoor_driver_as_verstek:
             _upsert_pickup_profile(
                 db,
@@ -1290,7 +1290,7 @@ def create_saamry_event(
     else:
         raise HTTPException(
             status_code=400,
-            detail="Stel eers die Driver se beginadres",
+            detail="Stel eers die bestuurder se beginadres",
         )
 
     now = datetime.utcnow()
@@ -1340,9 +1340,9 @@ def update_saamry_pickup(
         .first()
     )
     if event is None:
-        raise HTTPException(status_code=404, detail="Saamry-event is nie gevind nie")
+        raise HTTPException(status_code=404, detail="Saamry-rit is nie gevind nie")
     if event.SAA_Status != "AKTIEF":
-        raise HTTPException(status_code=409, detail="Hierdie Saamry-event is nie meer aktief nie")
+        raise HTTPException(status_code=409, detail="Hierdie Saamry-rit is nie meer aktief nie")
 
     event_member = (
         db.query(models.SaamryEventLid)
@@ -1355,7 +1355,7 @@ def update_saamry_pickup(
     if event_member is None:
         raise HTTPException(
             status_code=403,
-            detail="Jy is nie deel van hierdie Saamry-event nie",
+            detail="Jy is nie deel van hierdie Saamry-rit nie",
         )
 
     clean_address = (payload.beskrywing or '').strip()
@@ -1395,17 +1395,17 @@ def cancel_saamry_event(
     _require_saamry_user(db, current_user)
     event = db.query(models.SaamryEvent).filter(models.SaamryEvent.Event_ID == event_id).first()
     if event is None:
-        raise HTTPException(status_code=404, detail="Saamry-event is nie gevind nie")
+        raise HTTPException(status_code=404, detail="Saamry-rit is nie gevind nie")
     group = _get_group_or_404(db, event.Groep_ID)
     if group.Bestuurder_ID != current_user.Gebruiker_ID:
-        raise HTTPException(status_code=403, detail="Net die Driver/Admin kan die event kanselleer")
+        raise HTTPException(status_code=403, detail="Net die bestuurder/admin kan die rit kanselleer")
     if event.SAA_Status != "AKTIEF":
-        raise HTTPException(status_code=409, detail="Hierdie event is nie meer aktief nie")
+        raise HTTPException(status_code=409, detail="Hierdie rit is nie meer aktief nie")
     event.SAA_Status = "GEKANSELLEER"
     event.Voltooi_Op = datetime.utcnow()
     event.Gewysig_Op = datetime.utcnow()
     db.commit()
-    return schemas.APIResponse(sukses=True, data={"boodskap": "Saamry-event is gekanselleer"})
+    return schemas.APIResponse(sukses=True, data={"boodskap": "Saamry-rit is gekanselleer"})
 
 
 # ---------------------------------------------------------------------------
@@ -1827,7 +1827,7 @@ def gate_group_preview(
                     "groep_naam": passenger_group.SAA_Naam,
                     "bestuurder_id": passenger_event.Bestuurder_ID,
                     "rede": (
-                        "Hierdie persoon is 'n passasier in 'n aktiewe Saamry-event. "
+                        "Hierdie persoon is 'n passasier in 'n aktiewe Saamry-rit. "
                         "Die Driver moet die voertuigscan voltooi. Daarna kan die persoon weer individueel scan."
                     ),
                 },
@@ -1837,21 +1837,21 @@ def gate_group_preview(
             data={
                 "has_group": False,
                 "blocked_by_event": False,
-                "rede": "Geen aktiewe Saamry-event vir hierdie Driver nie",
+                "rede": "Geen aktiewe Saamry-rit vir hierdie Driver nie",
             },
         )
     group = _get_group_or_404(db, event.Groep_ID)
     if group.SAA_Status != "AKTIEF" or group.Bestuurder_ID != payload.bestuurder_id:
         return schemas.APIResponse(
             sukses=True,
-            data={"has_group": False, "rede": "Die Saamry-event se Driver/Admin is nie meer geldig nie"},
+            data={"has_group": False, "rede": "Die Saamry-rit se Driver/Admin is nie meer geldig nie"},
         )
 
     members = _event_gate_members(event)
     if len(members) <= 1:
         return schemas.APIResponse(
             sukses=True,
-            data={"has_group": False, "rede": "Die Saamry-event het geen passasiers nie"},
+            data={"has_group": False, "rede": "Die Saamry-rit het geen passasiers nie"},
         )
 
     member_data = []
@@ -1908,11 +1908,11 @@ def confirm_group_at_gate(
         raise HTTPException(status_code=409, detail="Die permanente Saamrygroep is nie meer aktief nie")
     event = _active_event_for_group(db, group.Groep_ID)
     if event is None:
-        raise HTTPException(status_code=409, detail="Hierdie groep het nie meer 'n aktiewe Saamry-event nie")
+        raise HTTPException(status_code=409, detail="Hierdie groep het nie meer 'n aktiewe Saamry-rit nie")
     if payload.event_id is not None and payload.event_id != event.Event_ID:
-        raise HTTPException(status_code=409, detail="Die Saamry-event het intussen verander")
+        raise HTTPException(status_code=409, detail="Die Saamry-rit het intussen verander")
     if event.Bestuurder_ID != group.Bestuurder_ID:
-        raise HTTPException(status_code=409, detail="Die event se Driver/Admin stem nie meer met die groep ooreen nie")
+        raise HTTPException(status_code=409, detail="Die rit se bestuurder/admin stem nie meer met die groep ooreen nie")
 
     gate_location = _campus_gate_location(db, payload.kampus_id)
     event_users = _event_gate_members(event)
@@ -1920,10 +1920,10 @@ def confirm_group_at_gate(
 
     selected_ids = list(dict.fromkeys(payload.gebruiker_ids))
     if event.Bestuurder_ID not in selected_ids:
-        raise HTTPException(status_code=400, detail="Die Driver moet altyd saam bevestig word")
+        raise HTTPException(status_code=400, detail="Die bestuurder moet altyd saam bevestig word")
     invalid_ids = [user_id for user_id in selected_ids if user_id not in accepted_by_id]
     if invalid_ids:
-        raise HTTPException(status_code=400, detail="Een of meer gekose persone is nie deel van hierdie Saamry-event nie")
+        raise HTTPException(status_code=400, detail="Een of meer gekose persone is nie deel van hierdie Saamry-rit nie")
 
     driver_on_campus, _ = _user_is_on_campus(db, event.Bestuurder_ID, payload.kampus_id)
     driver_already_matches = (rigting == "IN" and driver_on_campus) or (
@@ -1994,7 +1994,7 @@ def confirm_group_at_gate(
         if driver_log is None:
             raise HTTPException(
                 status_code=409,
-                detail="Die Driver se scan is nie verwerk nie; die Saamry-event bly aktief",
+                detail="Die bestuurder se skandering is nie verwerk nie; die Saamry-rit bly aktief",
             )
 
         # Kritieke reël: die event verdwyn eers nadat die Driver-log suksesvol geskryf is.
@@ -2042,7 +2042,7 @@ def confirm_group_at_gate(
             "oorgeslaan": skipped,
             "boodskap": (
                 f"{len(processed)} persoon/persone is as {rigting} bevestig; "
-                "Saamry-event is voltooi"
+                "Saamry-rit is voltooi"
             ),
         },
     )
@@ -2066,7 +2066,7 @@ def kry_saamry_ml_status(
     if not status_data["runtime_ok"]:
         raise HTTPException(
             status_code=503,
-            detail="Saamry ML runtime is nie gereed nie",
+            detail="Saamry se ML-model is nie gereed nie",
         )
 
     return schemas.APIResponse(

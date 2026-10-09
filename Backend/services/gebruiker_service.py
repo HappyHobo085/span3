@@ -120,7 +120,7 @@ def kontroleer_unieke_gebruiker_velde(
         if exclude_user_id is not None:
             query = query.filter(models.Gebruikers.Gebruiker_ID != exclude_user_id)
         if query.first():
-            raise HTTPException(status_code=400, detail="ID Nommer reeds in gebruik")
+            raise HTTPException(status_code=400, detail="ID-nommer reeds in gebruik")
 
 
 def kontroleer_unieke_subnommer(
@@ -345,14 +345,14 @@ def sync_gebruiker_nfc_tag(db: Session, gebruiker_id: int, data: dict):
             models.NFC_Tags.Gebruiker_ID != gebruiker_id,
         ).first()
         if bestaande_uid:
-            raise HTTPException(status_code=400, detail="NFC tag reeds aan 'n ander gebruiker gekoppel")
+            raise HTTPException(status_code=400, detail="NFC-etiket reeds aan 'n ander gebruiker gekoppel")
 
     tag = db.query(models.NFC_Tags).filter(
         models.NFC_Tags.Gebruiker_ID == gebruiker_id
     ).order_by(models.NFC_Tags.NFC_Is_Aktief.desc(), models.NFC_Tags.NFC_Tags_ID.desc()).first()
 
     if not tag and not uid:
-        raise HTTPException(status_code=400, detail="NFC_UID is verpligtend wanneer 'n nuwe NFC tag geskep word")
+        raise HTTPException(status_code=400, detail="NFC_UID is verpligtend wanneer 'n nuwe NFC-etiket geskep word")
 
     if not tag:
         tag = models.NFC_Tags(
