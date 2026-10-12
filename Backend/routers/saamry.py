@@ -661,7 +661,8 @@ def search_saamry_users(
             or_(
                 models.Gebruikers.GEB_Naam.ilike(f"%{clean}%"),
                 models.Gebruikers.GEB_Van.ilike(f"%{clean}%"),
-                models.Gebruikers.GEB_ID_Nommer.ilike(f"%{clean}%"),
+                # Nie op ID-nommer nie: 'n gedeeltelike soektog laat enigiemand
+                # ander se ID-nommers syfer vir syfer uitvind (POPIA).
                 models.Student.STU_Nommer.ilike(f"%{clean}%"),
                 models.Personeel.PER_Nommer.ilike(f"%{clean}%"),
             ),

@@ -218,7 +218,6 @@ def lees_gebruikers(
                     "Gebruiker_ID": g.Gebruiker_ID,
                     "GEB_Naam": g.GEB_Naam,
                     "GEB_Van": g.GEB_Van,
-                    "GEB_ID_Nommer": g.GEB_ID_Nommer,
                     "GEB_Profiel_Foto": g.GEB_Profiel_Foto,
                     "Is_Aktief": g.Is_Aktief,
                 }
@@ -249,6 +248,8 @@ def lees_gebruiker(
     if not is_admin and "Kampus_Opsigter" in role_names:
         opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == current_user.Gebruiker_ID).first()
         teiken_opsigter_info = db.query(models.Kampus_Opsigter).filter(models.Kampus_Opsigter.Gebruiker_ID == user_id).first()
+        if opsigter_info is None:
+            raise HTTPException(status_code=403, detail="Opsigter is nie aan 'n kampus gekoppel nie.")
         if teiken_opsigter_info and teiken_opsigter_info.Kampus_ID != opsigter_info.Kampus_ID:
             raise HTTPException(status_code=403, detail="Jy het nie toegang tot hierdie gebruiker nie.")
 
@@ -259,7 +260,6 @@ def lees_gebruiker(
                 "Gebruiker_ID": gebruiker.Gebruiker_ID,
                 "GEB_Naam": gebruiker.GEB_Naam,
                 "GEB_Van": gebruiker.GEB_Van,
-                "GEB_ID_Nommer": gebruiker.GEB_ID_Nommer,
                 "GEB_Profiel_Foto": gebruiker.GEB_Profiel_Foto,
                 "Is_Aktief": gebruiker.Is_Aktief,
             }

@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 import auth
 import database
 import models
-from routers import kampus, klasse, koshuis, lokasie, student
+from routers import gebruikers, kampus, klasse, koshuis, lokasie, saamry, student
 
 
 @pytest.fixture()
@@ -34,7 +34,7 @@ def omg():
     db = Sessie()
 
     app = FastAPI()
-    for r in (kampus, koshuis, lokasie, student, klasse):
+    for r in (kampus, koshuis, lokasie, student, klasse, gebruikers, saamry):
         app.include_router(r.router)
 
     def _get_db():
@@ -296,3 +296,38 @@ def test_sec006_nfc_uids_en_klaslyste_nie_vir_studente_nie(omg, klas, pad):
     assert omg.client.get(pad, headers=klas.kop).status_code == 403
     _, opsigter = omg.gebruiker("Kampus_Opsigter")
     assert omg.client.get(pad, headers=opsigter).status_code == 200
+
+
+# --- ID-nommer-lekke (POPIA; nie in die verslag nie) --------------------------
+
+def test_saamry_soektog_vind_nie_mense_op_id_nommer_nie(omg):
+    a, kop_a = omg.gebruiker("Student")
+    b, _ = omg.gebruiker("Student")
+    b.GEB_Naam, b.GEB_ID_Nommer = "Zandile", "0203045800081"
+    for g in (a, b):
+        omg.db.add(models.Student(Gebruiker_ID=g.Gebruiker_ID, STU_Nommer=f"ST{g.Gebruiker_ID}", STU_Is_Koshuis=False))
+    omg.db.commit()
+
+    def ids(q):
+        r = omg.client.get("/saamry/gebruikers/search", params={"q": q}, headers=kop_a)
+        assert r.status_code == 200, r.text
+        return {u["gebruiker_id"] for u in r.json()["data"]}
+
+    assert b.Gebruiker_ID not in ids("02030458")      # deel van die ID-nommer
+    assert b.Gebruiker_ID in ids("Zandile")           # soek op naam werk steeds
+
+
+def test_wag_kry_nie_id_nommers_uit_gebruikerslys_nie(omg):
+    teiken, _ = omg.gebruiker("Student")
+    _, wag = omg.gebruiker("Sekuriteit_Wag")
+    lys = omg.client.get("/gebruikers", headers=wag)
+    assert lys.status_code == 200
+    assert lys.json()["data"] and all("GEB_ID_Nommer" not in g for g in lys.json()["data"])
+    een = omg.client.get(f"/gebruikers/{teiken.Gebruiker_ID}", headers=wag)
+    assert een.status_code == 200 and "GEB_ID_Nommer" not in een.json()["data"]
+
+
+def test_opsigter_sonder_kampus_kry_403_nie_500_nie(omg):
+    teiken, _ = omg.gebruiker("Student")
+    _, opsigter = omg.gebruiker("Kampus_Opsigter")
+    assert omg.client.get(f"/gebruikers/{teiken.Gebruiker_ID}", headers=opsigter).status_code == 403
