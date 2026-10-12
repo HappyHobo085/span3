@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 import models, schemas, auth
+import http_sekuriteit
 
 router = APIRouter(prefix="/rooster", tags=["Klas / Module / Groep"])
 
@@ -1708,7 +1709,7 @@ async def importeer_klasse(
     ``Rooster_Lokaal_Koppeling`` nie. Die ou helpers/endpoints bly egter in
     plek vir backwards compatibility met bestaande data en admin-skerms.
     """
-    inhoud = (await lêer.read()).decode("utf-8-sig", errors="replace")
+    inhoud = (await http_sekuriteit.lees_beperk(lêer, http_sekuriteit.MAKS_CSV_BYTES)).decode("utf-8-sig", errors="replace")
     reëls = parse_moon_rooster_csv(inhoud)
 
     resultaat = schemas.KlasImportResult()
@@ -1864,7 +1865,7 @@ async def importeer_student_toewysings(
     geskep (soos by die Lantiv-invoer); onbekende modules en studente word
     as foute gerapporteer.  Elke ry word onafhanklik gecommit.
     """
-    inhoud = (await lêer.read()).decode("utf-8-sig", errors="replace")
+    inhoud = (await http_sekuriteit.lees_beperk(lêer, http_sekuriteit.MAKS_CSV_BYTES)).decode("utf-8-sig", errors="replace")
     rye = parse_student_toewysing_csv(inhoud)
 
     resultaat = schemas.StudentToewysingImportResult()

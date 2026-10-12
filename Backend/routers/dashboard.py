@@ -11,6 +11,7 @@ from sqlalchemy import func
 
 from database import get_db
 import models, schemas, auth
+import http_sekuriteit
 from services.gebruiker_service import kies_primere_rol
 
 router = APIRouter(tags=["Dashboard"])
@@ -85,9 +86,14 @@ async def upload_my_profile_photo(
     filename = f"user_{current_user.Gebruiker_ID}{ext}"
     file_path = os.path.join(UPLOAD_DIR, filename)
 
-    contents = await file.read()
+    # MOON-SEC-009: lees nooit meer as die limiet in die geheue nie, en die inhoud
+    # moet regtig 'n JPG/PNG/WEBP wees (nie net die naam en content_type nie).
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=400, detail=f"Lêer te groot — maksimum {MAX_UPLOAD_BYTES // (1024*1024)} MB toegelaat")
+    werklike_tipe = http_sekuriteit.foto_tipe(contents)
+    if werklike_tipe is None or werklike_tipe != (".jpg" if ext == ".jpeg" else ext):
+        raise HTTPException(status_code=400, detail="Die lêer is nie 'n geldige JPG, PNG of WEBP nie")
     with open(file_path, "wb") as f:
         f.write(contents)
 

@@ -42,6 +42,7 @@ def _prepare_insert_row_for_new_primary_key(table, current_row: Dict[str, Any], 
 
 from database import get_db
 import models, schemas, auth
+import http_sekuriteit
 from services.nfc_service import genereer_unieke_nfc_uid
 from config import Config
 
@@ -244,11 +245,12 @@ def _import_from_zip(db: Session, zip_file: UploadFile, mode: str = 'merge') -> 
     results: Dict[str, Any] = {"imported": {}, "errors": {}, "skipped": [], "details": {}}
     id_maps: Dict[str, Dict[Any, Any]] = {}
 
-    # Read ZIP into memory
-    zip_content = zip_file.file.read()
+    # Read ZIP into memory (MOON-SEC-009: begrens die grootte en kontroleer voor uitpak)
+    zip_content = http_sekuriteit.lees_beperk_sync(zip_file.file, http_sekuriteit.MAKS_ZIP_BYTES)
     zip_buffer = io.BytesIO(zip_content)
 
     with zipfile.ZipFile(zip_buffer, 'r') as zf:
+        http_sekuriteit.kontroleer_zip(zf)
         # Get list of CSV files in ZIP
         csv_files = [name for name in zf.namelist() if name.endswith('.csv')]
 
@@ -765,7 +767,7 @@ async def import_table_csv(
 
     csv_payload = text
     if file is not None:
-        raw = await file.read()
+        raw = await http_sekuriteit.lees_beperk(file, http_sekuriteit.MAKS_CSV_BYTES)
         if raw:
             csv_payload = raw.decode("utf-8-sig")
 

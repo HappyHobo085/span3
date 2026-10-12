@@ -515,3 +515,65 @@ def test_sec010_xlsx_skryf_formule_as_teks():
     assert selle, "die waarde moet steeds sigbaar wees"
     assert all(c.data_type == "s" for c in selle)
     assert not any(c.data_type == "f" for ws in wb.worksheets for r in ws.iter_rows() for c in r)
+
+
+# --- MOON-SEC-009: oplaai-limiete --------------------------------------------
+
+def _zip(lêers: dict) -> bytes:
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for naam, inhoud in lêers.items():
+            zf.writestr(naam, inhoud)
+    return buf.getvalue()
+
+
+def test_sec009_zip_bom_word_voor_uitpak_geweier(omg, monkeypatch):
+    import io
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    import http_sekuriteit
+    from routers import admin
+
+    monkeypatch.setattr(http_sekuriteit, "MAKS_ZIP_ONGEKOMPRIMEER_BYTES", 10_000)
+    bom = _zip({"kampus.csv": "0" * 1_000_000})            # klein ZIP, groot inhoud
+    assert len(bom) < 10_000
+    with pytest.raises(HTTPException) as fout:
+        admin._import_from_zip(omg.db, SimpleNamespace(file=io.BytesIO(bom)))
+    assert fout.value.status_code == 413
+
+
+def test_sec009_oorgroot_zip_en_te_veel_leers(omg, monkeypatch):
+    import io
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    import http_sekuriteit
+    from routers import admin
+
+    monkeypatch.setattr(http_sekuriteit, "MAKS_ZIP_BYTES", 100)
+    with pytest.raises(HTTPException) as fout:
+        admin._import_from_zip(omg.db, SimpleNamespace(file=io.BytesIO(b"x" * 101)))
+    assert fout.value.status_code == 413
+
+    monkeypatch.setattr(http_sekuriteit, "MAKS_ZIP_BYTES", 10 * 1024 * 1024)
+    monkeypatch.setattr(http_sekuriteit, "MAKS_ZIP_LEERS", 3)
+    baie = _zip({f"t{i}.csv": "a" for i in range(4)})
+    with pytest.raises(HTTPException) as fout:
+        admin._import_from_zip(omg.db, SimpleNamespace(file=io.BytesIO(baie)))
+    assert fout.value.status_code == 413
+
+
+def test_sec009_profielfoto_moet_regtig_n_beeld_wees(omg, monkeypatch, tmp_path):
+    from routers import dashboard
+    monkeypatch.setattr(dashboard, "UPLOAD_DIR", str(tmp_path))
+    omg.client.app.include_router(dashboard.router)
+    _, kop = omg.gebruiker("Student")
+
+    def laai(naam, inhoud, tipe="image/png"):
+        return omg.client.post("/me/foto", files={"file": (naam, inhoud, tipe)}, headers=kop)
+
+    assert laai("foto.png", b"<script>alert(1)</script>").status_code == 400      # nie 'n beeld nie
+    assert laai("foto.png", b"\xff\xd8\xff\xe0" + b"0" * 20).status_code == 400  # JPG met .png-naam
+    assert laai("foto.png", b"\x89PNG\r\n\x1a\n" + b"0" * 20).status_code == 200
+    assert laai("foto.jpeg", b"\xff\xd8\xff\xe0" + b"0" * 20, "image/jpeg").status_code == 200
