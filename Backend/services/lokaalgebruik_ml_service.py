@@ -91,7 +91,13 @@ def kry_ml_status() -> dict:
 
 
 def inskrywings_per_klas(db: Session, klasse: list[models.Klas]) -> dict[int, int]:
-    """Unieke studente per klas uit Student_Klas, Student_Module en groepe (gebondel)."""
+    """Bepaal klas-spesifieke inskrywings sonder om module-inskrywings dubbel te tel.
+
+    Prioriteit per klassessie:
+    1. ``Student_Klas`` indien direkte klas-toewysings bestaan.
+    2. Anders die studente in die klas se gekoppelde groep(e).
+    3. Slegs as die klas geen groepkoppeling het nie, ``Student_Module`` as fallback.
+    """
     klas_ids = [k.Klas_ID for k in klasse]
     module_ids = {k.Module_ID for k in klasse}
     if not klas_ids:
@@ -123,12 +129,21 @@ def inskrywings_per_klas(db: Session, klasse: list[models.Klas]) -> dict[int, in
         ):
             per_groep[grp].add(gid)
 
-    uitslag = {}
+    uitslag: dict[int, int] = {}
     for k in klasse:
-        ids = set(per_klas[k.Klas_ID]) | per_module[k.Module_ID]
-        for grp in klas_groepe[k.Klas_ID]:
-            ids |= per_groep[grp]
+        direkte_ids = per_klas[k.Klas_ID]
+
+        if direkte_ids:
+            ids = set(direkte_ids)
+        elif klas_groepe[k.Klas_ID]:
+            ids: set[int] = set()
+            for grp in klas_groepe[k.Klas_ID]:
+                ids |= per_groep[grp]
+        else:
+            ids = set(per_module[k.Module_ID])
+
         uitslag[k.Klas_ID] = len(ids)
+
     return uitslag
 
 

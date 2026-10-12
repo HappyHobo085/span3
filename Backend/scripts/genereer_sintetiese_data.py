@@ -104,22 +104,27 @@ def bereken_sessie_bywoning(
 
 
 def _klas_inskrywing(db, klas: Klas) -> int:
-    """Unieke studente uit dieselfde drie bronne as die klasregister."""
-    ids: set[int] = set()
+    """Bepaal die studente wat hierdie spesifieke klassessie moet bywoon.
 
-    for (gid,) in (
-        db.query(Student_Klas.Gebruiker_ID)
-        .filter(Student_Klas.Klas_ID == klas.Klas_ID)
-        .all()
-    ):
-        ids.add(int(gid))
+    Prioriteit:
+    1. Direkte ``Student_Klas``-toewysings.
+    2. Indien geen direkte toewysings bestaan nie, die klas se ``Student_Groep``-lede.
+    3. Slegs wanneer die klas geen groepkoppeling het nie, val terug na
+       ``Student_Module``.
 
-    for (gid,) in (
-        db.query(Student_Module.Gebruiker_ID)
-        .filter(Student_Module.Module_ID == klas.Module_ID)
-        .all()
-    ):
-        ids.add(int(gid))
+    ``Student_Module`` mag dus nie meer by elke groep-/klassessie opgetel word nie;
+    dit verteenwoordig module-inskrywing, nie noodwendig een spesifieke sessie nie.
+    """
+    direkte_ids = {
+        int(gid)
+        for (gid,) in (
+            db.query(Student_Klas.Gebruiker_ID)
+            .filter(Student_Klas.Klas_ID == klas.Klas_ID)
+            .all()
+        )
+    }
+    if direkte_ids:
+        return len(direkte_ids)
 
     groep_ids = [
         int(gid)
@@ -130,14 +135,25 @@ def _klas_inskrywing(db, klas: Klas) -> int:
         )
     ]
     if groep_ids:
-        for (gid,) in (
-            db.query(Student_Groep.Gebruiker_ID)
-            .filter(Student_Groep.Groep_ID.in_(groep_ids))
-            .all()
-        ):
-            ids.add(int(gid))
+        groep_student_ids = {
+            int(gid)
+            for (gid,) in (
+                db.query(Student_Groep.Gebruiker_ID)
+                .filter(Student_Groep.Groep_ID.in_(groep_ids))
+                .all()
+            )
+        }
+        return len(groep_student_ids)
 
-    return len(ids)
+    module_ids = {
+        int(gid)
+        for (gid,) in (
+            db.query(Student_Module.Gebruiker_ID)
+            .filter(Student_Module.Module_ID == klas.Module_ID)
+            .all()
+        )
+    }
+    return len(module_ids)
 
 
 def genereer_data() -> int:

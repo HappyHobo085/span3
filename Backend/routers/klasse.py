@@ -358,7 +358,17 @@ def _pas_rooster_lokaal_mapping_toe(db: Session, klas: models.Klas) -> bool:
 
 
 def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
-    """Merg (dedupeer) die student se rooster uit 3 bronne."""
+    """Bou die student se rooster met spesifieke toewysings voor module-fallback.
+
+    Reëls:
+      1. Student_Groep -> Klas_Groep gee die student se groepklasse.
+      2. Student_Klas gee eksplisiete klas-toewysings.
+      3. Student_Module is slegs 'n fallback vir algemene moduleklasse wat
+         GEEN Klas_Groep- of Student_Klas-toewysings het nie.
+
+    Dit keer dat 'n student wat vir INF101 geregistreer is outomaties in elke
+    INF101-groep se klas beland.
+    """
     gesien: set[int] = set()
     resultaat: list[dict] = []
 
@@ -368,6 +378,7 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
         gesien.add(klas.Klas_ID)
         resultaat.append(_klas_na_dict(klas))
 
+    # 1. Groep-spesifieke klasse.
     groepe = (
         db.query(models.Student_Groep.Groep_ID)
         .filter(models.Student_Groep.Gebruiker_ID == gebruiker_id)
@@ -380,30 +391,17 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
             .filter(models.Klas_Groep.Groep_ID.in_(groep_ids))
             .all()
         )
-        groepeer_klasse = (
-            db.query(models.Klas)
-            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
-            .filter(models.Klas.Klas_ID.in_([kid for (kid,) in klas_ids]))
-            .all()
-        )
-        for klas in groepeer_klasse:
-            voeg_by(klas)
+        groep_klas_ids = [kid for (kid,) in klas_ids]
+        if groep_klas_ids:
+            for klas in (
+                db.query(models.Klas)
+                .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+                .filter(models.Klas.Klas_ID.in_(groep_klas_ids))
+                .all()
+            ):
+                voeg_by(klas)
 
-    module_ids = [
-        m[0]
-        for m in db.query(models.Student_Module.Module_ID)
-        .filter(models.Student_Module.Gebruiker_ID == gebruiker_id)
-        .all()
-    ]
-    if module_ids:
-        for klas in (
-            db.query(models.Klas)
-            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
-            .filter(models.Klas.Module_ID.in_(module_ids))
-            .all()
-        ):
-            voeg_by(klas)
-
+    # 2. Direkte klas-toewysings is altyd geldig.
     direkte_ids = [
         k[0]
         for k in db.query(models.Student_Klas.Klas_ID)
@@ -418,6 +416,47 @@ def resolver_student_rooster(db: Session, gebruiker_id: int) -> list[dict]:
             .all()
         ):
             voeg_by(klas)
+
+    # 3. Module-inskrywing is net 'n fallback vir algemene/onbeperkte klasse.
+    #    Sodra 'n klas enige groep- of direkte student-toewysing het, moet die
+    #    module-inskrywing nie almal in daardie spesifieke klas plaas nie.
+    module_ids = [
+        m[0]
+        for m in db.query(models.Student_Module.Module_ID)
+        .filter(models.Student_Module.Gebruiker_ID == gebruiker_id)
+        .all()
+    ]
+    if module_ids:
+        module_klasse = (
+            db.query(models.Klas)
+            .options(joinedload(models.Klas.module), joinedload(models.Klas.lokasie))
+            .filter(models.Klas.Module_ID.in_(module_ids))
+            .all()
+        )
+        kandidaat_ids = [k.Klas_ID for k in module_klasse]
+
+        beperkte_klas_ids: set[int] = set()
+        if kandidaat_ids:
+            beperkte_klas_ids.update(
+                kid for (kid,) in (
+                    db.query(models.Klas_Groep.Klas_ID)
+                    .filter(models.Klas_Groep.Klas_ID.in_(kandidaat_ids))
+                    .distinct()
+                    .all()
+                )
+            )
+            beperkte_klas_ids.update(
+                kid for (kid,) in (
+                    db.query(models.Student_Klas.Klas_ID)
+                    .filter(models.Student_Klas.Klas_ID.in_(kandidaat_ids))
+                    .distinct()
+                    .all()
+                )
+            )
+
+        for klas in module_klasse:
+            if klas.Klas_ID not in beperkte_klas_ids:
+                voeg_by(klas)
 
     return resultaat
 
@@ -500,35 +539,56 @@ def _klas_dag_match(klas: models.Klas, dag: date) -> bool:
 
 
 def _klas_roster_gebruiker_ids(db: Session, klas: models.Klas) -> set[int]:
-    gebruiker_ids: set[int] = set()
-    groep_ids = [
-        g[0]
-        for g in db.query(models.Klas_Groep.Groep_ID)
-        .filter(models.Klas_Groep.Klas_ID == klas.Klas_ID)
-        .all()
-    ]
-    if groep_ids:
+    """Gee die studente wat werklik aan hierdie spesifieke klas behoort.
+
+    Spesifieke klas-/groep-toewysings wen bo die breë Student_Module-inskrywing.
+    Student_Module word slegs gebruik wanneer die klas glad nie deur Klas_Groep
+    of Student_Klas beperk is nie.
+    """
+    direkte_ids = {
+        int(gid)
         for (gid,) in (
-            db.query(models.Student_Groep.Gebruiker_ID)
-            .filter(models.Student_Groep.Groep_ID.in_(groep_ids))
+            db.query(models.Student_Klas.Gebruiker_ID)
+            .filter(models.Student_Klas.Klas_ID == klas.Klas_ID)
             .all()
-        ):
-            gebruiker_ids.add(gid)
+        )
+    }
 
-    for (gid,) in (
-        db.query(models.Student_Module.Gebruiker_ID)
-        .filter(models.Student_Module.Module_ID == klas.Module_ID)
-        .all()
-    ):
-        gebruiker_ids.add(gid)
+    groep_ids = [
+        int(gid)
+        for (gid,) in (
+            db.query(models.Klas_Groep.Groep_ID)
+            .filter(models.Klas_Groep.Klas_ID == klas.Klas_ID)
+            .all()
+        )
+    ]
 
-    for (gid,) in (
-        db.query(models.Student_Klas.Gebruiker_ID)
-        .filter(models.Student_Klas.Klas_ID == klas.Klas_ID)
-        .all()
-    ):
-        gebruiker_ids.add(gid)
-    return gebruiker_ids
+    groep_student_ids: set[int] = set()
+    if groep_ids:
+        groep_student_ids = {
+            int(gid)
+            for (gid,) in (
+                db.query(models.Student_Groep.Gebruiker_ID)
+                .filter(models.Student_Groep.Groep_ID.in_(groep_ids))
+                .all()
+            )
+        }
+
+    # Enige spesifieke klas-/groepdefinisie beteken dat module-inskrywing nie
+    # die klas tot die hele module mag uitbrei nie. Direkte toewysings kan wel
+    # as eksplisiete uitsonderings by 'n groepklas gevoeg word.
+    if direkte_ids or groep_ids:
+        return direkte_ids | groep_student_ids
+
+    # Geen spesifieke klas-/groepdefinisie nie: dit is 'n algemene moduleklas.
+    return {
+        int(gid)
+        for (gid,) in (
+            db.query(models.Student_Module.Gebruiker_ID)
+            .filter(models.Student_Module.Module_ID == klas.Module_ID)
+            .all()
+        )
+    }
 
 
 def _klas_scan_statusse(
