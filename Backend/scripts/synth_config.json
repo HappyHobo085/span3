@@ -1,13 +1,21 @@
 {
   "seed": 42,
-  "weke": 14,
+  "weke": 10,
   "semester_verval_faktor": 0.02,
   "gewoonte_basis_gemiddeld": 0.8,
   "gewoonte_basis_std": 0.1,
   "ruis_swaar_stert_kans": 0.1,
   "ruis_swaar_stert_skaal": 0.3,
-  "daaglikse_verstellings": {},
-  "tyd_verstellings": {},
+  "daaglikse_verstellings": {
+    "Maandag": 0.97,
+    "Vrydag": 0.85
+  },
+  "tyd_verstellings": {
+    "07:30": 0.88,
+    "08:00": 0.9,
+    "15:00": 0.95,
+    "16:00": 0.92
+  },
   "kampus": null,
   "lokale": []
 }

@@ -264,6 +264,7 @@
       currentKampusId = json.data[0].Kampus_ID;
       refreshDashboard(currentKampusId);
       startPolling();
+      loadLokaalGebruik(currentKampusId);
     }
   }
 
@@ -388,115 +389,190 @@
   }
 
   // ----- Lokaalgebruik Voorspelling / Hittekaart -----
-  let huidigeLokaalGebruik = [];
-  
-  async function loadLokaalGebruik(kampusId) {
-    if (!kampusId) return;
-    try {
-      const response = await window.app.api.get(`/kampusse/${kampusId}/lokaalgebruik`);
-      if (response.sukses) {
-        huidigeLokaalGebruik = response.data;
-        renderLokaalGebruik();
-      }
-    } catch (error) {
-      console.error('Fout met die laai van lokaalgebruik:', error);
-    }
+  // Die bediener voorspel vir elke sessie van volgende week watter breuk van die
+  // ingeskrewe studente sal skandeer (koers), en reken dit om na 'n vulgraad.
+  var lokaalGebruik = null;      // die laaste antwoord van die bediener
+  var lokaalGebruikKampus = null;
+
+  function esc(teks) {
+    return String(teks == null ? '' : teks).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
-  function getStatusKleur(vulgraad) {
-    if (vulgraad === null) return 'var(--border-dim)';
-    if (vulgraad <= 0.5) return 'var(--success-color, #4CAF50)';
-    if (vulgraad <= 0.8) return 'var(--warning-color, #FFEB3B)';
-    if (vulgraad <= 1.0) return 'var(--primary-color, #FF9800)';
-    return 'var(--danger-color, #F44336)';
+  function pct(waarde) {
+    return waarde == null ? '?' : Math.round(waarde * 100) + '%';
+  }
+
+  function minute(tyd) {
+    var m = /^(\d{1,2}):(\d{2})/.exec(String(tyd || ''));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+
+  async function loadLokaalGebruik(kampusId) {
+    if (!kampusId || !window.MoonApi) return;
+    lokaalGebruikKampus = String(kampusId);
+    var container = document.getElementById('lokaalgebruik-container');
+    if (container) container.innerHTML = '<p class="lg-leeg">Laai voorspelling…</p>';
+    try {
+      var json = await window.MoonApi.fetchLokaalGebruik(kampusId);
+      if (String(kampusId) !== lokaalGebruikKampus) return;  // ou antwoord vir 'n vorige kampus
+      if (!json || !json.sukses) throw new Error((json && (json.fout || json.detail)) || 'Onbekende fout');
+      lokaalGebruik = json.data;
+    } catch (error) {
+      console.error('Fout met die laai van lokaalgebruik:', error);
+      lokaalGebruik = null;
+      if (container) container.innerHTML = '<p class="lg-leeg">Kon nie die voorspelling laai nie.</p>';
+      return;
+    }
+    renderLokaalGebruik();
+  }
+
+  // Kleur volgens voorspelde vulgraad: groen tot 50%, geel tot 80%, pers tot 100%, rooi daarbo.
+  function vulKleur(vulgraad) {
+    if (vulgraad == null) return 'transparent';
+    var kleur = vulgraad <= 0.5 ? 'var(--success)'
+      : vulgraad <= 0.8 ? 'var(--warning)'
+      : vulgraad <= 1.0 ? 'var(--accent)'
+      : 'var(--error)';
+    return 'color-mix(in srgb, ' + kleur + ' 30%, transparent)';
+  }
+
+  function renderInfo() {
+    var info = document.getElementById('lokaalgebruik-info');
+    if (!info) return;
+    var d = lokaalGebruik;
+    if (!d) { info.textContent = ''; return; }
+    var dele = [];
+    if (d.voorspel_week) {
+      dele.push('<strong>Week ' + esc(d.voorspel_week) + '</strong> (data tot week ' + esc(d.laaste_data_week) + ')');
+    }
+    dele.push('Metode: <span title="' + esc(d.keuse_rede) + '">' + esc(d.metode_etiket) + '</span>');
+    if (d.metrics && d.metrics.mae && d.metrics.mae[d.metode] != null) {
+      dele.push('MAE koers: ' + esc(d.metrics.mae[d.metode]));
+    }
+    if (d.interval && d.interval.dekking != null) {
+      dele.push('Reeks-dekking: ' + pct(d.interval.dekking) + (d.interval.wys ? '' : ' (te laag, reeks versteek)'));
+    }
+    if (d.databron === 'SINTETIES') {
+      dele.push('<em>Sintetiese data: wys net dat die pyplyn werk</em>');
+    }
+    info.innerHTML = dele.join(' · ');
+  }
+
+  function selTitel(g) {
+    var reels = [
+      g.vak + ' — ' + g.begin + '–' + g.einde,
+      'Ingeskryf: ' + g.inskrywing + ' · Kapasiteit: ' + (g.kapasiteit || 'onbekend'),
+      'Rooster-vulgraad: ' + pct(g.geskeduleerde_vulgraad),
+      'Voorspelde koers: ' + g.koers.toFixed(2) + ' → ' + g.verwagte_getal + ' studente',
+      'Voorspelde vulgraad: ' + pct(g.vulgraad),
+    ];
+    if (g.reeks) {
+      reels.push('Reeks: ' + g.reeks.getal_laag + '–' + g.reeks.getal_hoog + ' studente (' +
+        pct(g.reeks.vulgraad_laag) + ' tot ' + pct(g.reeks.vulgraad_hoog) + ')');
+    }
+    if (g.oor_kapasiteit) reels.push('⚠ Voorspelling bo kapasiteit');
+    else if (g.kan_oorloop) reels.push('! Kan bo kapasiteit gaan');
+    if (g.konflik) reels.push('⚠ Besprekingskonflik in hierdie lokaal');
+    return reels.join('\n');
   }
 
   function renderLokaalGebruik() {
-    const container = document.getElementById('lokaalgebruik-container');
-    const dagSelect = document.getElementById('lokaalgebruik-dag-select');
+    var container = document.getElementById('lokaalgebruik-container');
+    var dagSelect = document.getElementById('lokaalgebruik-dag-select');
     if (!container || !dagSelect) return;
+    renderInfo();
+    if (!lokaalGebruik) return;
 
-    const gekoseDag = dagSelect.value;
-    const gleuwe = huidigeLokaalGebruik.filter(g => g.Dag === gekoseDag);
+    var gekoseDag = dagSelect.value;
+    var gleuwe = (lokaalGebruik.gleuwe || []).filter(function (g) { return g.dag === gekoseDag; });
 
     if (gleuwe.length === 0) {
-      container.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted)">Geen voorspellingsdata vir ${gekoseDag} nie.</p>`;
+      container.innerHTML = '<p class="lg-leeg">Geen klasse met \'n lokaal en inskrywings op ' + esc(gekoseDag) + ' nie.</p>';
       return;
     }
 
-    // Unieke lokale en unieke ure om die matriks te bou
-    const lokale = [...new Set(gleuwe.map(g => g.Lokaal))].sort();
-    const ure = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]; // Standaard akademiese ure (08:00 tot 17:00)
-
-    let html = `<table class="admin-table" style="width: 100%; text-align: center; border-collapse: collapse; margin-top: 15px;">`;
-    
-    // Opskrifte
-    html += `<thead><tr><th style="text-align:left; border-bottom: 2px solid var(--border-dim);">Lokaal</th>`;
-    ure.forEach(u => {
-      html += `<th style="border-bottom: 2px solid var(--border-dim); width: 8%;">${u.toString().padStart(2, '0')}:00</th>`;
+    // Uurgleuwe van die vroegste begin tot die laaste einde (minstens 08:00–17:00).
+    var eersteUur = 8, laasteUur = 17;
+    gleuwe.forEach(function (g) {
+      var b = minute(g.begin), e = minute(g.einde);
+      if (b != null) eersteUur = Math.min(eersteUur, Math.floor(b / 60));
+      if (e != null) laasteUur = Math.max(laasteUur, Math.ceil(e / 60));
     });
-    html += `</tr></thead><tbody>`;
+    var ure = [];
+    for (var u = eersteUur; u < laasteUur; u++) ure.push(u);
 
-    // Rye vir elke lokaal
-    lokale.forEach(lokaal => {
-      html += `<tr><td style="text-align:left; font-weight: bold; border-bottom: 1px solid var(--border-dim); padding: 8px;">${lokaal}</td>`;
-      ure.forEach(uur => {
-        // Soek 'n gleuf wat oorvleuel met hierdie uur
-        const match = gleuwe.find(g => {
-          if (g.Lokaal !== lokaal) return false;
-          const beginUur = parseInt(g.Begin.split(':')[0], 10);
-          const eindeUur = parseInt(g.Einde.split(':')[0], 10);
-          return uur >= beginUur && uur < eindeUur;
+    var lokale = Array.from(new Set(gleuwe.map(function (g) { return g.lokaal; }))).sort();
+
+    var html = '<table class="lg-tabel"><thead><tr><th class="lg-lokaal">Lokaal</th>';
+    ure.forEach(function (uur) {
+      html += '<th>' + String(uur).padStart(2, '0') + ':00</th>';
+    });
+    html += '</tr></thead><tbody>';
+
+    lokale.forEach(function (lokaal) {
+      var kap = (gleuwe.find(function (g) { return g.lokaal === lokaal; }) || {}).kapasiteit;
+      html += '<tr><td class="lg-lokaal">' + esc(lokaal) +
+        '<div class="lg-sub">' + (kap ? kap + ' plekke' : 'kapasiteit onbekend') + '</div></td>';
+
+      ure.forEach(function (uur) {
+        // 'n Sessie hoort in elke uurgleuf waarmee dit oorvleuel (bv. 08:30–09:20 → 08:00 en 09:00).
+        var van = uur * 60, tot = van + 60;
+        var hier = gleuwe.filter(function (g) {
+          var b = minute(g.begin), e = minute(g.einde);
+          return g.lokaal === lokaal && b != null && e != null && b < tot && e > van;
         });
-
-        if (match) {
-          const vulTeks = match.Vulgraad !== null ? Math.round(match.Vulgraad * 100) + '%' : 'Onbekend';
-          const agtergrond = getStatusKleur(match.Vulgraad);
-          const grens = match.Konflik ? '2px solid red' : '1px solid var(--border-dim)';
-          const flits = match.Konflik || (match.Vulgraad > 1.0) ? 'animation: pulse 2s infinite;' : '';
-          
-          html += `
-            <td style="border: ${grens}; background: ${agtergrond}; color: #000; padding: 4px; position: relative; ${flits}" title="Vak: ${match.Vak}&#10;Tyd: ${match.Begin} - ${match.Einde}&#10;Inskrywing: ${match.Inskrywing}&#10;Voorspel: ${match.Verwagte_Skanderings}&#10;Kapasiteit: ${match.Kapasiteit}&#10;Bron: ${match.Bron}">
-              <div style="font-size: 0.75em; font-weight:bold;">${match.Vak}</div>
-              <div style="font-size: 0.85em;">${vulTeks}</div>
-              ${match.Konflik ? '<span style="color:red;font-weight:900;" title="Besprekingskonflik!">&#9888;</span>' : ''}
-            </td>
-          `;
-        } else {
-          html += `<td style="border-bottom: 1px solid var(--border-dim); border-right: 1px solid var(--border-dim);">&nbsp;</td>`;
+        if (hier.length === 0) {
+          html += '<td></td>';
+          return;
         }
+        var ergste = hier.reduce(function (a, g) {
+          return (g.vulgraad || 0) > (a.vulgraad || 0) ? g : a;
+        });
+        var vlag = hier.some(function (g) { return g.konflik || g.oor_kapasiteit || g.kan_oorloop; });
+        html += '<td class="lg-sel' + (vlag ? ' lg-vlag' : '') + '" style="background:' + vulKleur(ergste.vulgraad) + '">';
+        hier.forEach(function (g) {
+          var merk = g.konflik ? ' <span class="lg-merk">⚠ konflik</span>'
+            : g.oor_kapasiteit ? ' <span class="lg-merk">⚠</span>'
+            : g.kan_oorloop ? ' <span class="lg-merk">!</span>' : '';
+          html += '<div class="lg-sessie" title="' + esc(selTitel(g)) + '">' +
+            '<div class="lg-vak">' + esc(g.vak) + merk + '</div>' +
+            '<div class="lg-vul">' + pct(g.vulgraad) + '</div>' +
+            (g.reeks ? '<div class="lg-sub">' + pct(g.reeks.vulgraad_laag) + '–' + pct(g.reeks.vulgraad_hoog) + '</div>' : '') +
+            '<div class="lg-sub">rooster ' + pct(g.geskeduleerde_vulgraad) + '</div>' +
+            '</div>';
+        });
+        html += '</td>';
       });
-      html += `</tr>`;
+      html += '</tr>';
     });
-    html += `</tbody></table>`;
-    
-    // Voeg effense pulse animasie by CSS as dit nie daar is nie
-    html += `
-      <style>
-        @keyframes pulse {
-          0% { box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0.7); }
-          50% { box-shadow: inset 0 0 5px 2px rgba(255, 0, 0, 0.7); }
-          100% { box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0.7); }
-        }
-      </style>
-    `;
+    html += '</tbody></table>';
+    html += '<div class="lg-sleutel">' +
+      '<span><i style="background:' + vulKleur(0.4) + '"></i>tot 50%</span>' +
+      '<span><i style="background:' + vulKleur(0.7) + '"></i>tot 80%</span>' +
+      '<span><i style="background:' + vulKleur(0.95) + '"></i>tot 100%</span>' +
+      '<span><i style="background:' + vulKleur(1.2) + '"></i>bo kapasiteit</span>' +
+      '<span>⚠ bo kapasiteit of konflik · ! reeks kom bo 100%</span>' +
+      '</div>';
 
     container.innerHTML = html;
   }
 
-  // Voeg 'n event listener by die dag seleksie sodat dit onmiddellik herteken as mens verander
-  const lokaalDagSelect = document.getElementById('lokaalgebruik-dag-select');
+  // Kies vandag se dag by verstek en herteken onmiddellik as die gebruiker 'n ander dag kies.
+  var lokaalDagSelect = document.getElementById('lokaalgebruik-dag-select');
   if (lokaalDagSelect) {
+    var vandag = ['Sondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrydag', 'Saterdag'][new Date().getDay()];
+    if (Array.from(lokaalDagSelect.options).some(function (o) { return o.value === vandag; })) {
+      lokaalDagSelect.value = vandag;
+    }
     lokaalDagSelect.addEventListener('change', renderLokaalGebruik);
   }
 
-  // Koppel loadLokaalGebruik in die dataSelect ('Kies Kampus' dropdown) veranderingslus
+  // Laai die voorspelling vir die nuwe kampus as die 'Kies Kampus' keuselys verander.
   if (dataSelect) {
     dataSelect.addEventListener('change', function () {
-      const geselekteerdeKampus = this.value;
-      if (geselekteerdeKampus) {
-        loadLokaalGebruik(geselekteerdeKampus);
-      }
+      if (this.value) loadLokaalGebruik(this.value);
     });
   }
 
@@ -516,12 +592,5 @@
     new MutationObserver(herteken).observe(document.documentElement, {
       attributes: true, attributeFilter: ['data-theme']
     });
-    
-    // Initialiseer lokaalgebruik vir die eerste kampus as daar een is
-    setTimeout(() => {
-      if (dataSelect && dataSelect.value) {
-        loadLokaalGebruik(dataSelect.value);
-      }
-    }, 1000);
   });
 })();

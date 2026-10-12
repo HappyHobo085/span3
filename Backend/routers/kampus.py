@@ -8,6 +8,7 @@ from typing import List
 from database import get_db
 import models, schemas, auth
 from services.status_service import haal_laatste_logs_per_gebruiker
+from services.lokaalgebruik_ml_service import voorspel_vir_kampus
 
 router = APIRouter(prefix="/kampusse", tags=["Kampus"])
 
@@ -145,100 +146,13 @@ def kry_kampus_status_detail(kampus_id: int, db: Session = Depends(get_db)):
         )
     )
 
-import json
-from pathlib import Path
-
-@router.get("/{kampus_id}/lokaalgebruik", response_model=schemas.APIResponse[List[schemas.LokaalGebruikGleuf]])
+@router.get("/{kampus_id}/lokaalgebruik", response_model=schemas.APIResponse[dict])
 def kry_lokaalgebruik(
-    kampus_id: int, 
-    week: int = 14, 
+    kampus_id: int,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user)
 ):
-    # Trek lokale
-    lokasies = db.query(models.Lokasie).filter(
-        models.Lokasie.Kampus_ID == kampus_id,
-        models.Lokasie.LOK_Tipe == 'klaskamer'
-    ).all()
-    
-    lokasie_ids = [l.Lokasie_ID for l in lokasies]
-    lokasie_map = {l.Lokasie_ID: l for l in lokasies}
-    
-    if not lokasie_ids:
-        return schemas.APIResponse(sukses=True, data=[])
-
-    # Trek klasse vir hierdie lokale
-    klasse = db.query(models.Klas, models.Module).join(
-        models.Module, models.Klas.Module_ID == models.Module.Module_ID
-    ).filter(models.Klas.Lokasie_ID.in_(lokasie_ids)).all()
-    
-    # Inskrywings (studente in module/klas)
-    inskrywings = db.query(
-        models.Student_Klas.Klas_ID, 
-        func.count(models.Student_Klas.Gebruiker_ID).label('totaal')
-    ).group_by(models.Student_Klas.Klas_ID).all()
-    inskrywing_map = {r.Klas_ID: r.totaal for r in inskrywings}
-    
-    # Lees voorspellings
-    voorspelling_pad = Path(__file__).parent.parent / "ml_data" / "huidige_voorspelling.json"
-    voorspellings = {}
-    if voorspelling_pad.exists():
-        with open(voorspelling_pad, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            voorspellings = data.get(str(week), {})
-            
-    # Bou response data en spoor konflikte op
-    # Oorvleueling in dieselfde lokaal en dag:
-    tye_per_lokaal_dag = {}
-    
-    uitset = []
-    
-    for klas, mod in klasse:
-        lokaal = lokasie_map[klas.Lokasie_ID]
-        inskrywing = inskrywing_map.get(klas.Klas_ID, 0)
-        
-        # Sleutel soos in ML skrip
-        key = f"{mod.MOD_Kode}_{lokaal.LOK_Naam}_{klas.KLA_Dag}_{klas.KLA_Begin_Tyd}"
-        
-        v_data = voorspellings.get(key, {})
-        koers = v_data.get("koers", 1.0) # Verval na 1.0 (Rooster) as geen data is nie
-        bron = v_data.get("bron", "ROOSTER (Verstek)")
-        
-        verwagte_skanderings = int(inskrywing * koers)
-        vulgraad = None
-        if lokaal.LOK_Kapasiteit and lokaal.LOK_Kapasiteit > 0:
-            vulgraad = verwagte_skanderings / lokaal.LOK_Kapasiteit
-            
-        gleuf = schemas.LokaalGebruikGleuf(
-            Vak=mod.MOD_Kode,
-            Lokaal=lokaal.LOK_Naam,
-            Dag=klas.KLA_Dag,
-            Begin=klas.KLA_Begin_Tyd,
-            Einde=klas.KLA_Eind_Tyd,
-            Inskrywing=inskrywing,
-            Kapasiteit=lokaal.LOK_Kapasiteit,
-            Verwagte_Skanderings=verwagte_skanderings,
-            Vulgraad=vulgraad,
-            Bron=bron,
-            Konflik=False
-        )
-        
-        # Konflik spoor
-        lok_dag_key = (klas.Lokasie_ID, klas.KLA_Dag)
-        if lok_dag_key not in tye_per_lokaal_dag:
-            tye_per_lokaal_dag[lok_dag_key] = []
-        tye_per_lokaal_dag[lok_dag_key].append(gleuf)
-        
-        uitset.append(gleuf)
-        
-    # Vlag konflikte in O(N^2) per lokaal per dag (gewoonlik baie klein getal N)
-    for lok_dag, gleuwe in tye_per_lokaal_dag.items():
-        for i, g1 in enumerate(gleuwe):
-            for j, g2 in enumerate(gleuwe):
-                if i != j:
-                    # Simpel tyd oorvleueling tjeks (as strings, veronderstel '08:00' format)
-                    if g1.Begin < g2.Einde and g1.Einde > g2.Begin:
-                        g1.Konflik = True
-                        g2.Konflik = True
-
-    return schemas.APIResponse(sukses=True, data=uitset)
+    """Voorspelde skanderingskoers, verwagte getal en vulgraad per sessie vir volgende week."""
+    if not db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first():
+        raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
+    return schemas.APIResponse(sukses=True, data=voorspel_vir_kampus(db, kampus_id))

@@ -146,6 +146,17 @@
     },
 
     /**
+     * GET /kampusse/{kampusId}/lokaalgebruik
+     */
+    // Hierdie funksie kry volgende week se voorspelde vulgraad per lokaal en sessie.
+    fetchLokaalGebruik: async function (kampusId) {
+      const r = await apiRequest('/kampusse/' + kampusId + '/lokaalgebruik', {
+        method: 'GET',
+      });
+      return r.body;
+    },
+
+    /**
      * GET /kampusse
      */
     // Hierdie funksie roep GET /kampusse — dit kry die lys van al die kampusse.

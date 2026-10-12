@@ -1,7 +1,14 @@
+"""Lokaalgebruikvoorspelling vir die Kampus-bladsy.
+
+Neem die komende week se rooster uit die databasis, voorspel die
+skanderingskoers per sessie (services/lokaalgebruik_model.py) en bereken die
+verwagte getal studente en die vulgraad per lokaal.
+"""
+
 from __future__ import annotations
 
 import os
-import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +17,15 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 import models
+from services.lokaalgebruik_model import (
+    METODE_ETIKETTE,
+    METODE_ROOSTER,
+    berei_voor,
+    normaliseer_dag,
+    normaliseer_tyd,
+    tyd_na_minute,
+    voorspel_koers,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = Path(
@@ -19,31 +35,8 @@ MODEL_PATH = Path(
     )
 )
 
-DAG_MAP = {
-    "monday": "Maandag", "maandag": "Maandag",
-    "tuesday": "Dinsdag", "dinsdag": "Dinsdag",
-    "wednesday": "Woensdag", "woensdag": "Woensdag",
-    "thursday": "Donderdag", "donderdag": "Donderdag",
-    "friday": "Vrydag", "vrydag": "Vrydag",
-    "saturday": "Saterdag", "saterdag": "Saterdag",
-    "sunday": "Sondag", "sondag": "Sondag",
-}
-
 _bundle: dict | None = None
 _model_mtime: float | None = None
-
-
-def normaliseer_dag(value: str | None) -> str:
-    key = str(value or "").strip().lower()
-    return DAG_MAP.get(key, str(value or "").strip())
-
-
-def _tyd_na_minute(value: str | None) -> int:
-    text = str(value or "").strip().replace(".", ":")
-    m = re.match(r"^(\d{1,2}):(\d{2})", text)
-    if not m:
-        return 0
-    return int(m.group(1)) * 60 + int(m.group(2))
 
 
 def _laai_bundle() -> dict | None:
@@ -59,173 +52,201 @@ def _laai_bundle() -> dict | None:
         return _bundle
 
     obj = joblib.load(MODEL_PATH)
-    if not isinstance(obj, dict) or "model" not in obj:
-        raise RuntimeError("Ongeldige lokaalgebruik model bundle.")
+    if not isinstance(obj, dict) or obj.get("weergawe") != 2:
+        raise RuntimeError("Ou of ongeldige lokaalgebruik-bundel; lei die model weer op.")
 
     _bundle = obj
     _model_mtime = mtime
     return _bundle
 
 
-def kry_ml_status() -> dict:
+def _veilig_laai() -> tuple[dict | None, str | None]:
     try:
-        bundle = _laai_bundle()
-        if bundle is None:
-            return {
-                "runtime_ok": False,
-                "model_file_exists": False,
-                "model_loaded": False,
-                "bron": None,
-                "model_type": None,
-                "metrics": None,
-            }
-        return {
-            "runtime_ok": True,
-            "model_file_exists": True,
-            "model_loaded": True,
-            "bron": bundle.get("bron"),
-            "model_type": bundle.get("type"),
-            "metrics": bundle.get("metrics"),
-            "trained_at": bundle.get("trained_at"),
-            "rows": bundle.get("rows"),
-        }
+        return _laai_bundle(), None
     except Exception as exc:
-        return {
-            "runtime_ok": False,
-            "model_file_exists": MODEL_PATH.exists(),
-            "model_loaded": False,
-            "fout": str(exc),
-        }
+        return None, str(exc)
 
 
-def _klas_inskrywing(db: Session, klas: models.Klas) -> int:
-    ids: set[int] = set()
-
-    for (gid,) in (
-        db.query(models.Student_Klas.Gebruiker_ID)
-        .filter(models.Student_Klas.Klas_ID == klas.Klas_ID)
-        .all()
-    ):
-        ids.add(int(gid))
-
-    for (gid,) in (
-        db.query(models.Student_Module.Gebruiker_ID)
-        .filter(models.Student_Module.Module_ID == klas.Module_ID)
-        .all()
-    ):
-        ids.add(int(gid))
-
-    groep_ids = [
-        int(gid)
-        for (gid,) in (
-            db.query(models.Klas_Groep.Groep_ID)
-            .filter(models.Klas_Groep.Klas_ID == klas.Klas_ID)
-            .all()
-        )
-    ]
-    if groep_ids:
-        for (gid,) in (
-            db.query(models.Student_Groep.Gebruiker_ID)
-            .filter(models.Student_Groep.Groep_ID.in_(groep_ids))
-            .all()
-        ):
-            ids.add(int(gid))
-
-    return len(ids)
-
-
-def voorspel_vir_kampus_en_dag(
-    db: Session,
-    kampus_id: int,
-    dag: str,
-) -> dict[str, Any]:
-    bundle = _laai_bundle()
-    dag_af = normaliseer_dag(dag)
-
+def kry_ml_status() -> dict:
+    bundle, fout = _veilig_laai()
     if bundle is None:
         return {
-            "dag": dag_af,
-            "bron": None,
-            "model_beskikbaar": False,
-            "voorspellings": [],
+            "model_file_exists": MODEL_PATH.exists(),
+            "model_loaded": False,
+            "fout": fout,
         }
+    return {
+        "model_file_exists": True,
+        "model_loaded": True,
+        "databron": bundle.get("databron"),
+        "metode": bundle.get("metode"),
+        "keuse_rede": bundle.get("keuse_rede"),
+        "metrics": bundle.get("metrics"),
+        "interval": bundle.get("interval"),
+        "laaste_week": bundle.get("laaste_week"),
+        "voorspel_week": bundle.get("voorspel_week"),
+        "trained_at": bundle.get("trained_at"),
+        "rows": bundle.get("rows"),
+    }
+
+
+def inskrywings_per_klas(db: Session, klasse: list[models.Klas]) -> dict[int, int]:
+    """Unieke studente per klas uit Student_Klas, Student_Module en groepe (gebondel)."""
+    klas_ids = [k.Klas_ID for k in klasse]
+    module_ids = {k.Module_ID for k in klasse}
+    if not klas_ids:
+        return {}
+
+    per_klas: dict[int, set[int]] = defaultdict(set)
+    for kid, gid in db.query(models.Student_Klas.Klas_ID, models.Student_Klas.Gebruiker_ID).filter(
+        models.Student_Klas.Klas_ID.in_(klas_ids)
+    ):
+        per_klas[kid].add(gid)
+
+    per_module: dict[int, set[int]] = defaultdict(set)
+    for mid, gid in db.query(models.Student_Module.Module_ID, models.Student_Module.Gebruiker_ID).filter(
+        models.Student_Module.Module_ID.in_(module_ids)
+    ):
+        per_module[mid].add(gid)
+
+    klas_groepe: dict[int, set[int]] = defaultdict(set)
+    for kid, grp in db.query(models.Klas_Groep.Klas_ID, models.Klas_Groep.Groep_ID).filter(
+        models.Klas_Groep.Klas_ID.in_(klas_ids)
+    ):
+        klas_groepe[kid].add(grp)
+
+    per_groep: dict[int, set[int]] = defaultdict(set)
+    alle_groepe = set().union(*klas_groepe.values()) if klas_groepe else set()
+    if alle_groepe:
+        for grp, gid in db.query(models.Student_Groep.Groep_ID, models.Student_Groep.Gebruiker_ID).filter(
+            models.Student_Groep.Groep_ID.in_(alle_groepe)
+        ):
+            per_groep[grp].add(gid)
+
+    uitslag = {}
+    for k in klasse:
+        ids = set(per_klas[k.Klas_ID]) | per_module[k.Module_ID]
+        for grp in klas_groepe[k.Klas_ID]:
+            ids |= per_groep[grp]
+        uitslag[k.Klas_ID] = len(ids)
+    return uitslag
+
+
+def _vlag_konflikte(gleuwe: list[dict]) -> None:
+    """Merk sessies wat in dieselfde lokaal op dieselfde dag oorvleuel."""
+    groepe: dict[tuple, list[dict]] = defaultdict(list)
+    for g in gleuwe:
+        groepe[(g["lokasie_id"], g["dag"])].append(g)
+    for rye in groepe.values():
+        for i, a in enumerate(rye):
+            for b in rye[i + 1:]:
+                if None in (a["_begin_min"], a["_einde_min"], b["_begin_min"], b["_einde_min"]):
+                    continue
+                if a["_begin_min"] < b["_einde_min"] and b["_begin_min"] < a["_einde_min"]:
+                    a["konflik"] = b["konflik"] = True
+
+
+def voorspel_vir_kampus(db: Session, kampus_id: int, dag: str | None = None) -> dict[str, Any]:
+    bundle, laai_fout = _veilig_laai()
 
     rye = (
-        db.query(models.Klas, models.Module, models.Lokasie, models.Kampus)
+        db.query(models.Klas, models.Module, models.Lokasie)
         .join(models.Module, models.Module.Module_ID == models.Klas.Module_ID)
         .join(models.Lokasie, models.Lokasie.Lokasie_ID == models.Klas.Lokasie_ID)
-        .join(models.Kampus, models.Kampus.Kampus_ID == models.Lokasie.Kampus_ID)
-        .filter(
-            models.Lokasie.Kampus_ID == kampus_id,
-            models.Klas.Lokasie_ID.isnot(None),
-        )
+        .filter(models.Lokasie.Kampus_ID == kampus_id)
         .all()
     )
+    dag_af = normaliseer_dag(dag) if dag else None
+    if dag_af:
+        rye = [r for r in rye if normaliseer_dag(r[0].KLA_Dag) == dag_af]
 
-    model = bundle["model"]
-    resultate: list[dict] = []
+    inskrywings = inskrywings_per_klas(db, [klas for klas, _, _ in rye])
+    rooster = pd.DataFrame([
+        {
+            "Week": 0,
+            "Sessie": str(klas.Klas_ID),
+            "Klas_ID": klas.Klas_ID,
+            "Vak": mod.MOD_Kode,
+            "Lokaal": lok.LOK_Naam,
+            "Lokasie_ID": lok.Lokasie_ID,
+            "Dag": klas.KLA_Dag,
+            "Begin": klas.KLA_Begin_Tyd,
+            "Einde": klas.KLA_Eind_Tyd,
+            "Inskrywing": inskrywings.get(klas.Klas_ID, 0),
+            "Kapasiteit": lok.LOK_Kapasiteit or 0,
+        }
+        for klas, mod, lok in rye
+    ], columns=["Week", "Sessie", "Klas_ID", "Vak", "Lokaal", "Lokasie_ID", "Dag",
+                "Begin", "Einde", "Inskrywing", "Kapasiteit"])
+    teiken = berei_voor(rooster).reset_index(drop=True)
 
-    for klas, module, lokasie, kampus in rye:
-        if normaliseer_dag(klas.KLA_Dag) != dag_af:
-            continue
+    koerse, metode = voorspel_koers(bundle, teiken)
+    interval = (bundle or {}).get("interval") or {}
+    wys_reeks = bool(interval.get("wys")) and metode != METODE_ROOSTER
 
-        inskrywing = _klas_inskrywing(db, klas)
-        if inskrywing <= 0:
-            continue
+    gleuwe: list[dict] = []
+    for i, ry in teiken.iterrows():
+        insk = int(ry["Inskrywing"])
+        kap = int(ry["Kapasiteit"]) or None
+        koers = float(koerse[i])
+        verwag = int(round(koers * insk))
 
-        kapasiteit = int(getattr(lokasie, "LOK_Kapasiteit", 0) or 0)
+        def vul(k: float) -> float | None:
+            return round(k * insk / kap, 3) if kap else None
 
-        semester_week = int(os.getenv("LOKAALGEBRUIK_SEMESTER_WEEK", "7") or "7")
-        semester_week = max(1, min(14, semester_week))
+        reeks = None
+        if wys_reeks:
+            lo = min(max(koers + interval["q_lo"], 0.0), 1.0)
+            hi = min(max(koers + interval["q_hi"], 0.0), 1.0)
+            reeks = {
+                "koers_laag": round(lo, 3), "koers_hoog": round(hi, 3),
+                "getal_laag": int(round(lo * insk)), "getal_hoog": int(round(hi * insk)),
+                "vulgraad_laag": vul(lo), "vulgraad_hoog": vul(hi),
+            }
 
-        X = pd.DataFrame([{
-            "Week": semester_week,
-            "Kampus": kampus.KAM_Naam,
-            "Vak": module.MOD_Kode,
-            "Lokaal": lokasie.LOK_Naam,
-            "Dag": dag_af,
-            "BeginMinuut": _tyd_na_minute(klas.KLA_Begin_Tyd),
-            "Inskrywing": inskrywing,
-            "Kapasiteit": kapasiteit,
-        }])
-
-        koers = float(model.predict(X)[0])
-        koers = min(max(koers, 0.0), 1.0)
-        voorspelde_bywoning = int(round(koers * inskrywing))
-        vulgraad = (
-            round((voorspelde_bywoning / kapasiteit) * 100.0, 1)
-            if kapasiteit > 0
-            else None
-        )
-
-        resultate.append({
-            "klas_id": klas.Klas_ID,
-            "lokasie_id": lokasie.Lokasie_ID,
-            "kampus": kampus.KAM_Naam,
-            "vak": module.MOD_Kode,
-            "lokaal": lokasie.LOK_Naam,
-            "dag": dag_af,
-            "begin": klas.KLA_Begin_Tyd,
-            "einde": klas.KLA_Eind_Tyd,
-            "inskrywing": inskrywing,
-            "kapasiteit": kapasiteit,
-            "voorspelde_bywoning": voorspelde_bywoning,
-            "voorspelde_bywoning_pct": round(koers * 100.0, 1),
-            "vulgraad_pct": vulgraad,
-            "bron": bundle.get("bron", "SINTETIES/ML"),
+        vulgraad = vul(koers)
+        gleuwe.append({
+            "klas_id": int(ry["Klas_ID"]),
+            "lokasie_id": int(ry["Lokasie_ID"]),
+            "vak": ry["Vak"],
+            "lokaal": ry["Lokaal"],
+            "dag": ry["Dag"],
+            "begin": ry["Begin"],
+            "einde": normaliseer_tyd(ry["Einde"]),
+            "inskrywing": insk,
+            "kapasiteit": kap,
+            "geskeduleerde_vulgraad": vul(1.0),
+            "koers": round(koers, 3),
+            "verwagte_getal": verwag,
+            "vulgraad": vulgraad,
+            "reeks": reeks,
+            "oor_kapasiteit": vulgraad is not None and vulgraad > 1.0,
+            "kan_oorloop": bool(reeks and reeks["vulgraad_hoog"] is not None and reeks["vulgraad_hoog"] > 1.0),
+            "konflik": False,
+            "_begin_min": tyd_na_minute(ry["Begin"]),
+            "_einde_min": tyd_na_minute(ry["Einde"]),
         })
 
-    resultate.sort(
-        key=lambda x: (
-            x["begin"] or "",
-            -(x["vulgraad_pct"] if x["vulgraad_pct"] is not None else -1),
-            x["lokaal"] or "",
-        )
-    )
+    _vlag_konflikte(gleuwe)
+    for g in gleuwe:
+        g.pop("_begin_min")
+        g.pop("_einde_min")
+    gleuwe.sort(key=lambda g: (g["dag"], g["begin"], g["lokaal"]))
 
     return {
+        "kampus_id": kampus_id,
         "dag": dag_af,
-        "bron": bundle.get("bron", "SINTETIES/ML"),
-        "model_beskikbaar": True,
-        "voorspellings": resultate,
+        "voorspel_week": (bundle or {}).get("voorspel_week"),
+        "laaste_data_week": (bundle or {}).get("laaste_week"),
+        "metode": metode,
+        "metode_etiket": METODE_ETIKETTE[metode],
+        "keuse_rede": (bundle or {}).get("keuse_rede") or laai_fout
+            or "Geen opgeleide model nie; slegs die rooster word gewys.",
+        "databron": (bundle or {}).get("databron"),
+        "metrics": (bundle or {}).get("metrics"),
+        "interval": {
+            "wys": wys_reeks,
+            "dekking": interval.get("dekking"),
+        },
+        "gleuwe": gleuwe,
     }

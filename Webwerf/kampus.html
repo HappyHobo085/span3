@@ -77,34 +77,50 @@
     </article>
 
     <!-- Lokaalgebruik Voorspelling / Hittekaart -->
+    <style>
+      .lg-kop{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+      .lg-info{color:var(--text-2);font-size:0.85em;margin:6px 0 4px}
+      .lg-nota{color:var(--text-muted);font-size:0.8em;margin-bottom:10px}
+      .lg-leeg{padding:20px;text-align:center;color:var(--text-muted)}
+      .lg-tabel{width:100%;border-collapse:collapse;text-align:center;margin-top:10px;font-size:0.85em}
+      .lg-tabel th{border-bottom:2px solid var(--border-em);padding:6px 4px;font-weight:600;color:var(--text-2);white-space:nowrap}
+      .lg-tabel td{border:1px solid var(--border);padding:4px;vertical-align:top;min-width:64px}
+      .lg-tabel .lg-lokaal{text-align:left;font-weight:600;white-space:nowrap;padding:6px 8px}
+      .lg-sel.lg-vlag{box-shadow:inset 0 0 0 2px var(--error)}
+      .lg-sessie + .lg-sessie{margin-top:4px;padding-top:4px;border-top:1px dashed var(--border-em)}
+      .lg-vak{font-weight:700;font-size:0.85em}
+      .lg-vul{font-size:1.05em;font-weight:600;color:var(--text-1)}
+      .lg-sub{font-size:0.75em;color:var(--text-2);font-weight:400}
+      .lg-merk{color:var(--error);font-weight:800}
+      .lg-sleutel{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:0.8em;color:var(--text-2)}
+      .lg-sleutel i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1px solid var(--border-em)}
+    </style>
     <section class="panels" style="grid-template-columns:1fr">
       <article class="glass-card panel" aria-label="Lokaalgebruik" style="flex: 1 1 100%;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2>Lokaalgebruikvoorspelling (kapasiteit en vulgraad)</h2>
-          <div style="display: flex; gap: 10px;">
-            <select class="glass-select" id="lokaalgebruik-dag-select">
-              <option value="Monday">Maandag</option>
-              <option value="Tuesday">Dinsdag</option>
-              <option value="Wednesday">Woensdag</option>
-              <option value="Thursday">Donderdag</option>
-              <option value="Friday">Vrydag</option>
-            </select>
-          </div>
+        <div class="lg-kop">
+          <h2>Lokaalgebruik volgende week (voorspelde vulgraad)</h2>
+          <select class="glass-select" id="lokaalgebruik-dag-select" aria-label="Kies dag">
+            <option value="Maandag">Maandag</option>
+            <option value="Dinsdag">Dinsdag</option>
+            <option value="Woensdag">Woensdag</option>
+            <option value="Donderdag">Donderdag</option>
+            <option value="Vrydag">Vrydag</option>
+          </select>
         </div>
-        <div style="color: var(--viz-dim); font-size: 0.85em; margin-bottom: 10px;">
-          <em>Nota: Slegs sigbaar vir die gekose kampus. Voorspellings kan op sintetiese data gebaseer wees wanneer die bron as SINTETIES/ML aangedui word.</em>
+        <div class="lg-info" id="lokaalgebruik-info"></div>
+        <div class="lg-nota">
+          Elke sel wys die voorspelde vulgraad (verwagte skanderings ÷ kapasiteit), die reeks waarin dit waarskynlik val, en die rooster se vulgraad (ingeskryf ÷ kapasiteit).
+          Skandering is nie bywoning nie, en dit dek net mense in klasse. Hou die muis oor 'n sessie vir besonderhede.
         </div>
-        <div id="lokaalgebruik-container" style="overflow-x: auto;">
-          <!-- Heatmap word hier gelaai via kampus.js -->
-        </div>
+        <div id="lokaalgebruik-container" style="overflow-x: auto;"></div>
       </article>
     </section>
   </main>
 
   <!-- Skripte: die kode wat die bladsy laat werk (laai in hierdie volgorde) -->
-  <script src="website_api_calls.js?v=20261007verslag"></script>
+  <script src="website_api_calls.js?v=20261012lokaal"></script>
   <script src="main.js?v=20261007verslag"></script>
   <script src="stats.js?v=20261007dash"></script>
-  <script src="kampus.js?v=20261007dash"></script>
+  <script src="kampus.js?v=20261012lokaal"></script>
 </body>
 </html>

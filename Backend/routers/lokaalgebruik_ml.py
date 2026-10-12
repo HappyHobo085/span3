@@ -9,7 +9,7 @@ import schemas
 from database import get_db
 from services.lokaalgebruik_ml_service import (
     kry_ml_status,
-    voorspel_vir_kampus_en_dag,
+    voorspel_vir_kampus,
 )
 
 router = APIRouter(prefix="/lokaalgebruik", tags=["Lokaalgebruik ML"])
@@ -22,7 +22,7 @@ def lokaalgebruik_voorspellings(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
-    data = voorspel_vir_kampus_en_dag(db, kampus_id, dag)
+    data = voorspel_vir_kampus(db, kampus_id, dag)
     return schemas.APIResponse(sukses=True, data=data)
 
 
