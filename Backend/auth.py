@@ -29,6 +29,20 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dag
 # Span-toetsing / Docker: stel DISABLE_AUTH=1 om JWT- en roltoetsing te omseil (moet AF wees in produksie).
 DISABLE_AUTH = os.getenv("DISABLE_AUTH", "").strip().lower() in ("1", "true", "yes", "on")
 
+# MOON-SEC-001: fail-closed. Die omseiling word net toegelaat wanneer ENVIRONMENT
+# uitdruklik 'n ontwikkel- of toetsomgewing is; anders weier die backend om te begin.
+ONTWIKKEL_OMGEWINGS = {"development", "dev", "local", "testing", "test"}
+_OMGEWING = os.getenv("ENVIRONMENT", "").strip().lower()
+if DISABLE_AUTH and _OMGEWING not in ONTWIKKEL_OMGEWINGS:
+    raise RuntimeError(
+        "DISABLE_AUTH is aan, maar ENVIRONMENT is "
+        f"'{_OMGEWING or '(nie gestel nie)'}'. Die omseiling van aanmelding word net "
+        f"toegelaat met ENVIRONMENT in {sorted(ONTWIKKEL_OMGEWINGS)} — weier om te begin."
+    )
+if DISABLE_AUTH:
+    print("⚠️  DISABLE_AUTH is AAN: alle versoeke word as 'n Administrateur hanteer "
+          f"(ENVIRONMENT={_OMGEWING}). Moet nooit in produksie gebruik word nie.", flush=True)
+
 import bcrypt
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=not DISABLE_AUTH)

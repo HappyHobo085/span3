@@ -406,3 +406,30 @@ def test_sec008_opsigter_sien_net_eie_kampus_se_besoekers(omg, kampusse):
     kop = kampusse.opsigter(kampusse.eie)
     assert omg.client.get(f"/opsigter/kampusse/{kampusse.ander}/besoekers", headers=kop).status_code == 403
     assert omg.client.get(f"/opsigter/kampusse/{kampusse.eie}/besoekers", headers=kop).status_code == 200
+
+
+# --- MOON-SEC-001: DISABLE_AUTH net in ontwikkeling --------------------------
+
+def _laai_auth(env_extra):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    env = {k: v for k, v in os.environ.items() if k not in ("DISABLE_AUTH", "ENVIRONMENT")}
+    env.update({"SECRET_KEY": "toets-sleutel-" + "x" * 40, **env_extra})
+    return subprocess.run([sys.executable, "-c", "import auth"], cwd=Path(auth.__file__).parent,
+                          env=env, capture_output=True, text=True)
+
+
+@pytest.mark.parametrize("omgewing", [None, "production", "prod", "staging"])
+def test_sec001_disable_auth_weier_buite_ontwikkeling(omgewing):
+    extra = {"DISABLE_AUTH": "1"}
+    if omgewing:
+        extra["ENVIRONMENT"] = omgewing
+    r = _laai_auth(extra)
+    assert r.returncode != 0 and "DISABLE_AUTH" in r.stderr
+
+
+def test_sec001_disable_auth_toegelaat_in_ontwikkeling_en_af_in_produksie():
+    assert _laai_auth({"DISABLE_AUTH": "1", "ENVIRONMENT": "development"}).returncode == 0
+    assert _laai_auth({"DISABLE_AUTH": "0", "ENVIRONMENT": "production"}).returncode == 0
