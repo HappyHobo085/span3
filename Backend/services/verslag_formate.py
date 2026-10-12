@@ -96,6 +96,20 @@ def _is_leeg(grafiek: dict) -> bool:
 # Excel
 # --------------------------------------------------------------------------- #
 
+def _neutraliseer_formules(wb) -> None:
+    """Stoor teks wat met '=' begin as gewone teks, nie as 'n Excel-formule nie.
+
+    MOON-SEC-010: name en plekke kom van gebruikers (bv. 'n publieke RSVP), so
+    'n waarde soos '=HYPERLINK(...)' mag nie in die opsigter se Excel uitgevoer
+    word nie. Hierdie verslae bevat self geen formules nie.
+    """
+    for ws in wb.worksheets:
+        for ry in ws.iter_rows():
+            for sel in ry:
+                if sel.data_type == "f":
+                    sel.data_type = "s"
+
+
 def skryf_xlsx(oorsig: dict) -> bytes:
     from openpyxl import Workbook
     from openpyxl.chart import BarChart, LineChart, PieChart, Reference
@@ -284,6 +298,7 @@ def skryf_xlsx(oorsig: dict) -> bytes:
 
     if not wb.sheetnames:
         wb.create_sheet("Verslag")
+    _neutraliseer_formules(wb)
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()

