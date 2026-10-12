@@ -322,6 +322,12 @@ def opsigter_kampus_besoekers(
     if not kampus:
         raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
 
+    # 'n Opsigter sien net sy eie kampus se besoekers (name en selfoonnommers).
+    if "Administrateur" not in auth._haal_rol_names_uit_loaded(current_user):
+        koppeling = current_user.kampus_opsigter
+        if koppeling is None or koppeling.Kampus_ID != kampus_id:
+            raise HTTPException(status_code=403, detail="Jy het nie toegang tot hierdie kampus se besoekers nie")
+
     # Gebruik SA se kalenderdag, maar vergelyk teen die bestaande UTC-naive DB-tye.
     sa_tz = timezone(timedelta(hours=2))
     now_sa = datetime.now(sa_tz)

@@ -16,6 +16,10 @@ def test_opsigter_besoekers_lys_toegelate_besoeker(db, maak_gebruiker):
     kampus = models.Kampus(KAM_Naam="Hoofkampus", KAM_Adres="Straat 1")
     db.add(kampus)
     db.flush()
+    # Opsigters sien net hul eie kampus se besoekers (MOON-SEC-008).
+    db.add(models.Kampus_Opsigter(Gebruiker_ID=opsigter.Gebruiker_ID, KAMO_Nommer="KO1", Kampus_ID=kampus.Kampus_ID))
+    db.flush()
+    db.expire(opsigter, ["kampus_opsigter"])
 
     nou = datetime.utcnow()
     db.add(models.BesoekerUitnodiging(
@@ -53,6 +57,9 @@ def test_opsigter_besoekers_leeg_sonder_toegelate_besoekers(db, maak_gebruiker):
     kampus = models.Kampus(KAM_Naam="Leë Kampus", KAM_Adres="Straat 2")
     db.add(kampus)
     db.flush()
+    db.add(models.Kampus_Opsigter(Gebruiker_ID=opsigter.Gebruiker_ID, KAMO_Nommer="KO2", Kampus_ID=kampus.Kampus_ID))
+    db.flush()
+    db.expire(opsigter, ["kampus_opsigter"])
 
     resultaat = wagte.opsigter_kampus_besoekers(
         kampus_id=kampus.Kampus_ID,

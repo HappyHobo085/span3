@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 import auth
 import database
 import models
-from routers import gebruikers, kampus, klasse, koshuis, lokasie, saamry, student
+from routers import events, gebruikers, kampus, klasse, koshuis, lokasie, saamry, student, wagte
 
 
 @pytest.fixture()
@@ -34,7 +34,7 @@ def omg():
     db = Sessie()
 
     app = FastAPI()
-    for r in (kampus, koshuis, lokasie, student, klasse, gebruikers, saamry):
+    for r in (kampus, koshuis, lokasie, student, klasse, gebruikers, saamry, events, wagte):
         app.include_router(r.router)
 
     def _get_db():
@@ -331,3 +331,78 @@ def test_opsigter_sonder_kampus_kry_403_nie_500_nie(omg):
     teiken, _ = omg.gebruiker("Student")
     _, opsigter = omg.gebruiker("Kampus_Opsigter")
     assert omg.client.get(f"/gebruikers/{teiken.Gebruiker_ID}", headers=opsigter).status_code == 403
+
+
+# --- MOON-SEC-008: opsigters net vir hul eie kampus ---------------------------
+
+@pytest.fixture()
+def kampusse(omg):
+    from datetime import datetime as dt
+    db = omg.db
+    ander = models.Kampus(KAM_Naam="Kaapstad", KAM_Adres="x")
+    db.add(ander)
+    db.flush()
+
+    def opsigter(kampus_id):
+        g, kop = omg.gebruiker("Kampus_Opsigter")
+        db.add(models.Kampus_Opsigter(Gebruiker_ID=g.Gebruiker_ID, KAMO_Nommer=f"K{g.Gebruiker_ID}", Kampus_ID=kampus_id))
+        db.commit()
+        return kop
+
+    def geleentheid(kampus_id):
+        skepper, _ = omg.gebruiker("Administrateur")
+        e = models.Funksie(Kampus_ID=kampus_id, Geskep_Deur_ID=skepper.Gebruiker_ID, FUN_Naam="Fees",
+                           FUN_Begin_Tyd=dt(2026, 11, 1, 10), FUN_Eind_Tyd=dt(2026, 11, 1, 12),
+                           FUN_Kapasiteit=50, FUN_Status="AKTIEF", FUN_Is_Aktief=True)
+        db.add(e)
+        db.commit()
+        return e.Funksie_ID
+
+    class K:
+        pass
+
+    k = K()
+    k.eie, k.ander, k.opsigter, k.geleentheid = omg.kampus_id, ander.Kampus_ID, opsigter, geleentheid
+    return k
+
+
+def _geleentheid_roetes(eid):
+    return [
+        ("put", f"/events/{eid}", {"naam": "Gekaap"}),
+        ("post", f"/events/{eid}/kanselleer", None),
+        ("post", f"/events/{eid}/share", None),
+        ("get", f"/events/{eid}/rsvps", None),
+        ("get", f"/events/{eid}/attendance", None),
+        ("delete", f"/events/{eid}/public-rsvps/999", None),
+    ]
+
+
+def test_sec008_opsigter_kan_nie_ander_kampus_se_geleenthede_bestuur_nie(omg, kampusse):
+    kop = kampusse.opsigter(kampusse.eie)
+    eid = kampusse.geleentheid(kampusse.ander)
+    for metode, pad, body in _geleentheid_roetes(eid):
+        r = getattr(omg.client, metode)(pad, headers=kop, **({"json": body} if body else {}))
+        assert r.status_code == 403, (metode, pad, r.status_code)
+    nuut = {"naam": "X", "kampus_id": kampusse.ander, "begin_tyd": "2026-11-02T10:00:00Z",
+            "eind_tyd": "2026-11-02T12:00:00Z", "kapasiteit": 10}
+    assert omg.client.post("/events", json=nuut, headers=kop).status_code == 403
+
+
+def test_sec008_opsigter_bestuur_eie_kampus_en_kan_nie_na_ander_kampus_skuif_nie(omg, kampusse):
+    kop = kampusse.opsigter(kampusse.eie)
+    eid = kampusse.geleentheid(kampusse.eie)
+    assert omg.client.get(f"/events/{eid}/rsvps", headers=kop).status_code == 200
+    assert omg.client.put(f"/events/{eid}", json={"naam": "Nuwe naam"}, headers=kop).status_code == 200
+    assert omg.client.put(f"/events/{eid}", json={"kampus_id": kampusse.ander}, headers=kop).status_code == 403
+
+
+def test_sec008_admin_bestuur_enige_kampus(omg, kampusse):
+    _, admin = omg.gebruiker("Administrateur")
+    eid = kampusse.geleentheid(kampusse.ander)
+    assert omg.client.get(f"/events/{eid}/rsvps", headers=admin).status_code == 200
+
+
+def test_sec008_opsigter_sien_net_eie_kampus_se_besoekers(omg, kampusse):
+    kop = kampusse.opsigter(kampusse.eie)
+    assert omg.client.get(f"/opsigter/kampusse/{kampusse.ander}/besoekers", headers=kop).status_code == 403
+    assert omg.client.get(f"/opsigter/kampusse/{kampusse.eie}/besoekers", headers=kop).status_code == 200

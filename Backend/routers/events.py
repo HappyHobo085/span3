@@ -62,6 +62,20 @@ def _require_opsigter(db: Session, current_user: models.Gebruikers) -> None:
         raise HTTPException(status_code=403, detail="Slegs 'n opsigter mag geleenthede bestuur")
 
 
+def _require_opsigter_vir_kampus(db: Session, current_user: models.Gebruikers, *kampus_ids: int) -> None:
+    """Soos _require_opsigter, maar 'n opsigter mag net sy eie kampus bestuur (MOON-SEC-008).
+
+    'n Administrateur het steeds toegang tot alle kampusse.
+    """
+    _require_opsigter(db, current_user)
+    if "Administrateur" in auth._haal_rol_names_uit_loaded(current_user):
+        return
+    koppeling = current_user.kampus_opsigter
+    eie_kampus = koppeling.Kampus_ID if koppeling is not None else None
+    if eie_kampus is None or any(k != eie_kampus for k in kampus_ids):
+        raise HTTPException(status_code=403, detail="Jy mag net geleenthede vir jou eie kampus bestuur")
+
+
 def _require_rsvp_user(db: Session, current_user: models.Gebruikers) -> None:
     """Check that user is a student or personeel — use eager-loaded sub-records."""
     _require_active(current_user)
@@ -463,7 +477,7 @@ def create_event(
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
-    _require_opsigter(db, current_user)
+    _require_opsigter_vir_kampus(db, current_user, payload.kampus_id)
     naam = payload.naam.strip()
     if not naam:
         raise HTTPException(status_code=400, detail="Naam van geleentheid is verpligtend")
@@ -501,6 +515,7 @@ def update_event(
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
     new_kampus_id = payload.kampus_id if payload.kampus_id is not None else event.Kampus_ID
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID, new_kampus_id)
     new_lokasie_id = payload.lokasie_id if payload.kampus_id is not None else event.Lokasie_ID
     _validate_location(db, new_kampus_id, new_lokasie_id)
     new_begin = _utc_naive(payload.begin_tyd) if payload.begin_tyd is not None else event.FUN_Begin_Tyd
@@ -538,6 +553,7 @@ def cancel_event(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID)
 
     # Wanneer 'n Event gekanselleer word, moet geen aktiewe RSVP daarvan
     # oorbly nie. Dit maak ook eksterne QR-kodes onmiddellik ongeldig omdat
@@ -588,6 +604,7 @@ def share_event(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID)
     if not event.FUN_Deel_Token:
         event.FUN_Deel_Token = _new_unique_share_token(db)
         event.Gewysig_Op = datetime.utcnow()
@@ -676,6 +693,7 @@ def event_rsvps(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID)
     app_rows = db.query(models.FunksieRSVP, models.Gebruikers).join(
         models.Gebruikers,
         models.Gebruikers.Gebruiker_ID == models.FunksieRSVP.Gebruiker_ID,
@@ -741,6 +759,7 @@ def event_attendance(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID)
     return {
         "sukses": True,
         "data": _attendance_payload(db, event, current_user.Gebruiker_ID),
@@ -757,6 +776,7 @@ def cancel_public_rsvp_by_opsigter(
 ):
     _require_opsigter(db, current_user)
     event = _event_or_404(db, event_id)
+    _require_opsigter_vir_kampus(db, current_user, event.Kampus_ID)
     row = (
         db.query(models.FunksiePubliekRSVP)
         .filter(
