@@ -24,27 +24,12 @@ def student_scan_klas(
     if data.rigting not in ["IN", "UIT"]:
         raise HTTPException(status_code=400, detail="Rigting moet IN of UIT wees")
 
-    student = db.query(models.Student).filter(
-        models.Student.Gebruiker_ID == current_user.Gebruiker_ID
-    ).first()
+    # MOON-SEC-006: die bediener dwing self af dat die student nou 'n roosterklas
+    # in hierdie lokaal het; 'n skandering buite die klas skryf geen bywoning nie.
+    from routers.klasse import bepaal_huidige_klas_vir_nfc
 
-    if not student:
-        raise HTTPException(status_code=403, detail="Net studente kan by 'n klas skandeer")
-
-    tag = db.query(models.NFC_Tags).filter(
-        models.NFC_Tags.NFC_UID == data.nfc_uid.strip(),
-        models.NFC_Tags.NFC_Is_Aktief == True
-    ).first()
-
-    if not tag or not tag.Lokasie_ID:
-        raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC-etiket gevind nie")
-
-    lokasie = db.query(models.Lokasie).filter(
-        models.Lokasie.Lokasie_ID == tag.Lokasie_ID
-    ).first()
-
-    if not lokasie:
-        raise HTTPException(status_code=404, detail="Lokaal nie gevind nie")
+    huidig = bepaal_huidige_klas_vir_nfc(db, current_user, data.nfc_uid)
+    student, tag, lokasie = huidig["student"], huidig["tag"], huidig["lokasie"]
 
     log = models.ToegangsLogs(
         NFC_Tags_ID=tag.NFC_Tags_ID,

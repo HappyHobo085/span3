@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 import auth
 import database
 import models
-from routers import kampus, koshuis
+from routers import kampus, klasse, koshuis, lokasie, student
 
 
 @pytest.fixture()
@@ -34,7 +34,7 @@ def omg():
     db = Sessie()
 
     app = FastAPI()
-    for r in (kampus, koshuis):
+    for r in (kampus, koshuis, lokasie, student, klasse):
         app.include_router(r.router)
 
     def _get_db():
@@ -219,3 +219,80 @@ def test_sec007_in_na_afsnytyd_bly_tot_volgende_dag(uitcheck):
     s = uitcheck.student_in(uitcheck.kampus_b, _sa(22, 30))
     assert uitcheck.loop(_sa(22, 45)) == set()
     assert uitcheck.loop(_sa(22, 0, dag=13)) == {s}
+
+
+# --- MOON-SEC-006: klasbywoning sonder roosterklas ----------------------------
+
+@pytest.fixture()
+def klas(omg, monkeypatch):
+    from datetime import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    db = omg.db
+    lokale = {}
+    for naam in ("L1", "L2"):
+        lok = models.Lokasie(LOK_Naam=naam, LOK_Tipe="Klaskamer", Kampus_ID=omg.kampus_id)
+        db.add(lok)
+        db.flush()
+        db.add(models.NFC_Tags(NFC_UID=f"UID-{naam}", Lokasie_ID=lok.Lokasie_ID, NFC_Tipe="Lokasie", NFC_Is_Aktief=True))
+        lokale[naam] = lok
+    mod = models.Module(MOD_Kode="SEK101")
+    db.add(mod)
+    db.flush()
+    # Maandag 08:00–09:00 in L1.
+    db.add(models.Klas(Module_ID=mod.Module_ID, Lokasie_ID=lokale["L1"].Lokasie_ID, KLA_Lokaal="L1",
+                       KLA_Dag="Maandag", KLA_Begin_Tyd="08:00", KLA_Eind_Tyd="09:00"))
+    stud, kop = omg.gebruiker("Student")
+    db.add(models.Student(Gebruiker_ID=stud.Gebruiker_ID, STU_Nommer="S900", STU_Is_Koshuis=False))
+    db.add(models.Student_Module(Gebruiker_ID=stud.Gebruiker_ID, Module_ID=mod.Module_ID))
+    db.commit()
+
+    class Klok(dt):
+        nou = dt(2026, 10, 12, 8, 30, tzinfo=ZoneInfo("Africa/Johannesburg"))  # Maandag
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.nou.astimezone(tz) if tz else cls.nou
+
+    monkeypatch.setattr(klasse, "datetime", Klok)
+
+    class K:
+        pass
+
+    k = K()
+    k.kop, k.klok, k.db, k.stud = kop, Klok, db, stud
+
+    def skandeer(uid):
+        return omg.client.post("/student/scan-klas", json={"nfc_uid": uid, "rigting": "IN"}, headers=kop)
+
+    def logs():
+        return db.query(models.ToegangsLogs).filter_by(Gebruiker_ID=stud.Gebruiker_ID).count()
+
+    k.skandeer, k.logs = skandeer, logs
+    return k
+
+
+def test_sec006_skandering_tydens_klas_in_regte_lokaal_tel(klas):
+    r = klas.skandeer("UID-L1")
+    assert r.status_code == 200, r.text
+    assert klas.logs() == 1
+
+
+def test_sec006_skandering_buite_klastyd_word_geweier(klas):
+    from datetime import datetime as dt
+    from zoneinfo import ZoneInfo
+    klas.klok.nou = dt(2026, 10, 12, 3, 0, tzinfo=ZoneInfo("Africa/Johannesburg"))  # 03:00 vanuit die bed
+    assert klas.skandeer("UID-L1").status_code == 409
+    assert klas.logs() == 0
+
+
+def test_sec006_skandering_in_verkeerde_lokaal_word_geweier(klas):
+    assert klas.skandeer("UID-L2").status_code == 409
+    assert klas.logs() == 0
+
+
+@pytest.mark.parametrize("pad", ["/lokasies", "/klasse", "/klasse/1/roster", "/klasse/1/bywoning"])
+def test_sec006_nfc_uids_en_klaslyste_nie_vir_studente_nie(omg, klas, pad):
+    assert omg.client.get(pad, headers=klas.kop).status_code == 403
+    _, opsigter = omg.gebruiker("Kampus_Opsigter")
+    assert omg.client.get(pad, headers=opsigter).status_code == 200

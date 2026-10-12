@@ -1479,16 +1479,13 @@ class StudentKlasNfcValideerRequest(BaseModel):
     nfc_uid: str
 
 
-@router.post("/studente/klas-nfc/valideer")
-def valideer_student_klas_nfc(
-    data: StudentKlasNfcValideerRequest,
-    db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user),
-):
-    """Valideer 'n fisiese klaskamer-tag teen die student se huidige roosterklas.
+def bepaal_huidige_klas_vir_nfc(db: Session, current_user: models.Gebruikers, nfc_uid: str) -> dict:
+    """Los 'n klaskamer-tag op na die student se klas wat nou in daardie lokaal is.
 
     Die backend, nie die foon nie, besluit op grond van SA-tyd en Lokasie_ID.
-    Geen ToegangsLogs word hier geskryf nie; dit is net die fail-closed pre-check.
+    Gooi HTTPException (403/404/409) as die student nie nou 'n klas daar het nie.
+    Word deur die valideer-stap én deur /student/scan-klas gebruik (MOON-SEC-006),
+    sodat bywoning nie sonder 'n geldige roosterklas aangeteken kan word nie.
     """
     student = (
         db.query(models.Student)
@@ -1498,7 +1495,7 @@ def valideer_student_klas_nfc(
     if not student:
         raise HTTPException(status_code=403, detail="Net studente kan klas-NFC valideer")
 
-    tag = _vind_aktiewe_nfc_tag(db, data.nfc_uid)
+    tag = _vind_aktiewe_nfc_tag(db, nfc_uid)
     if not tag or not tag.Lokasie_ID:
         raise HTTPException(status_code=404, detail="Geen lokaal vir hierdie NFC-etiket gevind nie")
 
@@ -1553,15 +1550,28 @@ def valideer_student_klas_nfc(
             detail=f"Verkeerde lokaal. Jou huidige klas is in: {verwag}",
         )
 
-    klas = vir_lokaal[0]
+    return {"student": student, "tag": tag, "lokasie": lokasie, "klas": vir_lokaal[0], "nou": nou}
+
+
+@router.post("/studente/klas-nfc/valideer")
+def valideer_student_klas_nfc(
+    data: StudentKlasNfcValideerRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Valideer 'n fisiese klaskamer-tag teen die student se huidige roosterklas.
+
+    Geen ToegangsLogs word hier geskryf nie; dit is net die fail-closed pre-check.
+    """
+    r = bepaal_huidige_klas_vir_nfc(db, current_user, data.nfc_uid)
     return schemas.APIResponse(
         sukses=True,
         data={
-            "NFC_UID": tag.NFC_UID,
-            "Lokasie_ID": tag.Lokasie_ID,
-            "LOK_Naam": lokasie.LOK_Naam,
-            "Klas": _klas_na_dict(klas),
-            "Bediener_Tyd": nou.isoformat(),
+            "NFC_UID": r["tag"].NFC_UID,
+            "Lokasie_ID": r["tag"].Lokasie_ID,
+            "LOK_Naam": r["lokasie"].LOK_Naam,
+            "Klas": _klas_na_dict(r["klas"]),
+            "Bediener_Tyd": r["nou"].isoformat(),
         },
     )
 

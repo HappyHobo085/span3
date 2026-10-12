@@ -29,8 +29,10 @@ def skep_lokasie(
 @router.get("/lokasies")
 def lys_lokasies(
     db: Session = Depends(get_db),
-    current_user: models.Gebruikers = Depends(auth.get_current_user)
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_opsigter),
 ):
+    """Lokasies met hul NFC-UID's: slegs Admin en Kampus_Opsigter (MOON-SEC-006)."""
     # selectinload on Lokasie.nfc_tags means tags are loaded in the same query
     lokasies = db.query(models.Lokasie).all()
     result = []
@@ -70,8 +72,12 @@ def lys_lokasies(
 def lys_klasse(
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_opsigter),
 ):
-    """Gee 'n lys van alle klasse (lokasies met LOK_Tipe == 'Klaskamer')."""
+    """Gee 'n lys van alle klasse (lokasies met LOK_Tipe == 'Klaskamer').
+
+    Bevat NFC-UID's, dus slegs Admin en Kampus_Opsigter (MOON-SEC-006).
+    """
     # selectinload on Lokasie.nfc_tags means tags are loaded in the same query
     lokasies = (
         db.query(models.Lokasie)
@@ -98,6 +104,7 @@ def kry_klas_roster(
     lokasie_id: int,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_opsigter),
 ):
     """Gee die lys van studente wat ooit by hierdie lokaal ingeskandeer het (unikale gebruikers)."""
     # Join with toegangs_logs to find distinct gebruikers for this lokasie
@@ -131,6 +138,7 @@ def kry_klas_bywoning(
     date: Optional[str] = None,  # ISO date string YYYY-MM-DD; defaults to today
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_opsigter),
 ):
     """Gee bywoningdata vir 'n klas op 'n gegewe datum.
 
