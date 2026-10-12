@@ -142,6 +142,8 @@ async def custom_http_exception_handler(
             data=None,
             fout=exc.detail,
         ).dict(),
+        # Behou bv. Retry-After vir HTTP 429 tempo-beperkings.
+        headers=exc.headers,
     )
 
 

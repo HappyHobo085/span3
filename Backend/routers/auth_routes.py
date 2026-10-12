@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas, auth
 from services.gebruiker_service import get_user_role_names, kies_primere_rol
+from tempo_beperking import beperk_versoeke
 
 router = APIRouter(tags=["Auth"])
 
@@ -20,6 +21,23 @@ def login_vir_toegang_token(
     db: Session = Depends(get_db)
 ):
     username = form_data.username.strip()
+
+    # MOON-SEC-016: beperk brute-force pogings per IP, plus per IP+gebruikersnaam.
+    beperk_versoeke(
+        request,
+        bucket="login-ip",
+        limiet=10,
+        venster_sekondes=60,
+        boodskap="Te veel aanmeldpogings. Wag asseblief 'n minuut en probeer weer.",
+    )
+    beperk_versoeke(
+        request,
+        bucket="login-gebruiker",
+        limiet=5,
+        venster_sekondes=60,
+        subject=username,
+        boodskap="Te veel aanmeldpogings. Wag asseblief 'n minuut en probeer weer.",
+    )
 
     user = None
 

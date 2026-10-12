@@ -1,6 +1,6 @@
 """Wagte (Guard) and Sekuriteit routes."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from database import get_db
 import models, schemas, auth
+from tempo_beperking import beperk_versoeke
 
 router = APIRouter(tags=["Wagte"])
 
@@ -252,12 +253,23 @@ def _validate_koshuis_inwoner(db: Session, gebruiker_id: int, koshuis):
 
 @router.get("/wagte/nommer/check")
 def wagte_nommer_check(
+    request: Request,
     nommer: str,
     db: Session = Depends(get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
     """Ligte live-validasie vir handmatige wag-invoer."""
+    # MOON-SEC-012: keer ID/student/personeelnommer-oes.
+    beperk_versoeke(
+        request,
+        bucket="wagte-nommer-check",
+        limiet=10,
+        venster_sekondes=60,
+        subject=current_user.Gebruiker_ID,
+        boodskap="Te veel nommernavrae. Wag asseblief 'n minuut en probeer weer.",
+    )
+
     scan = nommer.strip()
     if not scan:
         return schemas.APIResponse(

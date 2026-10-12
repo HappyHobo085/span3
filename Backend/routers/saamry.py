@@ -22,11 +22,12 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,7 @@ from services.compatibiliteit_service import (
     bereken_saamry_versoenbaarheid,
 )
 from services.ml_service import kry_ml_runtime_status
+from tempo_beperking import beperk_versoeke
 
 
 router = APIRouter(prefix="/saamry", tags=["Saamry"])
@@ -640,11 +642,22 @@ def get_saamry_status(
 
 @router.get("/gebruikers/search")
 def search_saamry_users(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=100),
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
 ):
     _require_saamry_user(db, current_user)
+    # Beperk massasoektogte sonder om normale tik/debounce-soektogte te breek.
+    beperk_versoeke(
+        request,
+        bucket="saamry-gebruikers-search",
+        limiet=30,
+        venster_sekondes=60,
+        subject=current_user.Gebruiker_ID,
+        boodskap="Te veel Saamry-soektogte. Wag asseblief 'n minuut en probeer weer.",
+    )
+
     clean = q.strip()
 
     users = (
@@ -1606,7 +1619,7 @@ def _authenticate_ws(websocket: WebSocket, db: Session) -> Optional[models.Gebru
             )
             .first()
         )
-    except (JWTError, TypeError, ValueError):
+    except (jwt.InvalidTokenError, TypeError, ValueError):
         return None
 
 

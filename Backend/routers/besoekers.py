@@ -3,13 +3,14 @@
 from datetime import datetime, timedelta, timezone
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 import auth
 import database
 import models
 import schemas
+from tempo_beperking import beperk_versoeke
 
 
 router = APIRouter(prefix="/besoekers", tags=["Besoekers"])
@@ -270,11 +271,21 @@ def cancel_visitor_invite(
 @router.post("/verifieer")
 def verify_visitor_otp(
     payload: schemas.BesoekerOtpVerifyRequest,
+    request: Request,
     db: Session = Depends(database.get_db),
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     _: bool = Depends(auth.check_sekuriteit),
 ):
-    del current_user
+    # MOON-SEC-016: beperk OTP-raai per aangemelde wag/IP.
+    beperk_versoeke(
+        request,
+        bucket="besoeker-otp-verifieer",
+        limiet=10,
+        venster_sekondes=60,
+        subject=current_user.Gebruiker_ID,
+        boodskap="Te veel OTP-pogings. Wag asseblief 'n minuut en probeer weer.",
+    )
+
     otp = payload.otp.strip()
     if len(otp) != 6 or not otp.isdigit():
         raise HTTPException(status_code=400, detail="OTP moet presies 6 syfers wees")

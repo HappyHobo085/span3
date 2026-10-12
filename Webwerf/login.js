@@ -101,6 +101,16 @@
 
         const result = await response.json();
 
+        if (response.status === 429) {
+          wysBoodskap(
+            result.fout ||
+              result.detail ||
+              'Te veel aanmeldpogings. Wag asseblief ’n minuut en probeer weer.',
+            'error'
+          );
+          return;
+        }
+
         // As die bediener sê die inteken was suksesvol
         if (response.ok && result.sukses) {
           // Stoor die bewys (token) dat die gebruiker ingeteken is

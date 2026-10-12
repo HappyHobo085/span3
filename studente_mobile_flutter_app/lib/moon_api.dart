@@ -1693,6 +1693,24 @@ class MoonApi {
 
   static String? bearerToken;
 
+  static void _throwIfRateLimited(
+    http.Response response, [
+    dynamic decoded,
+  ]) {
+    if (response.statusCode != 429) return;
+
+    String? message;
+    if (decoded is Map) {
+      message = (decoded['fout'] ?? decoded['detail'])?.toString();
+    }
+
+    throw Exception(
+      (message != null && message.trim().isNotEmpty)
+          ? message
+          : 'Te veel versoeke. Wag asseblief ’n minuut en probeer weer.',
+    );
+  }
+
   static Future<Map<String, dynamic>> login({
 
     required String email,
@@ -1734,6 +1752,7 @@ class MoonApi {
       );
 
     final decoded = jsonDecode(response.body);
+    _throwIfRateLimited(response, decoded);
 
     if (response.statusCode != 200 || decoded['sukses'] != true) {
 
@@ -2545,6 +2564,8 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
 
     }
 
+    _throwIfRateLimited(response, decoded);
+
     if (response.statusCode != 200 || decoded['sukses'] != true) {
 
       throw Exception(
@@ -2986,6 +3007,8 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
         'Bedienerfout HTTP ${response.statusCode}: ${response.body}',
       );
     }
+    _throwIfRateLimited(response, decoded);
+
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         decoded is! Map ||
@@ -3423,6 +3446,9 @@ static Future<Map<String, dynamic>> fetchLiveDashboard() async {
       );
 
     }
+
+    _throwIfRateLimited(response, decoded);
+
 
     if (response.statusCode < 200 ||
 
