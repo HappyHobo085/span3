@@ -114,6 +114,24 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception:
         return False
 
+
+_SKYN_HASH: Optional[str] = None
+
+
+def verify_password_of_skyn(plain_password: str, gebruiker) -> bool:
+    """Verifieer 'n wagwoord, en doen 'n skyn-bcrypt as die gebruiker nie bestaan nie.
+
+    MOON-SEC-016: so neem 'n onbekende gebruikersnaam ewe lank as 'n verkeerde
+    wagwoord, en kan 'n aanvaller nie uit die reaksietyd aflei wie geregistreer is nie.
+    """
+    global _SKYN_HASH
+    if gebruiker is None:
+        if _SKYN_HASH is None:
+            _SKYN_HASH = get_password_hash("skyn-wagwoord-vir-konstante-tyd")
+        verify_password(plain_password, _SKYN_HASH)
+        return False
+    return verify_password(plain_password, gebruiker.GEB_Wagwoord)
+
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 

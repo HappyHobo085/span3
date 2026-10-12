@@ -42,7 +42,7 @@ def login_vir_toegang_token(
             if kandidaat and "Student" in get_user_role_names(db, kandidaat):
                 user = kandidaat
 
-    if not user or not auth.verify_password(form_data.password, user.GEB_Wagwoord):
+    if not auth.verify_password_of_skyn(form_data.password, user):
         from fastapi import HTTPException
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

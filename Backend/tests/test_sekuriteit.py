@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 import auth
 import database
 import models
-from routers import events, gebruikers, kampus, klasse, koshuis, lokasie, saamry, student, wagte
+from routers import auth_routes, events, gebruikers, kampus, klasse, koshuis, lokasie, saamry, student, wagte
 
 
 @pytest.fixture()
@@ -33,8 +33,11 @@ def omg():
     Sessie = sessionmaker(bind=engine)
     db = Sessie()
 
+    from starlette.middleware.sessions import SessionMiddleware
+
     app = FastAPI()
-    for r in (kampus, koshuis, lokasie, student, klasse, gebruikers, saamry, events, wagte):
+    app.add_middleware(SessionMiddleware, secret_key="toets")
+    for r in (kampus, koshuis, lokasie, student, klasse, gebruikers, saamry, events, wagte, auth_routes):
         app.include_router(r.router)
 
     def _get_db():
@@ -433,3 +436,54 @@ def test_sec001_disable_auth_weier_buite_ontwikkeling(omgewing):
 def test_sec001_disable_auth_toegelaat_in_ontwikkeling_en_af_in_produksie():
     assert _laai_auth({"DISABLE_AUTH": "1", "ENVIRONMENT": "development"}).returncode == 0
     assert _laai_auth({"DISABLE_AUTH": "0", "ENVIRONMENT": "production"}).returncode == 0
+
+
+# --- MOON-SEC-016: aanmelding lek nie wie bestaan nie -------------------------
+
+def test_sec016_onbekende_gebruiker_doen_ook_bcrypt(omg, monkeypatch):
+    oproepe = []
+    werklik = auth.bcrypt.checkpw
+    monkeypatch.setattr(auth.bcrypt, "checkpw", lambda *a: oproepe.append(1) or werklik(*a))
+    r = omg.client.post("/token", data={"username": "bestaan.nie@example.com", "password": "raai"})
+    assert r.status_code == 401
+    assert len(oproepe) == 1   # dieselfde werk as vir 'n bestaande gebruiker met 'n verkeerde wagwoord
+
+
+def test_sec016_regte_wagwoord_meld_steeds_aan(omg):
+    g, _ = omg.gebruiker("Administrateur")
+    g.GEB_Wagwoord = auth.get_password_hash("korrek123")
+    omg.db.commit()
+    assert omg.client.post("/token", data={"username": g.GEB_Epos, "password": "korrek123"}).status_code == 200
+    assert omg.client.post("/token", data={"username": g.GEB_Epos, "password": "verkeerd"}).status_code == 401
+
+
+# --- MOON-SEC-017 / 018: /docs en sekuriteitsopskrifte ------------------------
+
+def test_sec017_geen_api_dokumentasie_in_produksie(monkeypatch):
+    import http_sekuriteit
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    assert set(http_sekuriteit.dokumentasie_urls().values()) == {None}
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert http_sekuriteit.dokumentasie_urls()["docs_url"] == "/docs"
+
+
+@pytest.mark.parametrize("omgewing,hsts", [("production", True), ("development", False)])
+def test_sec018_sekuriteitsopskrifte(monkeypatch, omgewing, hsts):
+    import http_sekuriteit
+    monkeypatch.setenv("ENVIRONMENT", omgewing)
+    app = FastAPI()
+    app.middleware("http")(http_sekuriteit.voeg_sekuriteitsopskrifte_by)
+    app.get("/")(lambda: {"ok": True})
+    r = TestClient(app).get("/")
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert ("Strict-Transport-Security" in r.headers) is hsts
+
+
+def test_sec017_018_main_gebruik_die_instellings():
+    # main.py kan nie sonder 'n databasis gelaai word nie; kontroleer die bedrading.
+    from pathlib import Path
+    bron = (Path(auth.__file__).parent / "main.py").read_text(encoding="utf-8")
+    assert "**http_sekuriteit.dokumentasie_urls()" in bron
+    assert 'app.middleware("http")(http_sekuriteit.voeg_sekuriteitsopskrifte_by)' in bron

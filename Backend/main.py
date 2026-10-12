@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import auth
+import http_sekuriteit
 import schemas
 import models
 
@@ -105,6 +106,8 @@ app = FastAPI(
     description="Louis se Admin API vir die MOON projek.",
     version="1.0.0",
     lifespan=lifespan,
+    # MOON-SEC-017: geen publieke API-dokumentasie in produksie nie.
+    **http_sekuriteit.dokumentasie_urls(),
 )
 
 
@@ -188,6 +191,10 @@ app.add_middleware(
 
 
 app.add_middleware(auth.AuthMiddleware)
+
+
+# MOON-SEC-018: standaard HTTP-sekuriteitsopskrifte op elke antwoord.
+app.middleware("http")(http_sekuriteit.voeg_sekuriteitsopskrifte_by)
 
 
 app.add_middleware(
