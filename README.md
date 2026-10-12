@@ -1,33 +1,129 @@
-# MOON — Kampus Toegangsbeheer Stelsel
+# MOON — Kampus Toegangsbeheer- & Veiligheidstelsel
 
-> **NSWIW370 · 2026 · Span 3**
+> **NSWIW370 · 2026 · Span 3 — Finale Inhandiging (DA11)**
 
-MOON is 'n kampus toegangsbeheer stelsel wat NFC-tegnologie gebruik om studentebywoning, kampustoegang, en sekuriteitsbestuur te stroomlyn. Die stelsel bestaan uit 'n mobiele Flutter-app, 'n webkoppelvlak vir administrateurs, 'n MQTT-boodskapdiens vir noodgevalle, en 'n FastAPI-backend gekoppel aan 'n PostgreSQL-databasis.
+MOON (Modulêre Omvattende Operasionele Netwerk) is 'n geïntegreerde kampusbestuur-, toegangsbeheer- en veiligheidstelsel ontwikkel vir Akademia. Die platform kombineer kontaklose NFC-tegnologie, intydse IoT-boodskappe (MQTT), 'n intelligente Saamry-versoenbaarheidstelsel met masjienleer (ML), lokaalgebruikvoorspelling, noodontruimingsbestuur, en rol-gebaseerde sekuriteit in 'n eenvormige ekosisteem.
+
+Die stelsel bedien vyf verskillende rolspelers (**Studente**, **Personeel**, **Kampus Opsigters**, **Sekuriteitswagte**, en **Sisteem Administrateurs**) deur middel van 'n multi-platform Flutter mobiele app en 'n responsiewe webkoppelvlak.
 
 ---
 
 ## Spansamestelling
 
-| Lid | Rol |
-|---|---|
-| **Jaco** | Databasis & Projekleier |
-| **Louis** | Backend Ontwikkelaar |
-| **Steven** | Backend Ontwikkelaar |
-| **Connor** | Frontend Ontwikkelaar |
+| Lid | Rol | Kernverantwoordelikhede |
+|---|---|---|
+| **Jaco Oosthuizen** | Databasis & Projekleier | Databasisontwerp, migrasies, skedulering, projekkoördinering |
+| **Louis** | Backend Ontwikkelaar | FastAPI Admin API, RBAC, sekuriteitsverharding, verslagdoening |
+| **Steven** | Backend Ontwikkelaar | Toegangsbeheer, NFC-integrasie, MQTT noodgeval-diens |
+| **Connor** | Frontend Ontwikkelaar | Webwerf admin-koppelvlak, temas, dinamiese dashboards |
+
+---
+
+## Stelselargitektuur
+
+Die stelsel is gebou op 'n mikrodienste- en houer-gebaseerde argitektuur wat betroubaarheid, sekuriteit en intydse reaksie verseker:
+
+```mermaid
+flowchart TD
+    subgraph Kliëntlaag
+        APP["📱 Mobiele App (Flutter)\nStudente · Personeel · Wagte · Opsigters · Admin"]
+        WEB["💻 Webwerf (Nginx alpine)\nAdmin Beheerpaneel & Verslae"]
+    end
+
+    subgraph Sekuriteit & Netwerk
+        NGX["Nginx Webbediener\n(Poort 80 / CSP / Sekuriteitsopskrifte)"]
+        RT_LIMIT["Tempo-beperking & RBAC Middleware"]
+    end
+
+    subgraph Backend Diente
+        API["⚡ FastAPI Backend (Python 3.12)\nREST API · Auth · Besigheidslogika"]
+        SCHED["⏱️ APScheduler Agtergrondtaak\nOutomatiese Nag-uitcheck"]
+        ML_SAAMRY["🧠 Saamry ML Model\nAankomstyd-skatting"]
+        ML_LOKAAL["🏫 Lokaalgebruik ML\nVulgraad-voorspelling"]
+    end
+
+    subgraph Data & IoT
+        DB[("🐘 PostgreSQL 15\nVerhoudingsdata, Logs & Rosters")]
+        MQTT["📡 Eclipse Mosquitto (MQTT)\nIntydse Nooduitsendings"]
+    end
+
+    WEB --> NGX
+    NGX --> API
+    APP --> RT_LIMIT
+    RT_LIMIT --> API
+    APP -.->|WSS / TCP 1883| MQTT
+    API -->|Publiseer Noodgevalle| MQTT
+    API --> SCHED
+    API --> ML_SAAMRY
+    API --> ML_LOKAAL
+    API --> DB
+    SCHED --> DB
+```
 
 ---
 
 ## Tegniese Stapel
 
-| Laag | Tegnologie |
-|---|---|
-| Mobiele App | Flutter (Dart) |
-| Webkoppelvlak | HTML / CSS / JS (Nginx bediener) |
-| Backend API | FastAPI (Python) |
-| Databasis | PostgreSQL 15 |
-| IoT Boodskappe | Mosquitto (MQTT) |
-| Houerbestuur | Docker & Docker Compose |
-| Weergawebeheer | GitLab |
+| Laag | Tegnologie | Beskrywing |
+|---|---|---|
+| **Mobiele App** | Flutter 3.x (Dart) | Kruisplatform-toepassing (Android & iOS) met NFC, QR, kaarte en agtergrond-MQTT |
+| **Webkoppelvlak** | HTML5 / CSS3 / Vanilla JS | Skoon, vinnige administrasiepaneel bedien deur Nginx alpine |
+| **Backend API** | FastAPI (Python 3.12) | Asinchrone REST API met Uvicorn, Pydantic v2 en SQLAlchemy ORM |
+| **Databasis** | PostgreSQL 15 | Relasionele databasis met buitesleutel-integriteit en migrasieskripte |
+| **IoT & Boodskappe** | Eclipse Mosquitto 2 (MQTT) | Hoëspoed boodskapdiens vir intydse kampuswye noodgevaluitsendings |
+| **Masjienleer** | Scikit-Learn, Pandas, NumPy | Regressie- en mediaanheuristiek vir pendeltye en lokaalvulgraad |
+| **Kartering** | OpenStreetMap (flutter_map, latlong2) | Interaktiewe optelplekkaart vir Saamry-gebruikers |
+| **Agtergrondtake** | APScheduler | Outomatiese uitcheck-roetines met sekuriteitsvergrendeling |
+| **Verslagdoening** | ReportLab, OpenPyXL | PDF- en Excel-verslaegenerering met beskerming teen formule-inspuiting |
+| **Houerbestuur** | Docker & Docker Compose | Volledige isolasie van databasis, boodskapdiens, API en webwerf |
+
+---
+
+## Kernkenmerke & Stelselmodules
+
+### 1. 🏷️ Kampus- en Klaskamer Toegangsbeheer (NFC & Handmatig)
+- **Kontaklose Deurgang**: Registrasie van fisiese NFC-kaarte/tags gekoppel aan studente, personeel of vaste klaskamers.
+- **Rooster-gebaseerde Bywoning**: Studente word outomaties by hul spesifieke klas aangeteken mits hul skandering ooreenstem met die geregistreerde rooster en klaskamer.
+- **Handmatige & Wag-skanderings**: Sekuriteitswagte kan vinnige hekkontroles doen met beperkte profielinsig ter beskerming van privaatheid.
+
+### 2. 🚗 Intelligente Saamry-stelsel (Carpooling met ML)
+- **Versoenbaarheidsalgoritme**: Gebruik 'n 4-pilaar geweegde formule:
+  - **Tyd (40%)**: Oorvleueling in daaglikse aankoms- en vertrektye bereken via historiese heklogs of 'n koue-begin terugvalheuristiek ($\sigma = 22.2$ min onsekerheid).
+  - **Ligging (30%)**: Geografiese voorstad- en klusterpassing (bv. Centurion, Oos, Moot, Sentraal).
+  - **Rol (15%)**: Bestuurder, Passasier, of Albei.
+  - **Betroubaarheid (15%)**: Aantal fisiese heklogs wat die student se pendelpatroon bevestig.
+- **Optelplek-kartering**: Studente kan hul presiese optelkoördinate op 'n interaktiewe kaart kies en bevestig.
+- **Ritte & Kletse**: Skep permanente groepe, eenmalige ritte en direkte boodskappe.
+- **Hekintegrasie**: Wanneer 'n bestuurder by die kampushek inskandeer, word alle bevestigde saamryers outomaties saam as IN aangeteken.
+
+### 3. 🚨 Noodgevalle- & Ontruimingsbestuur
+- **Intydse Uitsendings**: Onmiddellike MQTT-kennisgewings per kampus wat alarms na mobiele toestelle stoot.
+- **Agtergronddiens**: Native agtergronddiens op Android verseker dat studente en personeel noodboodskappe ontvang selfs wanneer die toepassing nie oop is nie.
+- **Regstreekse Noodpaneel (Roll Call)**: Sekuriteit en opsigters het 'n lewendige oorsig van alle persone op kampus en merk individue as `DAAR` of `NIE_DAAR` tydens ontruimings.
+
+### 4. 🎟️ Geleenthede (Events) & Besoekerbeheer
+- **Publieke RSVP & QR-Kaartjies**: Eksterne gaste kan vir kampusfunksies registreer via 'n unieke skakel en ontvang 'n veilige QR-kode sonder blootstelling van persoonlike inligting.
+- **Besoeker-OTP**: Studente en personeel kan gaste nooi met 'n tydgebonde 6-syfer OTP wat heksekuriteit mag valideer vir beide IN- en UIT-toegang.
+
+### 5. 📊 Lokaalgebruik-voorspelling & Koshuisbestuur
+- **Lokaalbenutting met ML**: Voorspel die verwagte aantal studente en persentasie vulgraad per lesingsaal vir die komende week op grond van roosteringeskrewenes en geskiedenis.
+- **Koshuisadministrasie**: Moniteer kapasiteit, inwoners en studentetoewysings per koshuis.
+
+### 6. 🌙 Outomatiese Nag-uitcheck
+- Agtergrondskeduleerder wat nie-koshuisstudente wie se laaste status steeds `IN` is, aan die einde van die dag (verstek 22:00) outomaties uitcheck.
+- **Sekuriteitsvergrendeling**: Tydens 'n aktiewe noodgeval word die outo-uitcheck outomaties opgeskort sodat niemand van die ontruimingslys verdwyn nie.
+
+### 7. 📑 Dinamiese Verslae & Databewaring
+- Genereer geformateerde PDF-, Excel- (.xlsx) en CSV-verslae vir bywoning, kampusbesetting, noodgevalle en hekgeskiedenis.
+- Beskerm teen Excel-formule-inspuiting en CSV-misbruik.
+
+### 8. 🛡️ Stelselsekuriteit & Verharding (RBAC & Hardening)
+- Rol-gebaseerde Toegangsbeheer met 5 vlakke (`Administrateur`, `Kampus_Opsigter`, `Sekuriteit_Wag`, `Personeel`, `Student`).
+- Tempo-beperking (rate limiting) teen brute-krag aanvalle op sensitiewe roetes.
+- Konstante-tyd wagwoordvergelyking en bcrypt-hashing.
+- Streng HTTP-sekuriteitsopskrifte (CSP, X-Frame-Options, HSTS).
+- Groottebeperkings op oplaaie en beskerming teen zip-bomme.
+- Swagger `/docs` word outomaties in produksie afgeskakel.
 
 ---
 
@@ -35,93 +131,139 @@ MOON is 'n kampus toegangsbeheer stelsel wat NFC-tegnologie gebruik om studenteb
 
 ```text
 span3/
-├── Backend/                  # FastAPI Python backend
-│   ├── routers/              # API eindpunte per module
-│   ├── services/             # Besigheidslogika
-│   ├── auth.py               # Outentifikasie en sekuriteit
-│   ├── models.py             # Databasis modelle
-│   ├── schemas.py            # Pydantic schemas
-│   ├── main.py               # FastAPI app ingangspunt
-│   ├── Dockerfile            # Docker bou-instruksies
-│   └── requirements.txt      # Python afhanklikhede
-├── Webwerf/                  # Admin webkoppelvlak
-│   ├── assets/               # Prente en bates
-│   ├── nginx.docker.conf     # Nginx konfigurasie
-│   └── *.html, *.js, *.css   # Voorpunt blaaie en skripte
-├── studente_mobile_flutter_app/   # Flutter mobiele app
-│   ├── lib/                  # Dart bronkode
-│   ├── android/, ios/, web/  # Platform-spesifieke kode
-│   └── pubspec.yaml          # Flutter afhanklikhede
-├── Mosquitto/                # MQTT konfigurasie
+├── Backend/                            # FastAPI Python Backend
+│   ├── migrations/                     # Genommerde SQL skema- en opgraderingslêers
+│   ├── ml_data/                        # Data en opnames vir ML-opleiding
+│   ├── ml_models/                      # Gestoor joblib ML-modelbundels
+│   ├── routers/                        # Modulêre API-roetes
+│   │   ├── admin.py                    # Administrasie en globale aksies
+│   │   ├── auth_routes.py              # Aanmelding, JWT tokens en sessies
+│   │   ├── besoekers.py                # OTP besoekerstelsel
+│   │   ├── dashboard.py                # Kampusstatus en intydse tellers
+│   │   ├── events.py                   # Funksies, publieke RSVP's en QR-hekbeheer
+│   │   ├── gebruikers.py               # Gebruikerbestuur en profiele
+│   │   ├── kampus.py                   # Kampusse en lokale
+│   │   ├── klasse.py                   # Roosters, klasregistrasies en NFC-koppeling
+│   │   ├── koshuis.py                  # Koshuisbestuur
+│   │   ├── lokaalgebruik_ml.py         # Lokaalvoorspellings en ML-metrieke
+│   │   ├── nfc.py                      # Hekskanderings en toegangslogs
+│   │   ├── noodgeval.py                # Noodgevalle en MQTT-uitsendings
+│   │   ├── noodgeval_live.py           # Regstreekse ontruimingskontrole
+│   │   ├── saamry.py                   # Saamrygroep, ritte, kletse en voorstelle
+│   │   ├── student.py                  # Studente-roosters en bywoning
+│   │   ├── verslae.py                  # PDF-, Excel- en CSV-uitvoere
+│   │   └── wagte.py                    # Sekuriteitswag-verifikasie
+│   ├── scripts/                        # Masjienleer- en datagenereringskripte
+│   ├── services/                       # Besigheidslogika, algoritmes en ML-hulpbronne
+│   ├── tests/                          # Outomatiese integrasie- en eenheidstoetse
+│   ├── auth.py                         # JWT tokenverifikasie en RBAC
+│   ├── auto_uitcheck.py                # APScheduler nag-uitchecktaak
+│   ├── database.py                     # SQLAlchemy enjinkonfigurasie
+│   ├── entrypoint.sh                   # Docker houer opstart- en ML-inisialisasie
+│   ├── http_sekuriteit.py              # Sekuriteitsopskrifte en oplaailimiete
+│   ├── main.py                         # FastAPI toepassingsfabriek en roetering
+│   ├── models.py                       # SQLAlchemy ORM databasismodelle
+│   ├── mqtt_service.py                 # Mosquitto MQTT uitsaaidiens
+│   ├── schemas.py                      # Pydantic data-valideringskemas
+│   ├── tempo_beperking.py              # In-memory spoedbeperking (rate limiting)
+│   └── requirements.txt                # Python afhanklikhede
+├── Webwerf/                            # Admin Webkoppelvlak (Nginx)
+│   ├── assets/                         # Logo's, ikone en grafiese bates
+│   ├── nginx.docker.conf               # Nginx bediener- en sekuriteitskonfigurasie
+│   ├── admin.html / admin.js           # Gebruikersadministrasie en rolbestuur
+│   ├── event.html / event.js           # Funksies, gaste en QR-verifikasie
+│   ├── home.html / home.js             # Hoofpaneel met lewendige kampusstatistieke
+│   ├── kampus.html / kampus.js         # Lokale, NFC-tags en ML-lokaalvoorspellings
+│   ├── koshuis.html / koshuis.js       # Koshuisbesetting en kamerbestuur
+│   ├── login.html / login.js           # Veilige web-aanmelding
+│   ├── verslag.html / verslag.js       # Verslagdoening en data-aflaaie
+│   ├── styles.css / theme.js           # Donker/Lig-tema en stilering
+│   └── README.md                       # Webwerf tegniese verwysing en gids
+├── studente_mobile_flutter_app/        # Flutter Mobiele Toepassing
+│   ├── lib/
+│   │   ├── admin.dart                  # Mobiele adminpaneel
+│   │   ├── main.dart                   # Toepassing ingangspunt en rolroetering
+│   │   ├── moon_api.dart               # API-kliënt en HTTP-hulpmetodes
+│   │   ├── mqtt_noodgeval_service.dart # MQTT-kliënt vir noodkennisgewings
+│   │   ├── noodgeval_dashboard.dart    # Mobiele ontruimingskontrolepaneel
+│   │   ├── opsigter.dart               # Kampus-opsigter aansig
+│   │   ├── personeel.dart              # Personeelrooster en klasregisters
+│   │   ├── profile_page.dart           # Gebruikersprofiel en foto-oplaai
+│   │   ├── saamry_pickup_map.dart      # Interaktiewe OpenStreetMap optelplekkaart
+│   │   ├── saamry_recommendations.dart # Pasmaats en versoenbaarheidsverslae
+│   │   ├── sekuriteitswag.dart         # Sekuriteitswag skanderingskoppelvlak
+│   │   └── student.dart                # Studentedashbord, rooster en ritte
+│   ├── pubspec.yaml                    # Flutter afhanklikhede
+│   └── README.md                       # Mobiele ontwikkelings- en uitrolgids
+├── Mosquitto/                          # MQTT Boodskapbediener Konfigurasie
 │   └── mosquitto.conf
-├── docs/                     # Projekdokumentasie
-├── docker-compose.yml        # Docker dienste definisie
-├── .env.example              # Omgewings-template (kopieer na .env)
-├── reset_server.sh           # Hulpskrip om bediener te herbou
-└── db_check.sh               # Hulpskrip om databasis te toets
+├── docs/                               # Projekdokumentasie, agendas en notules
+│   ├── Saamry-Algoritme.md             # Wiskundige spesifikasie van Saamry-algoritme
+│   ├── Lokaalgebruik-Model.md          # Tegniese spesifikasie van Lokaalgebruik ML-model
+│   └── README.md                       # Dokumentasieregister en vergaderingsindeks
+├── docker-compose.yml                  # Docker Compose dienstedefinisie
+├── .env.example                        # Omgewingsveranderlike sjabloon
+├── reset_server.sh                     # Bediener herstel- en herbouskrip
+└── db_check.sh                         # Databasisdiagnose en hertoetsing
 ```
 
 ---
 
-## Opstelling
+## Opstelling & Uitrol
 
-### Vereistes
+### 1. Voorvereistes
+- [Docker](https://www.docker.com/) en [Docker Compose](https://docs.docker.com/compose/)
+- [Flutter SDK](https://flutter.dev/) (3.x of nuwer) vir die mobiele toepassing
+- [Git](https://git-scm.com/)
 
-- Docker en Docker Compose
-- Flutter SDK 3.x (vir die mobiele app)
-
-### Bediener / Backend / Databasis (Docker)
-
-Ons gebruik Docker Compose om die hele stelsel (Databasis, MQTT, Backend, en Frontend webbediener) te integreer.
+### 2. Omgewingskonfigurasie
+Kopieer die omgewingsjabloon na `.env` in die hoofgids:
 
 ```bash
-# 1. Kloon die repo
-git clone <repo-url>
-cd span3
-
-# 2. Stel omgewingsveranderlikes op
 cp .env.example .env
-# Maak seker jy verander die SECRET_KEY in .env
-
-# 3. Begin die dienste met Docker Compose
-docker-compose up -d --build
-
-# Alternatiewelik, gebruik die herbou-skrip (stop containers, pull nuutste, herbou, run)
-./reset_server.sh
 ```
 
-Na opstelling:
-- Die **API** is beskikbaar by `http://localhost:8000`
-- Interaktiewe **API dokumentasie** (Swagger): `http://localhost:8000/docs`
-- Die **Webkoppelvlak** is beskikbaar by `http://localhost`
-- **MQTT bediener** luister op poort `1883`
+Maak `.env` oop en stel die nodige wagwoorde en geheime sleutels in:
+- `SECRET_KEY`: Genereer 'n veilige 32-greep heksadesimale sleutel (`python -c "import secrets; print(secrets.token_hex(32))"`).
+- `POSTGRES_PASSWORD`: Veilige databasiswagwoord.
+- `ENVIRONMENT`: Stel na `development` vir plaaslike toetsing (of `production` om Swagger-dokumentasie te versper en sekuriteitskoekies te dwing).
 
-### Flutter App
+### 3. Begin die Dienste met Docker Compose
+Die hele stelsel (PostgreSQL, Mosquitto MQTT, FastAPI Backend en Webwerf Frontend) word met een opdrag opgestel:
 
 ```bash
-cd span3/studente_mobile_flutter_app
+docker compose up -d --build
+```
 
-# Installeer afhanklikhede
+*(Of gebruik `./reset_server.sh` om alle houers skoon te trek, te herbou en te begin).*
+
+Sodra die houers hardloop:
+- **Webwerf Beheerpaneel**: `http://localhost`
+- **FastAPI Backend**: `http://localhost:8000`
+- **Interaktiewe API Dokumentasie (Swagger)**: `http://localhost:8000/docs` (in `development` modus)
+- **MQTT Boodskapbediener**: `localhost:1883`
+
+### 4. Begin die Flutter Mobiele Toepassing
+Navigeer na die Flutter-gids:
+
+```bash
+cd studente_mobile_flutter_app
+
+# Installeer Flutter pakkette
 flutter pub get
 
-# Begin op 'n gekoppelde toestel, blaaier, of emulator
+# Begin op 'n emulator, gekoppelde toestel of blaaier
 flutter run
 ```
 
----
-
-## Omgewingsveranderlikes
-
-Kopieer `.env.example` na `.env` in die hoofgids en vul die nodige waardes in (soos wagwoorde en geheime sleutels). Die `docker-compose.yml` gebruik hierdie `.env` lêer om die omgewing vir al die houers in te stel.
-
-> **Moenie** die `.env` lêer na die repo commit nie — dit is reeds in `.gitignore`.
+> **Wenk vir Android/Emulators:** Indien jy op 'n Android-emulator toets, maak seker die API-basisadres wys na jou plaaslike rekenaar (`10.0.2.2:8000`).
 
 ---
 
 ## Hulpskripte
 
-- **`reset_server.sh`**: Trek die nuutste kode via git, stop bestaande Docker-houers, herbou die beelde en begin die stelsel.
-- **`db_check.sh`**: Maak seker die databasis houer loop, lys databasisse en toets as `toegangs_logs` bestaan. Handig om vinnig na log-data te kyk.
+- **`./reset_server.sh`**: Trek die nuutste git-veranderinge, stop bestaande houers, herbou alle beelde en bring die stelsel skoon op.
+- **`./db_check.sh`**: Toets of die `moon_db` PostgreSQL-houer aktief is, lys alle databasisse en vertoon rekords in `toegangs_logs`.
 
 ---
 
@@ -129,22 +271,22 @@ Kopieer `.env.example` na `.env` in die hoofgids en vul die nodige waardes in (s
 
 | Mylpaal | Datum | Status |
 |---|---|---|
-| DA6 — Pre-Alpha | 15 Mei 2026 | ✅ Voltooi |
-| DA7 — Alfa / MVP | 10 Julie 2026 | ✅ Voltooi |
-| DA9 — Beta | 18 September 2026 | 🔄 In Vordering |
-| DA11 — Finale Inhandiging | 14 Oktober 2026 | ⏳ Gepland |
+| **DA6** — Pre-Alpha | 15 Mei 2026 | ✅ Voltooi |
+| **DA7** — Alfa / MVP | 10 Julie 2026 | ✅ Voltooi |
+| **DA9** — Beta | 18 September 2026 | ✅ Voltooi |
+| **DA11** — Finale Inhandiging | 14 Oktober 2026 | ✅ Voltooi |
 
 ---
 
 ## Bydraersriglyne
 
-1. Werk op jou eie tak: `git checkout -b feature/jou-taak` of `bugfix/jou-taak`
-2. Commit gereeld met duidelike boodskappe
-3. Maak 'n merge request na `main` — moenie direk na `main` stoot nie
-4. Laat 'n spanlid jou MR hersien voor dit saamgesmelt word
+1. Skep altyd 'n funksietak: `git checkout -b feature/jou-funksie`
+2. Commit gereeld met duidelike, beskrywende boodskappe.
+3. Toets deeglik plaaslik voordat 'n Merge Request na `main` oopgemaak word.
+4. Vereis ten minste een spanlid-hersiening voor samevoeging.
 
 ---
 
 ## Lisensie
 
-Hierdie projek is deel van die NSWIW370-module by die Akademie vir Inligtingstegnologie (AIT). Alle regte voorbehou.
+Hierdie projek vorm deel van die **NSWIW370** module by **Akademia**. Alle regte voorbehou.
