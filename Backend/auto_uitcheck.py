@@ -2,9 +2,16 @@
 
 Skep een outomatiese UIT-log vir 'n nie-koshuisstudent wie se jongste
 kampushek-status steeds IN is wanneer die ingestelde uitcheck-tyd bereik word.
+
+Sekuriteit (MOON-SEC-007): terwyl 'n kampus 'n AKTIEF noodgeval het, word niemand
+op daardie kampus uitgecheck nie — anders verdwyn hulle van die noodpaneel en
+hou hul fone op om na alarms vir die kampus te luister. Die taak sluit enige
+sessie wat vóór vandag se uitcheck-tyd begin het sodra daardie tyd verby is,
+sodat dit vanself inhaal ná 'n herbegin of nadat die noodgeval gesluit is.
 """
 
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -21,7 +28,24 @@ def _kry_uitcheck_tydstip(db: Session) -> str:
     instelling = db.query(models.Instelling).filter(
         models.Instelling.Sleutel == "auto_uitcheck_tydstip"
     ).first()
-    return instelling.Waarde.strip() if instelling and instelling.Waarde else "22:00"
+    waarde = instelling.Waarde.strip() if instelling and instelling.Waarde else ""
+    return waarde if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", waarde) else "22:00"
+
+
+def _afsnytyd_utc(nou_sa: datetime, tydstip: str) -> datetime:
+    """Vandag se uitcheck-tyd (SA) as naïewe UTC, soos die tydstempels gestoor word."""
+    uur, minuut = (int(x) for x in tydstip.split(":"))
+    afsny_sa = nou_sa.replace(hour=uur, minute=minuut, second=0, microsecond=0)
+    return afsny_sa.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _kampusse_met_aktiewe_noodgeval(db: Session) -> set[int]:
+    return {
+        kampus_id
+        for (kampus_id,) in db.query(models.Noodgeval.Kampus_ID).filter(
+            models.Noodgeval.NOO_Status == "AKTIEF"
+        )
+    }
 
 
 def _vind_oop_sessies(db: Session) -> list[dict]:
@@ -53,7 +77,7 @@ def _vind_oop_sessies(db: Session) -> list[dict]:
     )
 
     oop_logs = (
-        db.query(in_log)
+        db.query(in_log, in_lokasie.Kampus_ID)
         .join(in_lokasie, in_lokasie.Lokasie_ID == in_log.Lokasie_ID)
         .join(models.Student, models.Student.Gebruiker_ID == in_log.Gebruiker_ID)
         .filter(
@@ -67,40 +91,59 @@ def _vind_oop_sessies(db: Session) -> list[dict]:
     )
 
     # Een oop sessie per student: die jongste kampus-IN.
-    jongste_per_gebruiker: dict[int, object] = {}
-    for log in oop_logs:
+    jongste_per_gebruiker: dict[int, tuple] = {}
+    for log, kampus_id in oop_logs:
         if log.Gebruiker_ID not in jongste_per_gebruiker:
-            jongste_per_gebruiker[log.Gebruiker_ID] = log
+            jongste_per_gebruiker[log.Gebruiker_ID] = (log, kampus_id)
 
     return [
         {
             "Gebruiker_ID": log.Gebruiker_ID,
             "Lokasie_ID": log.Lokasie_ID,
+            "Kampus_ID": kampus_id,
             "NFC_Tags_ID": log.NFC_Tags_ID,
             "IN_Tydstempel": log.TOE_Tydstempel,
         }
-        for log in jongste_per_gebruiker.values()
+        for log, kampus_id in jongste_per_gebruiker.values()
     ]
+
+
+# Hou by hoeveel sessies weens 'n noodgeval uitgestel is, sodat ons net log as dit verander.
+_laaste_uitgestel = 0
 
 
 def outo_uitcheck_job():
     """Skep OUT-logte vir oop kampus-sessies van nie-koshuisstudente."""
+    global _laaste_uitgestel
     db = database.SessionLocal()
     try:
         nou_sa = datetime.now(_SA_TZ)
         huidige_tyd = nou_sa.strftime("%H:%M")
         gestelde_tyd = _kry_uitcheck_tydstip(db)
 
-        if huidige_tyd != gestelde_tyd:
+        nou_utc = nou_sa.astimezone(timezone.utc).replace(tzinfo=None)
+        afsny_utc = _afsnytyd_utc(nou_sa, gestelde_tyd)
+        if nou_utc < afsny_utc:
             return
 
-        oop_sessies = _vind_oop_sessies(db)
+        oop_sessies = [s for s in _vind_oop_sessies(db) if s["IN_Tydstempel"] < afsny_utc]
+        noodgeval_kampusse = _kampusse_met_aktiewe_noodgeval(db) if oop_sessies else set()
+        uitgestel = [s for s in oop_sessies if s["Kampus_ID"] in noodgeval_kampusse]
+        oop_sessies = [s for s in oop_sessies if s["Kampus_ID"] not in noodgeval_kampusse]
+
+        if len(uitgestel) != _laaste_uitgestel:
+            _laaste_uitgestel = len(uitgestel)
+            if uitgestel:
+                print(
+                    f"[Auto-Uitcheck] {len(uitgestel)} student(e) NIE uitgecheck nie — "
+                    f"aktiewe noodgeval op kampus {sorted(noodgeval_kampusse)}",
+                    flush=True,
+                )
+
         if not oop_sessies:
-            print(f"[Auto-Uitcheck] {huidige_tyd} — geen oop kampus-sessies nie")
             return
 
         aantal_geskep = 0
-        nou_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         for sessie in oop_sessies:
             nuwe_log = models.ToegangsLogs(

@@ -111,7 +111,13 @@ def verwyder_koshuis(
 
 
 @router.get("/{koshuis_id}/status", response_model=schemas.APIResponse[schemas.KoshuisDetailStatus])
-def kry_koshuis_status_detail(koshuis_id: int, db: Session = Depends(get_db)):
+def kry_koshuis_status_detail(
+    koshuis_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_sekuriteit),
+):
+    """Name, e-posse en intydse bewegings: slegs sekuriteitsrolle (MOON-SEC-003)."""
     koshuis = db.query(models.Koshuis).filter(models.Koshuis.Koshuis_ID == koshuis_id).first()
     if not koshuis:
         raise HTTPException(status_code=404, detail="Koshuis nie gevind nie")

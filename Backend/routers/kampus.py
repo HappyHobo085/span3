@@ -111,7 +111,11 @@ def verwyder_kampus(
 
 
 @router.get("/status", response_model=schemas.APIResponse[List[schemas.KampusSummaryStatus]])
-def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
+def kry_kampus_status_opsomming(
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+):
+    """Slegs getalle per kampus (geen name nie); vir enige aangemelde gebruiker (MOON-SEC-003)."""
     kampusse = db.query(models.Kampus).all()
     resultate = []
     for k in kampusse:
@@ -127,7 +131,13 @@ def kry_kampus_status_opsomming(db: Session = Depends(get_db)):
 
 
 @router.get("/{kampus_id}/status", response_model=schemas.APIResponse[schemas.KampusDetailStatus])
-def kry_kampus_status_detail(kampus_id: int, db: Session = Depends(get_db)):
+def kry_kampus_status_detail(
+    kampus_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Gebruikers = Depends(auth.get_current_user),
+    _: bool = Depends(auth.check_sekuriteit),
+):
+    """Name, e-posse en intydse bewegings: slegs sekuriteitsrolle (MOON-SEC-003)."""
     kampus = db.query(models.Kampus).filter(models.Kampus.Kampus_ID == kampus_id).first()
     if not kampus:
         raise HTTPException(status_code=404, detail="Kampus nie gevind nie")
