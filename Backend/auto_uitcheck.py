@@ -124,7 +124,9 @@ def outo_uitcheck_job():
         nou_utc = nou_sa.astimezone(timezone.utc).replace(tzinfo=None)
         afsny_utc = _afsnytyd_utc(nou_sa, gestelde_tyd)
         if nou_utc < afsny_utc:
-            return
+            # Voor vandag se uitcheck-tyd: haal net sessies van voor gister se
+            # uitcheck-tyd in (bv. ná 'n herbegin om 01:00 of 'n noodgeval oor middernag).
+            afsny_utc -= timedelta(days=1)
 
         oop_sessies = [s for s in _vind_oop_sessies(db) if s["IN_Tydstempel"] < afsny_utc]
         noodgeval_kampusse = _kampusse_met_aktiewe_noodgeval(db) if oop_sessies else set()

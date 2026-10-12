@@ -316,7 +316,7 @@
       gasteTabel.setRows([]);
       tekenGasteOpsomming();
       gasteTabel.setNote(rsvpJson && rsvpJson.status === 403
-        ? 'Slegs \'n Administrateur of Kampus-opsigter mag die gastelys sien.'
+        ? 'Net \'n Administrateur, of die opsigter van hierdie geleentheid se kampus, mag die gastelys sien.'
         : 'Kon nie die gastelys laai nie' + (rsvpJson && rsvpJson.fout ? ': ' + rsvpJson.fout : '.'));
       return;
     }

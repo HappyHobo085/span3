@@ -57,7 +57,16 @@ def omg():
     o.client = TestClient(app)
     o._teller = 0
 
-    def gebruiker(rol: str | None):
+    def basis_rol_id():
+        # Basisrol in Gebruikers.Rol_ID; die eintlike rolle sit in GebruikersRolle.
+        r = db.query(models.Rolle).filter_by(ROL_Naam="Student").first()
+        if r is None:
+            r = models.Rolle(ROL_Naam="Student")
+            db.add(r)
+            db.flush()
+        return r.Rol_ID
+
+    def gebruiker(rol: str | None, via_koppeltabel: bool = False):
         o._teller += 1
         rol_id = None
         if rol:
@@ -70,9 +79,12 @@ def omg():
         u = models.Gebruikers(
             GEB_Naam="Toets", GEB_Van=f"Sek{o._teller}",
             GEB_ID_Nommer=f"{9001010000000 + o._teller}", GEB_Epos=f"sek{o._teller}@example.com",
-            GEB_Wagwoord="x", Rol_ID=rol_id, Is_Aktief=True,
+            GEB_Wagwoord="x", Rol_ID=basis_rol_id() if via_koppeltabel else rol_id, Is_Aktief=True,
         )
         db.add(u)
+        db.flush()
+        if via_koppeltabel and rol_id:
+            db.add(models.GebruikersRolle(Gebruiker_ID=u.Gebruiker_ID, Rol_ID=rol_id))
         db.commit()
         token = auth.create_access_token({"sub": str(u.Gebruiker_ID)}, timedelta(minutes=5))
         return u, {"Authorization": f"Bearer {token}"}
@@ -574,6 +586,47 @@ def test_sec009_profielfoto_moet_regtig_n_beeld_wees(omg, monkeypatch, tmp_path)
         return omg.client.post("/me/foto", files={"file": (naam, inhoud, tipe)}, headers=kop)
 
     assert laai("foto.png", b"<script>alert(1)</script>").status_code == 400      # nie 'n beeld nie
-    assert laai("foto.png", b"\xff\xd8\xff\xe0" + b"0" * 20).status_code == 400  # JPG met .png-naam
+    r = laai("foto.png", b"\xff\xd8\xff\xe0" + b"0" * 20)                        # JPG met .png-naam
+    assert r.status_code == 200 and r.json()["data"]["foto_url"].endswith(".jpg")  # benoem volgens inhoud
     assert laai("foto.png", b"\x89PNG\r\n\x1a\n" + b"0" * 20).status_code == 200
     assert laai("foto.jpeg", b"\xff\xd8\xff\xe0" + b"0" * 20, "image/jpeg").status_code == 200
+
+
+# --- Bykomende gevalle uit die kode-hersiening --------------------------------
+
+def test_sec007_inhaal_na_middernag(uitcheck):
+    s = uitcheck.student_in(uitcheck.kampus_b, _sa(9, 0))
+    uitcheck.student_in(uitcheck.kampus_b, _sa(23, 0))
+    # Bediener was oor 22:00 af en begin om 01:00 die volgende dag.
+    assert uitcheck.loop(_sa(1, 0, dag=13)) == {s}      # 23:00-IN is ná gister se afsnytyd: bly IN
+
+
+def test_sec007_noodgeval_oor_middernag(uitcheck):
+    a = uitcheck.student_in(uitcheck.kampus_a, _sa(8, 0))
+    nood = uitcheck.noodgeval(uitcheck.kampus_a)
+    assert uitcheck.loop(_sa(22, 0)) == set()
+    nood.NOO_Status = "GESLUIT"
+    uitcheck.db.commit()
+    assert uitcheck.loop(_sa(0, 31, dag=13)) == {a}     # nie eers die volgende aand nie
+
+
+def test_sec008_opsigter_se_kampuslys_bevat_net_eie_kampus(omg, kampusse):
+    kop = kampusse.opsigter(kampusse.eie)
+    ids = [k["kampus_id"] for k in omg.client.get("/wagte/kampusse", headers=kop).json()["data"]]
+    assert ids == [kampusse.eie]                        # die app begin op kampusse.first
+    _, wag = omg.gebruiker("Sekuriteit_Wag")
+    ids = {k["kampus_id"] for k in omg.client.get("/wagte/kampusse", headers=wag).json()["data"]}
+    assert ids == {kampusse.eie, kampusse.ander}
+
+
+def test_sec008_rolle_via_koppeltabel(omg, kampusse):
+    """Die meeste regte gebruikers kry hul rol via GebruikersRolle, nie Rol_ID nie."""
+    eid = kampusse.geleentheid(kampusse.ander)
+    g, kop = omg.gebruiker("Kampus_Opsigter", via_koppeltabel=True)
+    omg.db.add(models.Kampus_Opsigter(Gebruiker_ID=g.Gebruiker_ID, KAMO_Nommer="KK1", Kampus_ID=kampusse.eie))
+    omg.db.commit()
+    assert omg.client.get(f"/events/{eid}/rsvps", headers=kop).status_code == 403
+    _, admin = omg.gebruiker("Administrateur", via_koppeltabel=True)
+    assert omg.client.get(f"/events/{eid}/rsvps", headers=admin).status_code == 200
+    _, stud = omg.gebruiker("Student", via_koppeltabel=True)
+    assert omg.client.get(f"/kampusse/{omg.kampus_id}/status", headers=stud).status_code == 403

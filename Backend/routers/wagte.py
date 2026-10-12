@@ -26,7 +26,15 @@ def wagte_kampusse(
     current_user: models.Gebruikers = Depends(auth.get_current_user),
     is_authorized: bool = Depends(auth.check_sekuriteit),
 ):
-    kampusse = db.query(models.Kampus).all()
+    query = db.query(models.Kampus)
+    rolle = auth._haal_rol_names_uit_loaded(current_user)
+    if "Administrateur" not in rolle and "Sekuriteit_Wag" not in rolle:
+        # 'n Opsigter bestuur net sy eie kampus (MOON-SEC-008); die app se
+        # opsigter- en noodgevalskerms begin op die eerste kampus in hierdie lys.
+        koppeling = current_user.kampus_opsigter
+        eie_kampus = koppeling.Kampus_ID if koppeling is not None else None
+        query = query.filter(models.Kampus.Kampus_ID == eie_kampus)
+    kampusse = query.all()
     return schemas.APIResponse(
         sukses=True,
         data=[
